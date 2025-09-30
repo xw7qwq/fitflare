@@ -1,0 +1,4 @@
+"""
+This empty file ensures the `profiles/` directory is tracked by Git.
+User profiles and their data will be created under this directory at runtime.
+"""

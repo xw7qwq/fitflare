@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>FitBaus</title>
+<link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@latest/dist/chartjs-chart-matrix.min.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    
+  </div>
+
+  <div class="card" style="padding:16px">
+    <div class="controls">
+      
+      <div class="cell">
+        <label>Chart</label>
+        <div class="dropdown-wrapper">
+          <select id="chartType">
+            <option value="daily_score">💤 Sleep Score</option>
+            <option value="daily_minutes">Minutes Asleep</option>
+            <option value="stages_pct">Monthly Stage % (Deep/REM/Light)</option>
+            <option disabled>────────────────────────</option>
+            <option value="hrv_heatmap">📉 HRV: Heatmap, CUSUM, Min/Max</option>
+            <option value="corr_same">Correlation: Sleep Score vs HRV</option>
+            <option disabled>────────────────────────</option>
+            <option value="daily_steps">👟 Steps &amp; Activity</option>
+            <option value="corr_steps_hrv">Correlation: Steps vs HRV & Sleep Score</option>
+            <option disabled>────────────────────────</option>
+            <option value="daily_rhr">❤️ RHR</option>
+            <option value="hist_rhr">RHR: Histogram, CUSUM, Min/Max</option>
+          <option disabled>────────────────────────</option>
+              <option value="analytics">📊 Comprehensive Analytics</option>
+              <option value="correlation_matrix">Correlation Matrix</option>
+              <option value="predictions">Predictions & Family Insights</option>
+              <option value="life_events">Life Events</option>
+        </select>
+        </div>
+      </div>
+      <div class="cell">
+        <label>Date From</label>
+        <input type="date" id="dateFrom"/>
+      </div>
+      <div class="cell">
+        <label>Date To</label>
+        <input type="date" id="dateTo"/>
+      </div>
+      <div class="cell" id="sameDayToggleCell" style="display:none;">
+        <label>Include same-day</label>
+        <div class="switch"><input type="checkbox" id="includeSameDay"></div>
+      </div>
+      <div class="cell">
+        <label>Steps &amp; Activity View</label>
+        <div class="tri-state-toggle">
+          <input type="range" id="stepsViewToggle" min="0" max="2" value="0" step="1">
+          <div class="toggle-labels">
+            <span class="label-left" data-value="0">Daily</span>
+            <span class="label-center" data-value="1">Monthly</span>
+            <span class="label-right" data-value="2">Yearly</span>
+          </div>
+        </div>
+      </div>
+        <div class="cell">
+          <label>RHR View</label>
+          <div class="tri-state-toggle">
+            <input type="range" id="rhrViewToggle" min="0" max="2" value="0" step="1">
+            <div class="toggle-labels">
+              <span class="label-left" data-value="0">Daily</span>
+              <span class="label-center" data-value="1">Monthly</span>
+              <span class="label-right" data-value="2">Yearly</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="cell">
+          <label>Sleep View</label>
+          <div class="tri-state-toggle">
+            <input type="range" id="sleepViewToggle" min="0" max="2" value="0" step="1">
+            <div class="toggle-labels">
+              <span class="label-left" data-value="0">Daily</span>
+              <span class="label-center" data-value="1">Monthly</span>
+              <span class="label-right" data-value="2">Yearly</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="cell">
+          <label>Minutes Asleep View</label>
+          <div class="tri-state-toggle">
+            <input type="range" id="minutesViewToggle" min="0" max="1" value="0" step="1">
+            <div class="toggle-labels">
+              <span class="label-left" data-value="0">Daily</span>
+              <span class="label-center" data-value="1">Monthly</span>
+            </div>
+          </div>
+        </div>
+      <div class="cell">
+        <label>Ignore Naps</label>
+        <div class="switch"><input type="checkbox" id="mainOnly" checked></div>
+      </div>
+      <div class="cell profile-cell">
+        <label for="profileSelect"><span id="profileStatus" style="color:#666;font-size:10px;">•</span> Profile</label>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <select id="profileSelect"></select>
+          <button id="fetchDataBtn" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:4px;font-size:16px;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:4px;transition:all 0.2s ease;flex-shrink:0;" title="Fetch New Data" onmouseover="this.style.background='rgba(154,165,198,0.1)'" onmouseout="this.style.background='none'">
+            ↻
+          </button>
+        </div>
+        <div id="fetchStatus" style="font-size:10px;color:#9aa5c6;margin-top:2px;"></div>
+      </div>
+      <div class="cell csv-row-start">
+        <label for="sleepFile"><span id="sleepStatus" style="color:#666;font-size:10px;">●</span> Load Sleep CSV</label>
+        <div style="position:relative;display:inline-block;width:100%">
+          <div id="sleepFileDisplay" class="file-display" style="cursor:pointer;text-align:center;position:relative">No file chosen
+            <input type="file" id="sleepFile" accept=".csv" style="opacity:0;position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer"/>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <label for="hrvFile"><span id="hrvStatus" style="color:#666;font-size:10px;">●</span> Load HRV CSV</label>
+        <div style="position:relative;display:inline-block;width:100%">
+          <div id="hrvFileDisplay" class="file-display" style="cursor:pointer;text-align:center;position:relative">No file chosen
+            <input type="file" id="hrvFile" accept=".csv" style="opacity:0;position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer"/>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <label for="stepsFile"><span id="stepsStatus" style="color:#666;font-size:10px;">●</span> Load Activity CSV</label>
+        <div style="position:relative;display:inline-block;width:100%">
+          <div id="stepsFileDisplay" class="file-display" style="cursor:pointer;text-align:center;position:relative">No file chosen
+            <input type="file" id="stepsFile" accept=".csv" style="opacity:0;position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer"/>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <label for="rhrFile"><span id="rhrStatus" style="color:#666;font-size:10px;">●</span> Load RHR CSV</label>
+        <div style="position:relative;display:inline-block;width:100%">
+          <div id="rhrFileDisplay" class="file-display" style="cursor:pointer;text-align:center;position:relative">No file chosen
+            <input type="file" id="rhrFile" accept=".csv" style="opacity:0;position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer"/>
+          </div>
+        </div>
+      </div>
+      <div class="cell logo-cell">
+        <label>&nbsp;</label>
+        <div class="inline-logo" aria-label="FitBaus brand">FitBaus</div>
+      </div>
+      <!-- Inline logo placed after Load RHR CSV (same row) -->
+      
+    </div>
+
+    <div class="toolbar">
+      <span class="muted" id="note"></span>
+    </div>
+    
+    <!-- Analytics badges (shown only when "Comprehensive Analytics" is selected) -->
+    <div id="analyticsBadges" class="hidden" style="display:none; flex-wrap:wrap; gap:12px; margin:16px 0; padding:16px; background:#0a0f1a; border-radius:12px; border:1px solid #1a2349"></div>
+    
+    <canvas id="chart" height="120"></canvas>
+    <!-- Collapsible Steps Preview (moved directly below first chart) -->
+    <div id="stepsPreviewCollapsible" class="muted" style="display:none; margin-top:8px;">
+      <button id="stepsPreviewToggle" class="disclosure" type="button" aria-expanded="false" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:0;display:flex;align-items:center;gap:6px;width:100%;position:relative;">
+        <span id="stepsPreviewTriangle" aria-hidden="true" style="margin-left:auto;" title="Data Preview">◀</span>
+      </button>
+      <div id="stepsPreviewContent" style="display:none; margin-top:8px; max-height:280px; overflow:auto;">
+        <table id="stepsPreviewTable"><thead></thead><tbody></tbody></table>
+      </div>
+    </div>
+    
+    <div class="toolbar">
+      <!-- Refresh hidden for Steps & Activity; removed from DOM per request -->
+      <button class="btn" id="downloadMonthly">Download Monthly Summary</button>
+      <button class="btn" id="downloadYearly">Download Yearly Summary</button>
+      <button class="btn" id="downloadAnalytics" disabled>Download Analytics Summary</button>
+    </div>
+    <div class="footer muted" id="meta"></div>
+    
+    <!-- Collapsible Sleep Preview (used for Daily Sleep Score) -->
+    <div id="sleepPreviewCollapsible" class="muted" style="display:none; margin-top:8px;">
+      <button id="sleepPreviewToggle" class="disclosure" type="button" aria-expanded="false" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:0;display:flex;align-items:center;gap:6px;width:100%;position:relative;">
+        <span id="sleepPreviewTriangle" aria-hidden="true" style="margin-left:auto;" title="Data Preview">◀</span>
+      </button>
+      <div id="sleepPreviewContent" style="display:none; margin-top:8px; max-height:280px; overflow:auto;">
+        <table id="sleepPreviewTable"><thead></thead><tbody></tbody></table>
+      </div>
+    </div>
+    
+    <!-- Additional HRV correlation chart -->
+    <div id="dualHRVCorrelationCharts" style="display:none; margin-top: 20px;">
+      <canvas id="hrvCorrNextChart" height="120"></canvas>
+    </div>
+    
+    <!-- Additional Steps correlation chart -->
+    <div id="dualStepsCorrelationCharts" style="display:none; margin-top: 20px;">
+      <canvas id="stepsCorrSleepChart" height="120"></canvas>
+    </div>
+    
+    <!-- Steps Histogram chart -->
+    <div id="stepsHistogramChart" style="display:none; margin-top: 20px;">
+      <canvas id="stepsHistogramCanvas" height="120"></canvas>
+      <div class="footer muted" id="histogramMeta"></div>
+    </div>
+    
+    <!-- Sedentary Minutes line chart (appears under Steps histogram) -->
+    <div id="sedentaryLineChart" style="display:none; margin-top: 20px;">
+      <canvas id="sedentaryLineCanvas" height="120"></canvas>
+      <div class="footer muted" id="sedentaryMeta"></div>
+    </div>
+    
+    <!-- Sleep Score Histogram chart -->
+    <div id="sleepHistogramChart" style="display:none; margin-top: 20px;">
+      <canvas id="sleepHistogramCanvas" height="120"></canvas>
+      <div class="toolbar">
+        <button class="btn" id="sleepHistogramDownloadBtn">Download Histogram Data</button>
+      </div>
+      <div class="footer muted" id="sleepHistogramMeta"></div>
+      
+      <!-- Collapsible Sleep Histogram Preview -->
+      <div id="sleepHistogramPreviewCollapsible" class="muted" style="display:none; margin-top:8px;">
+        <button id="sleepHistogramPreviewToggle" class="disclosure" type="button" aria-expanded="false" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:0;display:flex;align-items:center;gap:6px;width:100%;position:relative;">
+          <span id="sleepHistogramPreviewTriangle" aria-hidden="true" style="margin-left:auto;" title="Data Preview">◀</span>
+        </button>
+        <div id="sleepHistogramPreviewContent" style="display:none; margin-top:8px; max-height:280px; overflow:auto;">
+          <table id="sleepHistogramPreviewTable"><thead></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+    <!-- Collapsible RHR Preview -->
+    <div id="rhrPreviewCollapsible" class="muted" style="display:none; margin-top:8px;">
+      <button id="rhrPreviewToggle" class="disclosure" type="button" aria-expanded="false" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:0;display:flex;align-items:center;gap:6px;width:100%;position:relative;">
+        <span id="rhrPreviewTriangle" aria-hidden="true" style="margin-left:auto;" title="Data Preview">◀</span>
+      </button>
+      <div id="rhrPreviewContent" style="display:none; margin-top:8px; max-height:280px; overflow:auto;">
+        <table id="rhrPreviewTable"><thead></thead><tbody></tbody></table>
+      </div>
+    </div>
+    <!-- Collapsible HRV Preview -->
+    <div id="hrvPreviewCollapsible" class="muted" style="display:none; margin-top:8px;">
+      <button id="hrvPreviewToggle" class="disclosure" type="button" aria-expanded="false" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:0;display:flex;align-items:center;gap:6px;width:100%;position:relative;">
+        <span id="hrvPreviewTriangle" aria-hidden="true" style="margin-left:auto;" title="Data Preview">◀</span>
+      </button>
+      <div id="hrvPreviewContent" style="display:none; margin-top:8px; max-height:280px; overflow:auto;">
+        <table id="hrvPreviewTable"><thead></thead><tbody></tbody></table>
+      </div>
+    </div>
+    <!-- Collapsible Analytics Preview -->
+    <div id="analyticsPreviewCollapsible" class="muted" style="display:none; margin-top:8px;">
+      <button id="analyticsPreviewToggle" class="disclosure" type="button" aria-expanded="false" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:0;display:flex;align-items:center;gap:6px;width:100%;position:relative;">
+        <span id="analyticsPreviewTriangle" aria-hidden="true" style="margin-left:auto;" title="Data Preview">◀</span>
+      </button>
+      <div id="analyticsPreviewContent" style="display:none; margin-top:8px; max-height:280px; overflow:auto;">
+        <table id="analyticsPreviewTable"><thead></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  
+
+  <div class="card" style="padding:16px;margin-top:16px" id="topStepsSection" style="display:none">
+    <div class="header"><h1 style="font-size:18px">Days with Most Steps</h1></div>
+    <div style="max-height:280px;overflow:auto">
+      <table id="topStepsTable"><thead></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <div class="card" style="padding:16px;margin-top:16px" id="bottomStepsSection" style="display:none">
+    <div class="header"><h1 style="font-size:18px">Days with Least Steps (> 100)</h1></div>
+    <div style="max-height:280px;overflow:auto">
+      <table id="bottomStepsTable"><thead></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <div class="card" style="padding:16px;margin-top:16px" id="rhrCusumSection" style="display:none">
+    <div class="header"><h1 style="font-size:18px">RHR CUSUM Chart</h1></div>
+    <div style="position:relative;height:400px">
+      <canvas id="rhrCusumChart"></canvas>
+    </div>
+  </div>
+
+  <div class="card" style="padding:16px;margin-top:16px" id="topRHRSection" style="display:none">
+    <div class="header"><h1 style="font-size:18px">Days with Highest RHR</h1></div>
+    <div style="max-height:280px;overflow:auto">
+      <table id="topRHRTable"><thead></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <div class="card" style="padding:16px;margin-top:16px" id="bottomRHRSection" style="display:none">
+    <div class="header"><h1 style="font-size:18px">Days with Lowest RHR</h1></div>
+    <div style="max-height:280px;overflow:auto">
+      <table id="bottomRHRTable"><thead></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <div class="card" style="padding:16px;margin-top:16px" id="topSleepScoreSection" style="display:none">
+    <div class="header"><h1 style="font-size:18px">Days with Highest Sleep Score</h1></div>
+    <div style="max-height:280px;overflow:auto">
+      <table id="topSleepScoreTable"><thead></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <div class="card" style="padding:16px;margin-top:16px" id="bottomSleepScoreSection" style="display:none">
+    <div class="header"><h1 style="font-size:18px">Days with Lowest Sleep Score</h1></div>
+    <div style="max-height:280px;overflow:auto">
+      <table id="bottomSleepScoreTable"><thead></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <div class="card" style="padding:16px;margin-top:16px" id="hrvCusumSection" style="display:none">
+    <div class="header" style="display:flex;align-items:center;justify-content:space-between">
+      <h1 style="font-size:18px;margin:0">HRV CUSUM Chart</h1>
+      <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#e6eaf3;margin:0">
+        <input type="checkbox" id="hrvCusumIgnoreZero" checked style="transform:scale(1.2)">
+        Ignore zero values
+      </label>
+    </div>
+    <div style="position:relative;height:400px">
+      <canvas id="hrvCusumChart"></canvas>
+    </div>
+  </div>
+
+  <div class="card" style="padding:16px;margin-top:16px" id="topHRVSection" style="display:none">
+    <div class="header"><h1 style="font-size:18px">Days with Highest HRV</h1></div>
+    <div style="max-height:280px;overflow:auto">
+      <table id="topHRVTable"><thead></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <div class="card" style="padding:16px;margin-top:16px" id="bottomHRVSection" style="display:none">
+    <div class="header"><h1 style="font-size:18px">Days with Lowest HRV</h1></div>
+    <div style="max-height:280px;overflow:auto">
+      <table id="bottomHRVTable"><thead></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal -->
+<div id="logoModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title" aria-label="FitBaus">
+        <div class="inline-logo" aria-hidden="false">FitBaus</div>
+      </h2>
+      <button class="modal-close" id="modalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p>Thanks for trying this app! Comments? Feedback? Support? Email me at <a href="mailto:markraidc@gmail.com">markraidc@gmail.com</a></p>
+      <p class="signature">- <a href="https://www.reddit.com/user/markraidc/" target="_blank">u/markraidc</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- No Profile Modal -->
+<div id="noProfileModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title">
+        <div class="inline-logo" aria-label="FitBaus brand">FitBaus</div>
+      </h2>
+      <button class="modal-close" id="noProfileModalClose" style="display: none;">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- Tab Navigation -->
+      <div class="tab-navigation">
+        <button class="tab-btn active" data-tab="new-profile">New Profile</button>
+        <button class="tab-btn" data-tab="existing-profiles">Existing Profiles</button>
+      </div>
+      
+      <!-- New Profile Tab -->
+      <div id="newProfileTab" class="tab-content active">
+        <div id="profileCreationForm">
+          <h3>Create New Profile</h3>
+          <form id="createProfileForm">
+            <div class="form-group">
+              <label for="profileName">Profile Name:</label>
+              <input type="text" id="profileName" name="profileName" required 
+                     placeholder="e.g., john, jane, myprofile" 
+                     pattern="[a-zA-Z0-9_-]+" 
+                     title="Only letters, numbers, hyphens, and underscores allowed">
+            </div>
+            <div class="form-group">
+              <label for="clientId">Fitbit Client ID:</label>
+              <input type="text" id="clientId" name="clientId" required 
+                     placeholder="Your Fitbit App Client ID">
+            </div>
+            <div class="form-group">
+              <label for="clientSecret">Fitbit Client Secret:</label>
+              <input type="password" id="clientSecret" name="clientSecret" required 
+                     placeholder="Your Fitbit App Client Secret">
+            </div>
+            <div class="form-actions">
+              <button type="submit" id="createProfileBtn" class="btn btn-primary">Create Profile</button>
+              <div id="profileCreationStatus" class="status-message"></div>
+            </div>
+          </form>
+        </div>
+        <div id="profileCreatedSuccess" style="display: none;">
+          <h3>✅ Profile Created Successfully!</h3>
+          <p>Your profile has been created. You can now proceed to authorize with Fitbit.</p>
+          <button id="authorizeBtn" class="btn btn-primary">Authorize with Fitbit</button>
+          <div id="authorizationStatus" class="status-message"></div>
+        </div>
+      </div>
+      
+      <!-- Existing Profiles Tab -->
+      <div id="existingProfilesTab" class="tab-content">
+        <h3>Manage Existing Profiles</h3>
+        <div id="profilesList">
+          <div id="profilesLoading" class="status-message info">Loading profiles...</div>
+        </div>
+        <div id="profileDeletionStatus" class="status-message"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Authorize Profile Modal -->
+<div id="authorizeProfileModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title" id="authorizeProfileTitle">Authorize Profile</h2>
+      <button class="modal-close" id="authorizeProfileModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="authorizeProfileIntro" class="status-message info" style="display:none;"></div>
+      <div id="authorizeProfileContent"></div>
+      <div id="authorizeProfileStatus" class="status-message" style="display:none;"></div>
+    </div>
+  </div>
+  
+</div>
+
+<!-- Authorization Acknowledgement Modal -->
+<div id="authAckModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title">Please Confirm</h2>
+      <button class="modal-close" id="authAckClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="status-message info" style="text-align:left">
+        For this to work, you MUST be logged out of any other user accounts on:<br>
+        <a href="https://www.fitbit.com/dashboard" target="_blank" rel="noopener">https://www.fitbit.com/dashboard</a><br>
+        <a href="https://dev.fitbit.com/apps" target="_blank" rel="noopener">https://dev.fitbit.com/apps</a><br>
+        and you must be logged into the accounts for the profile you are trying to activate.<br><br>
+        Once you press okay, you will go to Fitbit's authorization page, which will then redirect you to the call-back URL, with the code. Copy this URL from the address bar, and paste it back here.
+      </div>
+      <div class="form-actions" style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn-primary" id="authAckOkBtn">Okay</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Delete Modal -->
+<div id="confirmDeleteModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title" id="confirmDeleteTitle">Delete Profile</h2>
+      <button class="modal-close" id="confirmDeleteClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="confirmDeleteBody" class="status-message info" style="text-align:left"></div>
+      <div id="confirmDeleteActions" class="form-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="btn-secondary" id="confirmDeleteCancelBtn">Cancel</button>
+        <button class="btn-danger" id="confirmDeleteProceedBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script src="script.js"></script>
+</body>
+</html>
