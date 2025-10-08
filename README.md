@@ -124,7 +124,7 @@ Before you begin, ensure you have:
    Each script will fetch data from your Fitbit account and save it to CSV files.
 
 7. **Access the dashboard:**
-   - Open http://localhost:9000 in your browser
+   - Open http://localhost:9155 in your browser (Docker default)
    - Your data will be persisted in the `profiles/myprofile/csv/` directory
 
 **Troubleshooting**: If you see your local machine's data instead of the Docker container's data, try:
@@ -254,7 +254,7 @@ python server.py
 - Open http://localhost:9000 in your web browser
 - The dashboard will load your Fitbit data from the CSV files
 
-**Note**: The default server port is 9000 (both locally and in Docker). You can change it by setting the `PORT` environment variable.
+**Note**: The app listens on port 9000 by default. When running with Docker, the container still listens on 9000, but the host port is mapped to 9155 by default via `docker-compose.override.yml`. You can change the host port by editing the `ports` mapping, and change the app's internal port by setting the `PORT` environment variable.
 
 **Note**: You cannot simply open `index.html` directly in your browser because the JavaScript needs to fetch CSV files, which requires a web server due to browser security restrictions.
 
@@ -289,7 +289,7 @@ docker-compose up --build
 #### **Web Interface (Recommended)**
 The easiest way to refresh your data is using the web interface:
 
-1. **Open the dashboard** at http://localhost:9000
+1. **Open the dashboard** at http://localhost:9155 (Docker) or http://localhost:9000 (local)
 2. **Select your profile** from the dropdown
 3. **Click the reload icon (🔄)** to the left of the profile dropdown
 4. **Wait for completion** - the interface will show real-time progress
@@ -581,11 +581,11 @@ This project is for personal use. Please respect Fitbit's API terms of service a
 The repository includes a Dockerfile and docker-compose.yml for running FitBaus locally on your server.
 
 - Build and run
-  - `docker compose up -d` (serves the UI on http://localhost:9000)
+  - `docker compose up -d` (serves the UI on http://localhost:9155)
   - Data persists in `./profiles` (tokens, per‑profile data) and `./csv`.
 
 - Authorize a profile
-  - Open the app (http://localhost:9000) → Profile Management → Create a profile.
+  - Open the app (http://localhost:9155) → Profile Management → Create a profile.
   - Use the built‑in authorization flow. Manual mode works everywhere (open URL, paste code). Background capture is optional (see below).
 
 - Fetch and explore

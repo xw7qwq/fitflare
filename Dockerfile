@@ -33,7 +33,7 @@ EXPOSE 8080
 
 # Healthcheck for self-host monitoring
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
-  CMD curl -fsS http://localhost:9000/api/health || exit 1
+  CMD /bin/sh -c "curl -fsS http://localhost:${PORT:-9000}/api/health || exit 1"
 
 # Default command (start with Gunicorn production server)
 CMD ["gunicorn", "--config", "gunicorn.conf.py", "server:app"]

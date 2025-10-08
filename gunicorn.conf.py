@@ -3,7 +3,13 @@ import multiprocessing
 import os
 
 # Server socket
-bind = "0.0.0.0:9000"
+# Allow overriding port via PORT env var (defaults to 9000)
+_port = os.getenv("PORT", "9000")
+try:
+    _port_int = int(_port)
+except ValueError:
+    _port_int = 9000
+bind = f"0.0.0.0:{_port_int}"
 backlog = 2048
 
 # Worker processes
