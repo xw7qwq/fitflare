@@ -83,10 +83,75 @@
       display: none;
     }
     
-    /* Responsive adjustments for mobile landscape */
+    /* Mobile Portrait Mode - Side by side cards */
+    @media screen and (max-width: 768px) and (orientation: portrait) {
+      .wrap { padding: 8px !important; }
+      
+      #spousalSignalsView > div {
+        flex-direction: row !important;
+        gap: 8px !important;
+      }
+      
+      #spousalSignalsView > div > div {
+        padding: 12px !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+        flex: 1 !important;
+      }
+      
+      #spousalSignalsView > div > div > div:first-child {
+        flex: none !important;
+        width: 100% !important;
+        order: 2 !important;
+      }
+      
+      #spousalSignalsView > div > div > div:last-child {
+        flex: none !important;
+        order: 1 !important;
+        justify-content: center !important;
+        height: 60px !important;
+      }
+      
+      #spousalSignalsView > div > div > div:last-child img {
+        height: 50px !important;
+      }
+      
+      #spousalSignalsView h3 {
+        font-size: 14px !important;
+        margin: 0 0 6px 0 !important;
+      }
+      
+      #spousalSignalsView [id*="profile"] {
+        font-size: 18px !important;
+        margin: 6px 0 !important;
+      }
+      
+      #spousalSignalsView [style*="font-size:12px"] {
+        font-size: 10px !important;
+      }
+      
+      #spousalSignalsView > div > div > div:first-child > div {
+        margin-bottom: 12px !important;
+      }
+      
+      #spousalSignalsView > div > div > div:first-child > div:last-child {
+        margin-top: 12px !important;
+        margin-bottom: 0 !important;
+      }
+      
+      #coupleWellness, #jointBurnoutCard {
+        padding: 12px !important;
+        margin-top: 8px !important;
+      }
+      
+      #coupleWellnessValue, #jointBurnoutValue {
+        font-size: 20px !important;
+      }
+    }
+    
+    /* Mobile Landscape Mode - Compact horizontal layout */
     @media screen and (max-width: 896px) and (orientation: landscape) {
       .wrap { padding: 8px !important; }
-      .card { padding: 12px !important; }
       
       #spousalSignalsView > div {
         gap: 12px !important;
@@ -94,6 +159,11 @@
       
       #spousalSignalsView > div > div {
         padding: 12px !important;
+        gap: 12px !important;
+      }
+      
+      #spousalSignalsView > div > div > div:first-child {
+        flex: 0 0 150px !important;
       }
       
       #spousalSignalsView h3 {
@@ -106,25 +176,29 @@
         margin: 6px 0 !important;
       }
       
-      #spousalSignalsView .metric-label,
       #spousalSignalsView [style*="font-size:12px"] {
         font-size: 10px !important;
       }
       
-      #spousalSignalsView > div > div > div {
+      #spousalSignalsView > div > div > div:first-child > div {
         margin-bottom: 12px !important;
       }
       
-      #spousalSignalsView > div > div > div:last-child {
+      #spousalSignalsView > div > div > div:first-child > div:last-child {
         margin-top: 12px !important;
+        margin-bottom: 0 !important;
       }
       
-      #coupleWellness {
+      #spousalSignalsView > div > div > div:last-child img {
+        height: 80px !important;
+      }
+      
+      #coupleWellness, #jointBurnoutCard {
         padding: 12px !important;
         margin-top: 12px !important;
       }
       
-      #coupleWellnessValue {
+      #coupleWellnessValue, #jointBurnoutValue {
         font-size: 20px !important;
       }
     }
@@ -132,7 +206,6 @@
     /* Extra compact for very small landscape screens */
     @media screen and (max-height: 500px) and (orientation: landscape) {
       .wrap { padding: 4px !important; }
-      .card { padding: 8px !important; }
       
       #spousalSignalsView > div {
         gap: 8px !important;
@@ -140,6 +213,11 @@
       
       #spousalSignalsView > div > div {
         padding: 8px !important;
+        gap: 8px !important;
+      }
+      
+      #spousalSignalsView > div > div > div:first-child {
+        flex: 0 0 120px !important;
       }
       
       #spousalSignalsView h3 {
@@ -156,25 +234,102 @@
         font-size: 9px !important;
       }
       
-      #spousalSignalsView > div > div > div {
+      #spousalSignalsView > div > div > div:first-child > div {
         margin-bottom: 8px !important;
       }
       
-      #spousalSignalsView > div > div > div:last-child {
+      #spousalSignalsView > div > div > div:first-child > div:last-child {
         margin-top: 8px !important;
+        margin-bottom: 0 !important;
       }
       
-      #coupleWellness {
+      #spousalSignalsView > div > div > div:last-child img {
+        height: 60px !important;
+      }
+      
+      #coupleWellness, #jointBurnoutCard {
         padding: 8px !important;
         margin-top: 8px !important;
       }
       
-      #coupleWellnessValue {
+      #coupleWellnessValue, #jointBurnoutValue {
         font-size: 16px !important;
       }
       
       #dataDate {
         font-size: 9px !important;
+      }
+    }
+    
+    /* Very small mobile screens (portrait) */
+    @media screen and (max-width: 480px) and (orientation: portrait) {
+      .wrap { padding: 4px !important; }
+      
+      #spousalSignalsView > div > div {
+        padding: 12px !important;
+        gap: 10px !important;
+      }
+      
+      #spousalSignalsView h3 {
+        font-size: 14px !important;
+        margin: 0 0 6px 0 !important;
+      }
+      
+      #spousalSignalsView [id*="profile"] {
+        font-size: 20px !important;
+        margin: 6px 0 !important;
+      }
+      
+      #spousalSignalsView [style*="font-size:12px"] {
+        font-size: 10px !important;
+      }
+      
+      #spousalSignalsView > div > div > div:last-child img {
+        height: 60px !important;
+      }
+      
+      #spousalSignalsView > div > div > div:first-child > div {
+        margin-bottom: 12px !important;
+      }
+      
+      #spousalSignalsView > div > div > div:first-child > div:last-child {
+        margin-top: 12px !important;
+        margin-bottom: 0 !important;
+      }
+      
+      #coupleWellness, #jointBurnoutCard {
+        padding: 12px !important;
+        margin-top: 8px !important;
+      }
+      
+      #coupleWellnessValue, #jointBurnoutValue {
+        font-size: 20px !important;
+      }
+    }
+    
+    /* Mobile bottom navigation improvements */
+    @media screen and (max-width: 768px) {
+      #dataDate {
+        font-size: 10px !important;
+        margin-top: 8px !important;
+      }
+      
+      #fetchDataBtn {
+        width: 20px !important;
+        height: 20px !important;
+        font-size: 14px !important;
+        margin-top: 8px !important;
+      }
+      
+      #spousalLogo {
+        font-size: 12px !important;
+        letter-spacing: 1px !important;
+      }
+      
+      #spousalLogo::before {
+        width: 15px !important;
+        height: 15px !important;
+        margin-right: 3px !important;
       }
     }
   </style>
@@ -198,11 +353,11 @@
             <div style="flex:0 0 200px;text-align:center;">
               <h3 style="color:#ffffff;margin:0 0 10px 0;">Profile 1</h3>
               <div style="margin-bottom:20px;">
-                <div id="profile1HRV" style="font-size:32px;font-weight:bold;color:#4a90e2;margin:10px 0;">--</div>
+                <div id="profile1HRV" style="font-size:32px;font-weight:bold;color:#ffcc66;margin:10px 0;">--</div>
                 <div style="font-size:12px;color:#9aa5c6;">Heart Rate Variability</div>
               </div>
               <div>
-                <div id="profile1Sleep" style="font-size:32px;font-weight:bold;color:#ffcc66;margin:10px 0;">--</div>
+                <div id="profile1Sleep" style="font-size:32px;font-weight:bold;color:#4a90e2;margin:10px 0;">--</div>
                 <div style="font-size:12px;color:#9aa5c6;">Sleep Score</div>
               </div>
               <div style="margin-top:20px;">
@@ -220,11 +375,11 @@
             <div style="flex:0 0 200px;text-align:center;">
               <h3 style="color:#ffffff;margin:0 0 10px 0;">Profile 2</h3>
               <div style="margin-bottom:20px;">
-                <div id="profile2HRV" style="font-size:32px;font-weight:bold;color:#4a90e2;margin:10px 0;">--</div>
+                <div id="profile2HRV" style="font-size:32px;font-weight:bold;color:#ffcc66;margin:10px 0;">--</div>
                 <div style="font-size:12px;color:#9aa5c6;">Heart Rate Variability</div>
               </div>
               <div>
-                <div id="profile2Sleep" style="font-size:32px;font-weight:bold;color:#ffcc66;margin:10px 0;">--</div>
+                <div id="profile2Sleep" style="font-size:32px;font-weight:bold;color:#4a90e2;margin:10px 0;">--</div>
                 <div style="font-size:12px;color:#9aa5c6;">Sleep Score</div>
               </div>
               <div style="margin-top:20px;">
@@ -242,15 +397,15 @@
       
     </div>
     
-    <!-- Date, Fetch button and Logo at bottom -->
+    <!-- Date and Fetch button at bottom -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding:0 16px;">
-      <div id="dataDate" style="font-size:11px;color:#4CAF50;margin-top:12px;font-style:italic;">--</div>
-      <div style="display:flex;align-items:center;gap:12px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div id="dataDate" style="font-size:11px;color:#6b7280;margin-top:12px;font-style:italic;">--</div>
         <button id="fetchDataBtn" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:4px;font-size:16px;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:4px;transition:all 0.2s ease;flex-shrink:0;align-self:center;margin-top:12px;" title="Fetch New Data" onmouseover="this.style.background='rgba(154,165,198,0.1)'" onmouseout="this.style.background='none'">
           ↻
         </button>
-        <div id="spousalLogo" class="inline-logo" aria-label="FitBaus brand">FitBaus</div>
       </div>
+      <div id="spousalLogo" class="inline-logo" aria-label="FitBaus brand">FitBaus</div>
     </div>
   </div>
 
@@ -953,7 +1108,7 @@
         const agg = coupleAggregate(a,b);
         if (!agg){ 
           host.innerHTML = `
-            <div style="font-size:28px;font-weight:bold;color:#9aa5c6;margin:10px 0;">--</div>
+            <div id="coupleWellnessValue" style="font-size:28px;font-weight:bold;color:#9aa5c6;margin:10px 0;">--</div>
             <div style="font-size:12px;color:#9aa5c6;">Couple Wellness</div>
           `;
           return; 
@@ -962,7 +1117,7 @@
         const color = getBandColor(agg.score);
         const conf = agg.label ? ` • ${agg.label}` : '';
         host.innerHTML = `
-          <div style="font-size:28px;font-weight:bold;color:${color};margin:10px 0;">${Math.round(agg.score)} (${lbl})</div>
+          <div id="coupleWellnessValue" style="font-size:28px;font-weight:bold;color:${color};margin:10px 0;">${Math.round(agg.score)} (${lbl})</div>
           <div style="font-size:12px;color:#9aa5c6;">Couple Wellness${conf}</div>
         `;
        }
@@ -1032,7 +1187,7 @@
          // If either profile is missing, show placeholder
          if (!result1 || !result2) {
            host.innerHTML = `
-             <div style="font-size:28px;font-weight:bold;color:#9aa5c6;margin:10px 0;">--</div>
+             <div id="jointBurnoutValue" style="font-size:28px;font-weight:bold;color:#9aa5c6;margin:10px 0;">--</div>
              <div style="font-size:12px;color:#9aa5c6;">Joint Burnout Risk</div>
              <div style="font-size:10px;color:#9aa5c6;margin-top:8px;font-style:italic;">Insufficient data</div>
            `;
@@ -1073,7 +1228,7 @@
            
            // Update card
            host.innerHTML = `
-             <div style="font-size:28px;font-weight:bold;color:${riskColor};margin:10px 0;">${riskLevel}</div>
+             <div id="jointBurnoutValue" style="font-size:28px;font-weight:bold;color:${riskColor};margin:10px 0;">${riskLevel}</div>
              <div style="font-size:12px;color:#9aa5c6;">Joint Burnout Risk</div>
              <div style="font-size:10px;color:#9aa5c6;margin-top:8px;font-style:italic;">${burnoutText}</div>
            `;
@@ -1081,7 +1236,7 @@
          } catch (error) {
            // Fallback on error
            host.innerHTML = `
-             <div style="font-size:28px;font-weight:bold;color:#9aa5c6;margin:10px 0;">--</div>
+             <div id="jointBurnoutValue" style="font-size:28px;font-weight:bold;color:#9aa5c6;margin:10px 0;">--</div>
              <div style="font-size:12px;color:#9aa5c6;">Joint Burnout Risk</div>
              <div style="font-size:10px;color:#9aa5c6;margin-top:8px;font-style:italic;">Unable to calculate</div>
            `;
