@@ -49,16 +49,10 @@
       <!-- Dropdowns and logo outside controls -->
       <div style="margin-bottom:16px;">
         <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <label for="profileSelect" style="font-size:12px;color:#a9b3d8;width:120px;"><span id="profileStatus" style="color:#666;font-size:10px;">•</span> Profile</label>
-          <label for="viewSelect" style="font-size:12px;color:#a9b3d8;width:150px;">Mobile View</label>
         </div>
         <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;width:100%;">
           <div style="display:flex;gap:8px;align-items:center;">
             <select id="profileSelect" style="width:120px;"></select>
-            <select id="viewSelect" style="width:150px;">
-              <option value="predictions">Predictions & Family</option>
-              <option value="spousal">Spousal Signals</option>
-            </select>
           </div>
           <div class="inline-logo" aria-label="FitBaus brand" style="align-self:center;margin-top:16px;">FitBaus</div>
         </div>
@@ -359,31 +353,19 @@
 
   <script src="script.js"></script>
   <script>
-    // Mobile view switching
+    // Mobile view - Predictions & Family is default
     document.addEventListener('DOMContentLoaded', function() {
-      const viewSelect = document.getElementById('viewSelect');
       const controls = document.querySelector('.controls');
       const chart = document.getElementById('chart');
       const spousalView = document.getElementById('spousalSignalsView');
       
-      function switchView() {
-        const selectedView = viewSelect.value;
-        
-        if (selectedView === 'spousal') {
-          // Hide everything else
-          if (controls) controls.style.display = 'none';
-          if (chart) chart.style.display = 'none';
-          if (spousalView) spousalView.style.display = 'block';
-          
-          // Load today's HRV data for both profiles
-          loadSpousalHRVData();
-        } else {
-          // Show everything else
-          if (controls) controls.style.display = 'block';
-          if (chart) chart.style.display = 'block';
-          if (spousalView) spousalView.style.display = 'none';
-        }
-      }
+      // Always show Predictions & Family view (default for mobile)
+      if (controls) controls.style.display = 'block';
+      if (chart) chart.style.display = 'block';
+      if (spousalView) spousalView.style.display = 'none';
+      
+      // Note: Spousal Signals view is hidden by default
+      // Users can access it via the main dashboard or spousal.html
       
       async function loadSpousalHRVData() {
         try {
@@ -840,10 +822,6 @@
           <div style="font-size:12px;color:#9aa5c6;">Couple Wellness${conf}</div>
         `;
       }
-
-      viewSelect.addEventListener('change', switchView);
-      // Initialize view
-      switchView();
     });
   </script>
 </body>

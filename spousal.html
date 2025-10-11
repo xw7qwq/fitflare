@@ -42,6 +42,20 @@
   <style>
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     
+    /* Background image with transparency */
+    body {
+      background: 
+        linear-gradient(rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.8)),
+        url('assets/spousalbackground.png');
+      background-size: 100% 100%;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+    }
+    
     /* Make spousal page logo smaller */
     #spousalLogo.inline-logo {
       font-size: 14.5px !important;
@@ -51,6 +65,11 @@
       width: 17.5px !important;
       height: 17.5px !important;
       margin-right: 4px !important;
+    }
+    
+    /* Hide profile names in spousal cards */
+    #spousalSignalsView h3 {
+      display: none;
     }
     
     /* Responsive adjustments for mobile landscape */
@@ -163,34 +182,48 @@
        <!-- Spousal Signals View -->
        <div id="spousalSignalsView" style="display:block;">
         <div style="display:flex;gap:16px;justify-content:center;">
-          <div style="flex:1;text-align:center;background:#1a2349;border-radius:12px;padding:20px;">
-            <h3 style="color:#ffffff;margin:0 0 10px 0;">Profile 1</h3>
-            <div style="margin-bottom:20px;">
-              <div id="profile1HRV" style="font-size:32px;font-weight:bold;color:#4a90e2;margin:10px 0;">--</div>
-              <div style="font-size:12px;color:#9aa5c6;">Heart Rate Variability</div>
+          <div style="flex:1;background:#1a2349;border-radius:12px;padding:20px;display:flex;gap:20px;">
+            <!-- Data section on the left -->
+            <div style="flex:0 0 200px;text-align:center;">
+              <h3 style="color:#ffffff;margin:0 0 10px 0;">Profile 1</h3>
+              <div style="margin-bottom:20px;">
+                <div id="profile1HRV" style="font-size:32px;font-weight:bold;color:#4a90e2;margin:10px 0;">--</div>
+                <div style="font-size:12px;color:#9aa5c6;">Heart Rate Variability</div>
+              </div>
+              <div>
+                <div id="profile1Sleep" style="font-size:32px;font-weight:bold;color:#ffcc66;margin:10px 0;">--</div>
+                <div style="font-size:12px;color:#9aa5c6;">Sleep Score</div>
+              </div>
+              <div style="margin-top:20px;">
+                <div id="profile1Wellness" style="font-size:28px;font-weight:bold;color:#4CAF50;margin:10px 0;">--</div>
+                <div style="font-size:12px;color:#9aa5c6;">Wellness Score</div>
+              </div>
             </div>
-            <div>
-              <div id="profile1Sleep" style="font-size:32px;font-weight:bold;color:#ffcc66;margin:10px 0;">--</div>
-              <div style="font-size:12px;color:#9aa5c6;">Sleep Score</div>
-            </div>
-            <div style="margin-top:20px;">
-              <div id="profile1Wellness" style="font-size:28px;font-weight:bold;color:#4CAF50;margin:10px 0;">--</div>
-              <div style="font-size:12px;color:#9aa5c6;">Wellness Score</div>
+            <!-- Image section on the right -->
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;">
+              <img src="assets/husband.png" alt="Husband" style="height:120px;width:auto;object-fit:contain;">
             </div>
           </div>
-          <div style="flex:1;text-align:center;background:#1a2349;border-radius:12px;padding:20px;">
-            <h3 style="color:#ffffff;margin:0 0 10px 0;">Profile 2</h3>
-            <div style="margin-bottom:20px;">
-              <div id="profile2HRV" style="font-size:32px;font-weight:bold;color:#4a90e2;margin:10px 0;">--</div>
-              <div style="font-size:12px;color:#9aa5c6;">Heart Rate Variability</div>
+          <div style="flex:1;background:#1a2349;border-radius:12px;padding:20px;display:flex;gap:20px;">
+            <!-- Data section on the left -->
+            <div style="flex:0 0 200px;text-align:center;">
+              <h3 style="color:#ffffff;margin:0 0 10px 0;">Profile 2</h3>
+              <div style="margin-bottom:20px;">
+                <div id="profile2HRV" style="font-size:32px;font-weight:bold;color:#4a90e2;margin:10px 0;">--</div>
+                <div style="font-size:12px;color:#9aa5c6;">Heart Rate Variability</div>
+              </div>
+              <div>
+                <div id="profile2Sleep" style="font-size:32px;font-weight:bold;color:#ffcc66;margin:10px 0;">--</div>
+                <div style="font-size:12px;color:#9aa5c6;">Sleep Score</div>
+              </div>
+              <div style="margin-top:20px;">
+                <div id="profile2Wellness" style="font-size:28px;font-weight:bold;color:#4CAF50;margin:10px 0;">--</div>
+                <div style="font-size:12px;color:#9aa5c6;">Wellness Score</div>
+              </div>
             </div>
-            <div>
-              <div id="profile2Sleep" style="font-size:32px;font-weight:bold;color:#ffcc66;margin:10px 0;">--</div>
-              <div style="font-size:12px;color:#9aa5c6;">Sleep Score</div>
-            </div>
-            <div style="margin-top:20px;">
-              <div id="profile2Wellness" style="font-size:28px;font-weight:bold;color:#4CAF50;margin:10px 0;">--</div>
-              <div style="font-size:12px;color:#9aa5c6;">Wellness Score</div>
+            <!-- Image section on the right -->
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;">
+              <img src="assets/wife.png" alt="Wife" style="height:120px;width:auto;object-fit:contain;">
             </div>
           </div>
         </div>
@@ -226,45 +259,38 @@
       
       // Add fetch button handler for both profiles
       if (fetchBtn) {
-        fetchBtn.addEventListener('click', async function() {
-          console.log('Fetching data for both profiles...');
-          fetchBtn.disabled = true;
-          fetchBtn.style.animation = 'spin 1s linear infinite';
-          fetchBtn.style.color = '#4a90e2';
-          
-          try {
-            // Fetch data for both ammar and nour
-            console.log('Starting fetch for Ammar and Nour...');
-            const [ammarResponse, nourResponse] = await Promise.all([
-              fetch('/api/fetch-data', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ profile: 'ammar' })
-              }),
-              fetch('/api/fetch-data', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ profile: 'nour' })
-              })
-            ]);
-            
-            const ammarResult = await ammarResponse.json();
-            const nourResult = await nourResponse.json();
-            
-            console.log('Fetch jobs started:');
-            console.log('  Ammar job_id:', ammarResult.job_id);
-            console.log('  Nour job_id:', nourResult.job_id);
-            
-            // Poll both jobs
-            await pollBothJobs(ammarResult.job_id, nourResult.job_id);
-            
-          } catch (error) {
-            console.error('✗ Fetch error:', error);
-            fetchBtn.style.animation = 'none';
-            fetchBtn.style.color = '#ff6b6b';
-            fetchBtn.disabled = false;
-          }
-        });
+         fetchBtn.addEventListener('click', async function() {
+           fetchBtn.disabled = true;
+           fetchBtn.style.animation = 'spin 1s linear infinite';
+           fetchBtn.style.color = '#4a90e2';
+           
+           try {
+             // Fetch data for both ammar and nour
+             const [ammarResponse, nourResponse] = await Promise.all([
+               fetch('/api/fetch-data', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({ profile: 'ammar' })
+               }),
+               fetch('/api/fetch-data', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({ profile: 'nour' })
+               })
+             ]);
+             
+             const ammarResult = await ammarResponse.json();
+             const nourResult = await nourResponse.json();
+             
+             // Poll both jobs
+             await pollBothJobs(ammarResult.job_id, nourResult.job_id);
+             
+           } catch (error) {
+             fetchBtn.style.animation = 'none';
+             fetchBtn.style.color = '#ff6b6b';
+             fetchBtn.disabled = false;
+           }
+         });
         
         // Poll both job statuses until both complete
         async function pollBothJobs(ammarJobId, nourJobId) {
@@ -280,65 +306,56 @@
               
               let hasErrors = false;
               
-              if (!ammarDone) {
-                console.log(`Ammar job ${ammarJobId}:`, ammarStatus.status);
-                if (ammarStatus.status === 'completed') ammarDone = true;
-                else if (ammarStatus.status === 'failed' || ammarStatus.status === 'error' || ammarStatus.status === 'timeout') {
-                  console.error('✗ Ammar fetch failed:', ammarStatus.error);
-                  ammarDone = true;
-                  hasErrors = true;
-                }
-              }
-              
-              if (!nourDone) {
-                console.log(`Nour job ${nourJobId}:`, nourStatus.status);
-                if (nourStatus.status === 'completed') nourDone = true;
-                else if (nourStatus.status === 'failed' || nourStatus.status === 'error' || nourStatus.status === 'timeout') {
-                  console.error('✗ Nour fetch failed:', nourStatus.error);
-                  nourDone = true;
-                  hasErrors = true;
-                }
-              }
+               if (!ammarDone) {
+                 if (ammarStatus.status === 'completed') ammarDone = true;
+                 else if (ammarStatus.status === 'failed' || ammarStatus.status === 'error' || ammarStatus.status === 'timeout') {
+                   ammarDone = true;
+                   hasErrors = true;
+                 }
+               }
+               
+               if (!nourDone) {
+                 if (nourStatus.status === 'completed') nourDone = true;
+                 else if (nourStatus.status === 'failed' || nourStatus.status === 'error' || nourStatus.status === 'timeout') {
+                   nourDone = true;
+                   hasErrors = true;
+                 }
+               }
               
               // If both done, reload data
               if (ammarDone && nourDone) {
                 fetchBtn.style.animation = 'none';
                 
-                if (hasErrors) {
-                  // Show red X for errors
-                  console.error('✗ One or both fetch jobs failed');
-                  fetchBtn.textContent = '✗';
-                  fetchBtn.style.color = '#ff6b6b';
-                  fetchBtn.disabled = false;
-                  
-                  // Change back to refresh icon after 3 seconds
-                  setTimeout(() => {
-                    fetchBtn.textContent = '↻';
-                    fetchBtn.style.color = '#9aa5c6';
-                  }, 3000);
-                } else {
-                  // Both successful
-                  console.log('✓ Both fetch jobs completed successfully');
-                  console.log('Reloading spousal data...');
-                  
-                  // Reload the data
-                  await loadSpousalHRVData();
-                  
-                  // Show green checkmark
-                  fetchBtn.style.color = '#4CAF50';
-                  fetchBtn.textContent = '✓';
-                  fetchBtn.disabled = false;
-                  console.log('✓ Data refresh complete - cards updated with new data');
-                  
-                  // Reschedule auto-refresh for 24 hours from now
-                  scheduleAutoRefresh();
-                  
-                  // Keep green checkmark for 30 seconds
-                  setTimeout(() => {
-                    fetchBtn.textContent = '↻';
-                    fetchBtn.style.color = '#9aa5c6';
-                  }, 30000);
-                }
+                 if (hasErrors) {
+                   // Show red X for errors
+                   fetchBtn.textContent = '✗';
+                   fetchBtn.style.color = '#ff6b6b';
+                   fetchBtn.disabled = false;
+                   
+                   // Change back to refresh icon after 3 seconds
+                   setTimeout(() => {
+                     fetchBtn.textContent = '↻';
+                     fetchBtn.style.color = '#9aa5c6';
+                   }, 3000);
+                 } else {
+                   // Both successful
+                   // Reload the data
+                   await loadSpousalHRVData();
+                   
+                   // Show green checkmark
+                   fetchBtn.style.color = '#4CAF50';
+                   fetchBtn.textContent = '✓';
+                   fetchBtn.disabled = false;
+                   
+                   // Reschedule auto-refresh for 24 hours from now
+                   scheduleAutoRefresh();
+                   
+                   // Keep green checkmark for 30 seconds
+                   setTimeout(() => {
+                     fetchBtn.textContent = '↻';
+                     fetchBtn.style.color = '#9aa5c6';
+                   }, 30000);
+                 }
                 
                 return;
               }
@@ -346,13 +363,12 @@
               // Otherwise, poll again in 2 seconds
               setTimeout(checkStatus, 2000);
               
-            } catch (error) {
-              console.error('✗ Status polling error:', error);
-              fetchBtn.style.animation = 'none';
-              fetchBtn.style.color = '#ff6b6b';
-              fetchBtn.textContent = '↻';
-              fetchBtn.disabled = false;
-            }
+             } catch (error) {
+               fetchBtn.style.animation = 'none';
+               fetchBtn.style.color = '#ff6b6b';
+               fetchBtn.textContent = '↻';
+               fetchBtn.disabled = false;
+             }
           };
           
           // Start polling
@@ -372,16 +388,13 @@
           clearTimeout(autoRefreshTimer);
         }
         
-        // Schedule fetch for 24 hours from now
-        const twentyFourHours = 24 * 60 * 60 * 1000;
-        autoRefreshTimer = setTimeout(() => {
-          console.log('⏰ Auto-refresh triggered (24 hours elapsed)');
-          if (fetchBtn && !fetchBtn.disabled) {
-            fetchBtn.click();
-          }
-        }, twentyFourHours);
-        
-        console.log('⏰ Auto-refresh scheduled for 24 hours from now');
+         // Schedule fetch for 24 hours from now
+         const twentyFourHours = 24 * 60 * 60 * 1000;
+         autoRefreshTimer = setTimeout(() => {
+           if (fetchBtn && !fetchBtn.disabled) {
+             fetchBtn.click();
+           }
+         }, twentyFourHours);
       }
       
       // Start the auto-refresh timer
@@ -391,23 +404,15 @@
       const logo = document.getElementById('spousalLogo');
       if (logo) {
         logo.style.cursor = 'pointer';
-        logo.addEventListener('click', () => {
-          if (!document.fullscreenElement) {
-            // Enter fullscreen
-            document.documentElement.requestFullscreen().then(() => {
-              console.log('✓ Entered fullscreen mode');
-            }).catch(err => {
-              console.error('Error entering fullscreen:', err);
-            });
-          } else {
-            // Exit fullscreen
-            document.exitFullscreen().then(() => {
-              console.log('✓ Exited fullscreen mode');
-            }).catch(err => {
-              console.error('Error exiting fullscreen:', err);
-            });
-          }
-        });
+         logo.addEventListener('click', () => {
+           if (!document.fullscreenElement) {
+             // Enter fullscreen
+             document.documentElement.requestFullscreen().catch(() => {});
+           } else {
+             // Exit fullscreen
+             document.exitFullscreen().catch(() => {});
+           }
+         });
       }
       
       async function loadSpousalHRVData() {
@@ -454,26 +459,25 @@
              p2Well.textContent = '--';
            }
 
-          // Couple aggregation display (create on first run if missing)
-          renderCoupleSummary(result1, result2);
-          
-          // Update the data date display
-          updateDataDate(result1, result2);
-        } catch (e) {
-          console.warn('Spousal view error:', e);
-        }
+           // Couple aggregation display (create on first run if missing)
+           renderCoupleSummary(result1, result2);
+           
+           // Joint Burnout Risk card (placeholder)
+           renderJointBurnoutCard(p1, p2);
+           
+           // Update the data date display
+           updateDataDate(result1, result2);
+         } catch (e) {
+           // Silent error handling
+         }
       }
       
       function updateDataDate(result1, result2) {
         const dateElement = document.getElementById('dataDate');
         if (!dateElement) return;
         
-        // Get the date from the first available result
-        const dateStr = result1?.date || result2?.date;
-        console.log('updateDataDate called with:');
-        console.log('  result1:', result1);
-        console.log('  result2:', result2);
-        console.log('  dateStr:', dateStr);
+         // Get the date from the first available result
+         const dateStr = result1?.date || result2?.date;
         
         if (!dateStr) {
           dateElement.textContent = '--';
@@ -490,13 +494,11 @@
           
           // Create date in local timezone
           const d = new Date(year, month - 1, day);
-          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          const dayName = dayNames[d.getDay()];
-          const formattedDate = `${dayName} ${month}/${day}/${year}`;
-          console.log('  Formatted date:', formattedDate);
-          dateElement.textContent = formattedDate;
+           const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+           const dayName = dayNames[d.getDay()];
+           const formattedDate = `${dayName} ${month}/${day}/${year}`;
+           dateElement.textContent = formattedDate;
         } catch (error) {
-          console.error('Date formatting error:', error);
           dateElement.textContent = '--';
         }
       }
@@ -534,35 +536,39 @@
         // Build CSV paths using BASE_PREFIX from script.js
         const sleepPath = `${BASE_PREFIX}profiles/${profileId}/csv/fitbit_sleep.csv`;
         const hrvPath   = `${BASE_PREFIX}profiles/${profileId}/csv/fitbit_hrv.csv`;
+        const rhrPath   = `${BASE_PREFIX}profiles/${profileId}/csv/fitbit_rhr.csv`;
+        const stepsPath = `${BASE_PREFIX}profiles/${profileId}/csv/fitbit_activity.csv`;
+        
         // Use helpers from script.js
-        const [sleepText, hrvText] = await Promise.all([
+        const [sleepText, hrvText, rhrText, stepsText] = await Promise.all([
           fetchCSV(sleepPath).catch(()=>''),
           fetchCSV(hrvPath).catch(()=>''),
+          fetchCSV(rhrPath).catch(()=>''),
+          fetchCSV(stepsPath).catch(()=>'')
         ]);
-        const sleepRaw = sleepText ? parseCSV(sleepText) : [];
-        const hrvRaw = hrvText ? parseCSV(hrvText) : [];
-        console.log(`Raw CSV rows for ${profileId}:`, { sleepRaw: sleepRaw.length, hrvRaw: hrvRaw.length });
-        console.log(`Last sleep row for ${profileId}:`, sleepRaw[sleepRaw.length - 1]);
-        console.log(`Last HRV row for ${profileId}:`, hrvRaw[hrvRaw.length - 1]);
         
-        const sleepRows = normalizeSleepRows(sleepRaw);
-        const hrvRows = normalizeHRVRows(hrvRaw);
-        console.log(`Normalized rows for ${profileId}:`, { sleepRows: sleepRows.length, hrvRows: hrvRows.length });
-        console.log(`Last normalized sleep for ${profileId}:`, sleepRows[sleepRows.length - 1]);
-        console.log(`Last normalized HRV for ${profileId}:`, hrvRows[hrvRows.length - 1]);
+         const sleepRaw = sleepText ? parseCSV(sleepText) : [];
+         const hrvRaw = hrvText ? parseCSV(hrvText) : [];
+         const rhrRaw = rhrText ? parseCSV(rhrText) : [];
+         const stepsRaw = stepsText ? parseCSV(stepsText) : [];
+         
+         const sleepRows = normalizeSleepRows(sleepRaw);
+         const hrvRows = normalizeHRVRows(hrvRaw);
+         const rhrRows = normalizeRHRRows(rhrRaw);
+         const stepsRows = normalizeStepsRows(stepsRaw);
+         
+         const sleepDaily = aggregateSleepDaily(sleepRows);
+         const hrvDaily = aggregateHRVDaily(hrvRows);
+         const dates = dedupeSorted([...Object.keys(sleepDaily), ...Object.keys(hrvDaily)]);
         
-        const sleepDaily = aggregateSleepDaily(sleepRows);
-        const hrvDaily = aggregateHRVDaily(hrvRows);
-        const dates = dedupeSorted([...Object.keys(sleepDaily), ...Object.keys(hrvDaily)]);
-        console.log(`Aggregated data for ${profileId}:`, { 
-          sleepDailyKeys: Object.keys(sleepDaily).length,
-          hrvDailyKeys: Object.keys(hrvDaily).length,
-          lastSleepDate: Object.keys(sleepDaily).slice(-1)[0],
-          lastHRVDate: Object.keys(hrvDaily).slice(-1)[0],
-          allDates: dates.slice(-5)
-        });
-        
-        return { id: profileId, dates, sleepDaily, hrvDaily };
+        return { 
+          id: profileId, 
+          dates, 
+          sleepDaily, 
+          hrvDaily,
+          rhrRows,      // Keep as array for RHR elevation calculation
+          stepsRows     // Keep as array for steps analysis
+        };
       }
 
       function normalizeHRVRows(rows){
@@ -574,6 +580,34 @@
             return { dateISO: iso, rmssd: Number.isFinite(val) ? val : NaN };
           }).filter(r=> r.dateISO && Number.isFinite(r.rmssd));
         }catch(_){ return [] }
+      }
+
+      // From script.js line 855
+      function normalizeRHRRows(rows){
+        return rows.map(r=>{
+          const d = parseDate(r.date);
+          const rhr = Number(r.resting_heart_rate);
+          const iso = d ? d.toISOString().slice(0,10) : null;
+          return { 
+            dateISO: iso, 
+            date: d, 
+            rhr: Number.isFinite(rhr) ? rhr : NaN 
+          };
+        }).filter(r=>r.dateISO && Number.isFinite(r.rhr));
+      }
+
+      // From script.js (steps normalization)
+      function normalizeStepsRows(rows){
+        return rows.map(r=>{
+          const d = parseDate(r.date || r.dateTime);
+          const steps = Number(r.steps || r.value);
+          const iso = d ? d.toISOString().slice(0,10) : null;
+          return { 
+            dateISO: iso, 
+            date: d, 
+            steps: Number.isFinite(steps) ? steps : NaN 
+          };
+        }).filter(r=>r.dateISO && Number.isFinite(r.steps));
       }
 
       function aggregateSleepDaily(rows){
@@ -763,18 +797,13 @@
         const S_sm = emaSeries(S_norm, dates, PARAMS.alpha_sleep);
         const H_sm = emaSeries(HRV_norm, dates, PARAMS.alpha_hrv);
 
-        // Choose evaluation day t as the latest date with at least one signal
-        let t = null;
-        for (let i=dates.length-1; i>=0; i--){
-          const d = dates[i];
-          if (S_norm.has(d) || HRV_norm.has(d)) { t = d; break; }
-        }
-        console.log(`Evaluation day selected: ${t}`);
-        console.log(`S_norm has this date: ${S_norm.has(t)}, HRV_norm has this date: ${HRV_norm.has(t)}`);
-        console.log(`Last 5 dates in series:`, dates.slice(-5));
-        console.log(`S_norm keys (last 5):`, Array.from(S_norm.keys()).slice(-5));
-        console.log(`HRV_norm keys (last 5):`, Array.from(HRV_norm.keys()).slice(-5));
-        if (!t) return null;
+         // Choose evaluation day t as the latest date with at least one signal
+         let t = null;
+         for (let i=dates.length-1; i>=0; i--){
+           const d = dates[i];
+           if (S_norm.has(d) || HRV_norm.has(d)) { t = d; break; }
+         }
+         if (!t) return null;
 
         const sToday = S_norm.get(t); // may be undefined
         const hToday = HRV_norm.get(t);
@@ -925,9 +954,130 @@
           <div style="font-size:28px;font-weight:bold;color:${color};margin:10px 0;">${Math.round(agg.score)} (${lbl})</div>
           <div style="font-size:12px;color:#9aa5c6;">Couple Wellness${conf}</div>
         `;
-      }
+       }
 
-    });
-  </script>
-</body>
-</html>
+       // Helper functions from script.js for Joint Burnout calculation
+       function _mean2(arr){
+         return arr.length ? arr.reduce((s,v)=>s+v,0)/arr.length : NaN;
+       }
+
+       function stdev(arr) {
+         const a = arr.filter(x => Number.isFinite(x));
+         if (a.length < 2) return NaN;
+         const mean = _mean2(a);
+         const variance = a.reduce((sum, x) => sum + Math.pow(x - mean, 2), 0) / a.length;
+         return Math.sqrt(variance);
+       }
+
+       function winsorize(arr, p=0.01){
+         const a = arr.slice().sort((x,y)=>x-y);
+         const lo = a[Math.floor(p*a.length)];
+         const hi = a[Math.floor((1-p)*a.length)-1];
+         return arr.map(v => Math.min(hi, Math.max(lo, v)));
+       }
+
+       function lastNDays(arr, n){ 
+         return arr.slice(-n); 
+       }
+
+       // RHR Elevation Check - exact logic from script.js lines 2806-2825
+       function rhrElevated(userRhr){
+         try{
+           const series = userRhr.slice().sort((a,b)=>String(a.dateISO).localeCompare(String(b.dateISO)));
+           if(series.length < 14) return false; // need baseline + recent
+           const baselinePool = series.slice(0, Math.max(0, series.length - 7));
+           const baselineValsRaw = baselinePool.map(r=>r.rhr).filter(Number.isFinite);
+           if(baselineValsRaw.length < 30) return false; // insufficient baseline
+           const baselineVals = winsorize(baselineValsRaw, 0.01);
+           const mu = _mean2(baselineVals);
+           const sd = stdev(baselineVals);
+           const recent7 = series.slice(-7).map(r=>r.rhr).filter(Number.isFinite);
+           if(recent7.length < 5) return false;
+           const recentMean = _mean2(recent7);
+           const threshold = mu + Math.max(3, 1.0 * (Number.isFinite(sd)? sd : 0));
+           // stability: at least 2 of last 3 days elevated
+           const last3 = series.slice(-3).map(r=>r.rhr).filter(Number.isFinite);
+           const elevatedDays = last3.filter(v => v >= threshold).length;
+           return (recentMean >= threshold) && (elevatedDays >= 2);
+         }catch(_){ return false }
+       }
+
+       // Joint Burnout Risk Card - Full Implementation
+       function renderJointBurnoutCard(result1, result2) {
+         let host = document.getElementById('jointBurnoutCard');
+         if (!host) {
+           const container = document.createElement('div');
+           container.id = 'jointBurnoutCard';
+           container.style.marginTop = '16px';
+           container.style.background = '#1a2349';
+           container.style.borderRadius = '12px';
+           container.style.padding = '20px';
+           container.style.textAlign = 'center';
+           const parent = document.getElementById('spousalSignalsView');
+           parent.appendChild(container);
+           host = container;
+         }
+
+         // If either profile is missing, show placeholder
+         if (!result1 || !result2) {
+           host.innerHTML = `
+             <div style="font-size:28px;font-weight:bold;color:#9aa5c6;margin:10px 0;">--</div>
+             <div style="font-size:12px;color:#9aa5c6;">Joint Burnout Risk</div>
+             <div style="font-size:10px;color:#9aa5c6;margin-top:8px;font-style:italic;">Insufficient data</div>
+           `;
+           return;
+         }
+
+         try {
+           // Extract last 7 days data (matching script.js lines 2798-2803)
+           const days = 7;
+           const aS = lastNDays(Object.values(result1.sleepDaily).filter(Number.isFinite), days);
+           const bS = lastNDays(Object.values(result2.sleepDaily).filter(Number.isFinite), days);
+           const aR = result1.rhrRows || [];
+           const bR = result2.rhrRows || [];
+           const aP = lastNDays((result1.stepsRows || []).map(r=>r.steps).filter(Number.isFinite), days);
+           const bP = lastNDays((result2.stepsRows || []).map(r=>r.steps).filter(Number.isFinite), days);
+           
+           // Calculate risk flags (matching script.js lines 2826-2830)
+           const aRhrElev = rhrElevated(aR);
+           const bRhrElev = rhrElevated(bR);
+           const aRisk = (_mean2(aS)<75?1:0) + (aRhrElev?1:0) + (_mean2(aP)<6000?1:0);
+           const bRisk = (_mean2(bS)<75?1:0) + (bRhrElev?1:0) + (_mean2(bP)<6000?1:0);
+           const totalRisk = aRisk + bRisk;
+           
+           // Determine risk level and text (matching script.js lines 2831-2833)
+           let riskLevel = 'Low';
+           let burnoutText = 'Risk low and stable';
+           let riskColor = '#4CAF50'; // Green
+           
+           if(totalRisk>=4) {
+             riskLevel = 'High';
+             burnoutText = 'Family fatigue risk rising this week';
+             riskColor = '#ff6b6b'; // Red
+           } else if(totalRisk>=2) {
+             riskLevel = 'Moderate';
+             burnoutText = 'Elevated shared fatigue signals - consider lighter days';
+             riskColor = '#ffc107'; // Yellow
+           }
+           
+           // Update card
+           host.innerHTML = `
+             <div style="font-size:28px;font-weight:bold;color:${riskColor};margin:10px 0;">${riskLevel}</div>
+             <div style="font-size:12px;color:#9aa5c6;">Joint Burnout Risk</div>
+             <div style="font-size:10px;color:#9aa5c6;margin-top:8px;font-style:italic;">${burnoutText}</div>
+           `;
+           
+         } catch (error) {
+           // Fallback on error
+           host.innerHTML = `
+             <div style="font-size:28px;font-weight:bold;color:#9aa5c6;margin:10px 0;">--</div>
+             <div style="font-size:12px;color:#9aa5c6;">Joint Burnout Risk</div>
+             <div style="font-size:10px;color:#9aa5c6;margin-top:8px;font-style:italic;">Unable to calculate</div>
+           `;
+         }
+       }
+
+     });
+   </script>
+ </body>
+ </html>

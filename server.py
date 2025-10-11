@@ -551,7 +551,19 @@ def run_fetch_script(profile_id, job_id):
 # Static file serving (maintains existing behavior)
 @app.route('/')
 def index():
-    """Serve the main HTML file"""
+    """Serve the main HTML file with mobile detection"""
+    # Check for desktop override parameter
+    if request.args.get('desktop'):
+        return send_from_directory('.', 'index.html')
+    
+    # Server-side mobile detection as backup
+    user_agent = request.headers.get('User-Agent', '').lower()
+    is_mobile_ua = any(device in user_agent for device in ['android', 'iphone', 'ipad', 'ipod', 'iemobile', 'wpdesktop', 'mobile'])
+    
+    if is_mobile_ua:
+        print(f"[Mobile Detection] Server-side redirect to mobile.html for UA: {user_agent[:50]}...")
+        return send_from_directory('.', 'mobile.html')
+    
     return send_from_directory('.', 'index.html')
 
 @app.route('/favicon.ico')

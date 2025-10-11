@@ -7,17 +7,43 @@
 <script>
 // Lightweight mobile redirect to simplified page
 (function(){
-  try {
-    var params = new URLSearchParams(location.search || '');
-    if (params.has('desktop')) return; // allow override
-    var ua = navigator.userAgent || navigator.vendor || window.opera || '';
-    var smallViewport = Math.min(window.innerWidth || 0, window.screen && window.screen.width || 0) <= 768;
-    var isMobileUA = /android|iphone|ipad|ipod|iemobile|wpdesktop|mobile/i.test(ua);
-    if ((isMobileUA || smallViewport) && !/mobile\.html$/i.test(location.pathname)) {
-      var dest = 'mobile.html' + (location.search || '');
-      location.replace(dest);
+  function checkMobileRedirect() {
+    try {
+      var params = new URLSearchParams(location.search || '');
+      if (params.has('desktop')) return; // allow override
+      
+      var ua = navigator.userAgent || navigator.vendor || window.opera || '';
+      var isMobileUA = /android|iphone|ipad|ipod|iemobile|wpdesktop|mobile/i.test(ua);
+      
+      // More reliable viewport detection
+      var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+      var screenWidth = window.screen ? window.screen.width : 0;
+      var smallViewport = Math.min(viewportWidth, screenWidth) <= 768;
+      
+      console.log('[Mobile Detection] UA:', ua.substring(0, 50) + '...');
+      console.log('[Mobile Detection] isMobileUA:', isMobileUA);
+      console.log('[Mobile Detection] viewportWidth:', viewportWidth);
+      console.log('[Mobile Detection] screenWidth:', screenWidth);
+      console.log('[Mobile Detection] smallViewport:', smallViewport);
+      console.log('[Mobile Detection] current path:', location.pathname);
+      
+      if ((isMobileUA || smallViewport) && !/mobile\.html$/i.test(location.pathname)) {
+        var dest = 'mobile.html' + (location.search || '');
+        console.log('[Mobile Detection] Redirecting to:', dest);
+        location.replace(dest);
+      } else {
+        console.log('[Mobile Detection] No redirect needed');
+      }
+    } catch(e) { 
+      console.error('[Mobile Detection] Error:', e);
     }
-  } catch(_) { /* best-effort only */ }
+  }
+  
+  // Check immediately and after DOM loads
+  checkMobileRedirect();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkMobileRedirect);
+  }
 })();
 </script>
 <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
