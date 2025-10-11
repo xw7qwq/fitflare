@@ -19,7 +19,7 @@ select:focus{outline:none;border-color:#4a90e2}
 .inline-brand,.inline-brand-icon{display:none}
 .inline-logo{font-family:'Racing Sans One',cursive;font-size:29px;letter-spacing:4px;color:#ffcc66;margin:22px 0 0 0;cursor:pointer}
 .inline-logo::before{content:"";display:inline-block;width:35px;height:35px;margin-right:8px;background-image:url('assets/fitbauslogo.png');background-size:contain;background-repeat:no-repeat;background-position:center;vertical-align:top;margin-top:2px}
-.inline-logo::after{content:"v1.0";display:inline-block;margin-left:6px;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:9px;line-height:1;letter-spacing:0;color:rgba(154,165,198,0.45);vertical-align:baseline;position:relative;top:-2px}
+.inline-logo::after{content:"v1.1";display:inline-block;margin-left:6px;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:9px;line-height:1;letter-spacing:0;color:rgba(154,165,198,0.45);vertical-align:baseline;position:relative;top:-2px}
 .inline-logo:hover{opacity:0.9}
 .controls .logo-cell{grid-column:-1;justify-self:end;text-align:right;width:max-content;margin-right:0}
 .controls .logo-cell label{display:none}
