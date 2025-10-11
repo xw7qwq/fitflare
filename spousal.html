@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>FitBaus Mobile</title>
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@latest/dist/chartjs-chart-matrix.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Mobile-specific tweaks: keep UI minimal */
+    .controls .cell:not(.profile-cell) { display: none; }
+    .toolbar .btn { display: none; }
+    .dropdown-wrapper { width: 100%; }
+    .wrap { padding: 8px; }
+    .inline-logo { font-size: 14.5px !important; letter-spacing: 2px !important; }
+    .inline-logo::before { width: 17.5px !important; height: 17.5px !important; }
+    
+    /* Portrait mode adjustments */
+    @media screen and (orientation: portrait) and (max-width: 768px) {
+      .controls .logo-cell { grid-row: 1; margin-bottom: 8px; }
+      .controls .profile-cell { grid-row: 2; }
+    }
+  </style>
+  <script>
+    // If explicitly requested desktop, bounce back
+    (function(){
+      try {
+        var params = new URLSearchParams(location.search||'');
+        if (params.has('desktop')) {
+          location.replace('index.html' + (location.search || ''));
+        }
+      } catch(_){}
+    })();
+  </script>
+  <style>
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    
+    /* Make spousal page logo smaller */
+    #spousalLogo.inline-logo {
+      font-size: 14.5px !important;
+      letter-spacing: 2px !important;
+    }
+    #spousalLogo.inline-logo::before {
+      width: 17.5px !important;
+      height: 17.5px !important;
+      margin-right: 4px !important;
+    }
+    
+    /* Responsive adjustments for mobile landscape */
+    @media screen and (max-width: 896px) and (orientation: landscape) {
+      .wrap { padding: 8px !important; }
+      .card { padding: 12px !important; }
+      
+      #spousalSignalsView > div {
+        gap: 12px !important;
+      }
+      
+      #spousalSignalsView > div > div {
+        padding: 12px !important;
+      }
+      
+      #spousalSignalsView h3 {
+        font-size: 14px !important;
+        margin: 0 0 6px 0 !important;
+      }
+      
+      #spousalSignalsView [id*="profile"] {
+        font-size: 20px !important;
+        margin: 6px 0 !important;
+      }
+      
+      #spousalSignalsView .metric-label,
+      #spousalSignalsView [style*="font-size:12px"] {
+        font-size: 10px !important;
+      }
+      
+      #spousalSignalsView > div > div > div {
+        margin-bottom: 12px !important;
+      }
+      
+      #spousalSignalsView > div > div > div:last-child {
+        margin-top: 12px !important;
+      }
+      
+      #coupleWellness {
+        padding: 12px !important;
+        margin-top: 12px !important;
+      }
+      
+      #coupleWellnessValue {
+        font-size: 20px !important;
+      }
+    }
+    
+    /* Extra compact for very small landscape screens */
+    @media screen and (max-height: 500px) and (orientation: landscape) {
+      .wrap { padding: 4px !important; }
+      .card { padding: 8px !important; }
+      
+      #spousalSignalsView > div {
+        gap: 8px !important;
+      }
+      
+      #spousalSignalsView > div > div {
+        padding: 8px !important;
+      }
+      
+      #spousalSignalsView h3 {
+        font-size: 12px !important;
+        margin: 0 0 4px 0 !important;
+      }
+      
+      #spousalSignalsView [id*="profile"] {
+        font-size: 16px !important;
+        margin: 4px 0 !important;
+      }
+      
+      #spousalSignalsView [style*="font-size:12px"] {
+        font-size: 9px !important;
+      }
+      
+      #spousalSignalsView > div > div > div {
+        margin-bottom: 8px !important;
+      }
+      
+      #spousalSignalsView > div > div > div:last-child {
+        margin-top: 8px !important;
+      }
+      
+      #coupleWellness {
+        padding: 8px !important;
+        margin-top: 8px !important;
+      }
+      
+      #coupleWellnessValue {
+        font-size: 16px !important;
+      }
+      
+      #dataDate {
+        font-size: 9px !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" style="padding:16px;position:relative;">
+      <!-- Hidden stubs so mobile.html JS works -->
+      <div style="display:none;">
+        <select id="profileSelect">
+          <option value="ammar">Ammar</option>
+          <option value="nour">Nour</option>
+        </select>
+      </div>
+      
+       <!-- Spousal Signals View -->
+       <div id="spousalSignalsView" style="display:block;">
+        <div style="display:flex;gap:16px;justify-content:center;">
+          <div style="flex:1;text-align:center;background:#1a2349;border-radius:12px;padding:20px;">
+            <h3 style="color:#ffffff;margin:0 0 10px 0;">Profile 1</h3>
+            <div style="margin-bottom:20px;">
+              <div id="profile1HRV" style="font-size:32px;font-weight:bold;color:#4a90e2;margin:10px 0;">--</div>
+              <div style="font-size:12px;color:#9aa5c6;">Heart Rate Variability</div>
+            </div>
+            <div>
+              <div id="profile1Sleep" style="font-size:32px;font-weight:bold;color:#ffcc66;margin:10px 0;">--</div>
+              <div style="font-size:12px;color:#9aa5c6;">Sleep Score</div>
+            </div>
+            <div style="margin-top:20px;">
+              <div id="profile1Wellness" style="font-size:28px;font-weight:bold;color:#4CAF50;margin:10px 0;">--</div>
+              <div style="font-size:12px;color:#9aa5c6;">Wellness Score</div>
+            </div>
+          </div>
+          <div style="flex:1;text-align:center;background:#1a2349;border-radius:12px;padding:20px;">
+            <h3 style="color:#ffffff;margin:0 0 10px 0;">Profile 2</h3>
+            <div style="margin-bottom:20px;">
+              <div id="profile2HRV" style="font-size:32px;font-weight:bold;color:#4a90e2;margin:10px 0;">--</div>
+              <div style="font-size:12px;color:#9aa5c6;">Heart Rate Variability</div>
+            </div>
+            <div>
+              <div id="profile2Sleep" style="font-size:32px;font-weight:bold;color:#ffcc66;margin:10px 0;">--</div>
+              <div style="font-size:12px;color:#9aa5c6;">Sleep Score</div>
+            </div>
+            <div style="margin-top:20px;">
+              <div id="profile2Wellness" style="font-size:28px;font-weight:bold;color:#4CAF50;margin:10px 0;">--</div>
+              <div style="font-size:12px;color:#9aa5c6;">Wellness Score</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+    
+    <!-- Date, Fetch button and Logo at bottom -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding:0 16px;">
+      <div id="dataDate" style="font-size:11px;color:#4CAF50;margin-top:12px;font-style:italic;">--</div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button id="fetchDataBtn" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:4px;font-size:16px;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:4px;transition:all 0.2s ease;flex-shrink:0;align-self:center;margin-top:12px;" title="Fetch New Data" onmouseover="this.style.background='rgba(154,165,198,0.1)'" onmouseout="this.style.background='none'">
+          ↻
+        </button>
+        <div id="spousalLogo" class="inline-logo" aria-label="FitBaus brand">FitBaus</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Flag to prevent script.js from running its initialization
+    window.SKIP_MAIN_INIT = true;
+  </script>
+  <script src="script.js"></script>
+  <script>
+    // Spousal view - no switching, just load spousal data
+    document.addEventListener('DOMContentLoaded', function() {
+      const spousalView = document.getElementById('spousalSignalsView');
+      const fetchBtn = document.getElementById('fetchDataBtn');
+      
+      // Make sure view is visible
+      if (spousalView) spousalView.style.display = 'block';
+      
+      // Add fetch button handler for both profiles
+      if (fetchBtn) {
+        fetchBtn.addEventListener('click', async function() {
+          console.log('Fetching data for both profiles...');
+          fetchBtn.disabled = true;
+          fetchBtn.style.animation = 'spin 1s linear infinite';
+          fetchBtn.style.color = '#4a90e2';
+          
+          try {
+            // Fetch data for both ammar and nour
+            console.log('Starting fetch for Ammar and Nour...');
+            const [ammarResponse, nourResponse] = await Promise.all([
+              fetch('/api/fetch-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profile: 'ammar' })
+              }),
+              fetch('/api/fetch-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profile: 'nour' })
+              })
+            ]);
+            
+            const ammarResult = await ammarResponse.json();
+            const nourResult = await nourResponse.json();
+            
+            console.log('Fetch jobs started:');
+            console.log('  Ammar job_id:', ammarResult.job_id);
+            console.log('  Nour job_id:', nourResult.job_id);
+            
+            // Poll both jobs
+            await pollBothJobs(ammarResult.job_id, nourResult.job_id);
+            
+          } catch (error) {
+            console.error('✗ Fetch error:', error);
+            fetchBtn.style.animation = 'none';
+            fetchBtn.style.color = '#ff6b6b';
+            fetchBtn.disabled = false;
+          }
+        });
+        
+        // Poll both job statuses until both complete
+        async function pollBothJobs(ammarJobId, nourJobId) {
+          let ammarDone = false;
+          let nourDone = false;
+          
+          const checkStatus = async () => {
+            try {
+              const [ammarStatus, nourStatus] = await Promise.all([
+                !ammarDone ? fetch(`/api/fetch-status/${ammarJobId}`).then(r => r.json()) : Promise.resolve({ status: 'completed' }),
+                !nourDone ? fetch(`/api/fetch-status/${nourJobId}`).then(r => r.json()) : Promise.resolve({ status: 'completed' })
+              ]);
+              
+              let hasErrors = false;
+              
+              if (!ammarDone) {
+                console.log(`Ammar job ${ammarJobId}:`, ammarStatus.status);
+                if (ammarStatus.status === 'completed') ammarDone = true;
+                else if (ammarStatus.status === 'failed' || ammarStatus.status === 'error' || ammarStatus.status === 'timeout') {
+                  console.error('✗ Ammar fetch failed:', ammarStatus.error);
+                  ammarDone = true;
+                  hasErrors = true;
+                }
+              }
+              
+              if (!nourDone) {
+                console.log(`Nour job ${nourJobId}:`, nourStatus.status);
+                if (nourStatus.status === 'completed') nourDone = true;
+                else if (nourStatus.status === 'failed' || nourStatus.status === 'error' || nourStatus.status === 'timeout') {
+                  console.error('✗ Nour fetch failed:', nourStatus.error);
+                  nourDone = true;
+                  hasErrors = true;
+                }
+              }
+              
+              // If both done, reload data
+              if (ammarDone && nourDone) {
+                fetchBtn.style.animation = 'none';
+                
+                if (hasErrors) {
+                  // Show red X for errors
+                  console.error('✗ One or both fetch jobs failed');
+                  fetchBtn.textContent = '✗';
+                  fetchBtn.style.color = '#ff6b6b';
+                  fetchBtn.disabled = false;
+                  
+                  // Change back to refresh icon after 3 seconds
+                  setTimeout(() => {
+                    fetchBtn.textContent = '↻';
+                    fetchBtn.style.color = '#9aa5c6';
+                  }, 3000);
+                } else {
+                  // Both successful
+                  console.log('✓ Both fetch jobs completed successfully');
+                  console.log('Reloading spousal data...');
+                  
+                  // Reload the data
+                  await loadSpousalHRVData();
+                  
+                  // Show green checkmark
+                  fetchBtn.style.color = '#4CAF50';
+                  fetchBtn.textContent = '✓';
+                  fetchBtn.disabled = false;
+                  console.log('✓ Data refresh complete - cards updated with new data');
+                  
+                  // Reschedule auto-refresh for 24 hours from now
+                  scheduleAutoRefresh();
+                  
+                  // Keep green checkmark for 30 seconds
+                  setTimeout(() => {
+                    fetchBtn.textContent = '↻';
+                    fetchBtn.style.color = '#9aa5c6';
+                  }, 30000);
+                }
+                
+                return;
+              }
+              
+              // Otherwise, poll again in 2 seconds
+              setTimeout(checkStatus, 2000);
+              
+            } catch (error) {
+              console.error('✗ Status polling error:', error);
+              fetchBtn.style.animation = 'none';
+              fetchBtn.style.color = '#ff6b6b';
+              fetchBtn.textContent = '↻';
+              fetchBtn.disabled = false;
+            }
+          };
+          
+          // Start polling
+          setTimeout(checkStatus, 2000);
+        }
+      }
+      
+      // Load spousal data immediately
+      loadSpousalHRVData();
+      
+      // Auto-refresh every 24 hours
+      let autoRefreshTimer = null;
+      
+      function scheduleAutoRefresh() {
+        // Clear any existing timer
+        if (autoRefreshTimer) {
+          clearTimeout(autoRefreshTimer);
+        }
+        
+        // Schedule fetch for 24 hours from now
+        const twentyFourHours = 24 * 60 * 60 * 1000;
+        autoRefreshTimer = setTimeout(() => {
+          console.log('⏰ Auto-refresh triggered (24 hours elapsed)');
+          if (fetchBtn && !fetchBtn.disabled) {
+            fetchBtn.click();
+          }
+        }, twentyFourHours);
+        
+        console.log('⏰ Auto-refresh scheduled for 24 hours from now');
+      }
+      
+      // Start the auto-refresh timer
+      scheduleAutoRefresh();
+      
+      // Fullscreen toggle on logo click
+      const logo = document.getElementById('spousalLogo');
+      if (logo) {
+        logo.style.cursor = 'pointer';
+        logo.addEventListener('click', () => {
+          if (!document.fullscreenElement) {
+            // Enter fullscreen
+            document.documentElement.requestFullscreen().then(() => {
+              console.log('✓ Entered fullscreen mode');
+            }).catch(err => {
+              console.error('Error entering fullscreen:', err);
+            });
+          } else {
+            // Exit fullscreen
+            document.exitFullscreen().then(() => {
+              console.log('✓ Exited fullscreen mode');
+            }).catch(err => {
+              console.error('Error exiting fullscreen:', err);
+            });
+          }
+        });
+      }
+      
+      async function loadSpousalHRVData() {
+        try {
+          const { profileIds, labels } = getFirstTwoProfiles();
+          const profileTitles = document.querySelectorAll('#spousalSignalsView h3');
+          profileTitles[0].textContent = labels[0];
+          profileTitles[1].textContent = labels[1];
+
+          // Load data for each profile in parallel
+          const [p1, p2] = await Promise.all([
+            profileIds[0] ? loadProfileSeries(profileIds[0]) : Promise.resolve(null),
+            profileIds[1] ? loadProfileSeries(profileIds[1]) : Promise.resolve(null)
+          ]);
+
+          const result1 = p1 ? computeWellness(p1) : null;
+          const result2 = p2 ? computeWellness(p2) : null;
+
+           // Update per-person displays
+           const p1HRV = document.getElementById('profile1HRV');
+           const p2HRV = document.getElementById('profile2HRV');
+           const p1Sleep = document.getElementById('profile1Sleep');
+           const p2Sleep = document.getElementById('profile2Sleep');
+           const p1Well = document.getElementById('profile1Wellness');
+           const p2Well = document.getElementById('profile2Wellness');
+
+           if (result1) {
+             p1HRV.textContent = Number.isFinite(result1.latestHRV) ? Math.round(result1.latestHRV) : '--';
+             p1Sleep.textContent = Number.isFinite(result1.latestSleep) ? Math.round(result1.latestSleep) : '--';
+             p1Well.innerHTML = labelScore(result1.metaFinal);
+           } else {
+             p1HRV.textContent = '--';
+             p1Sleep.textContent = '--';
+             p1Well.textContent = '--';
+           }
+
+           if (result2) {
+             p2HRV.textContent = Number.isFinite(result2.latestHRV) ? Math.round(result2.latestHRV) : '--';
+             p2Sleep.textContent = Number.isFinite(result2.latestSleep) ? Math.round(result2.latestSleep) : '--';
+             p2Well.innerHTML = labelScore(result2.metaFinal);
+           } else {
+             p2HRV.textContent = '--';
+             p2Sleep.textContent = '--';
+             p2Well.textContent = '--';
+           }
+
+          // Couple aggregation display (create on first run if missing)
+          renderCoupleSummary(result1, result2);
+          
+          // Update the data date display
+          updateDataDate(result1, result2);
+        } catch (e) {
+          console.warn('Spousal view error:', e);
+        }
+      }
+      
+      function updateDataDate(result1, result2) {
+        const dateElement = document.getElementById('dataDate');
+        if (!dateElement) return;
+        
+        // Get the date from the first available result
+        const dateStr = result1?.date || result2?.date;
+        console.log('updateDataDate called with:');
+        console.log('  result1:', result1);
+        console.log('  result2:', result2);
+        console.log('  dateStr:', dateStr);
+        
+        if (!dateStr) {
+          dateElement.textContent = '--';
+          return;
+        }
+        
+        // Format as "Thu 10/10/2025"
+        try {
+          // Parse YYYY-MM-DD directly to avoid timezone issues
+          const parts = dateStr.split('-');
+          const year = parseInt(parts[0]);
+          const month = parseInt(parts[1]);
+          const day = parseInt(parts[2]);
+          
+          // Create date in local timezone
+          const d = new Date(year, month - 1, day);
+          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          const dayName = dayNames[d.getDay()];
+          const formattedDate = `${dayName} ${month}/${day}/${year}`;
+          console.log('  Formatted date:', formattedDate);
+          dateElement.textContent = formattedDate;
+        } catch (error) {
+          console.error('Date formatting error:', error);
+          dateElement.textContent = '--';
+        }
+      }
+
+      // --- Robust Wellness Implementation ---
+      const PARAMS = {
+        W_baseline: 28,
+        gap: 2,
+        alpha_sleep: 0.4,
+        alpha_hrv: 0.3,
+        w_sleep: 0.6,
+        w_hrv: 0.4,
+        HRV_min: 20,
+        HRV_max: 120,
+        mod_cap: 8,
+        slope_days: 7,
+        slope_pos: 1.0,
+        slope_neg: -1.0
+      };
+
+      function getFirstTwoProfiles(){
+        const select = document.getElementById('profileSelect');
+        const opts = select ? Array.from(select.options) : [];
+        const ids = [];
+        for (const o of opts) {
+          if (!o.value || o.value === '__profile_management__') continue;
+          ids.push(o.value);
+          if (ids.length === 2) break;
+        }
+        const labels = [ids[0] || 'No Profile', ids[1] || (ids.length === 1 ? 'No Second Profile' : 'No Profiles')];
+        return { profileIds: [ids[0] || null, ids[1] || null], labels };
+      }
+
+      async function loadProfileSeries(profileId){
+        // Build CSV paths using BASE_PREFIX from script.js
+        const sleepPath = `${BASE_PREFIX}profiles/${profileId}/csv/fitbit_sleep.csv`;
+        const hrvPath   = `${BASE_PREFIX}profiles/${profileId}/csv/fitbit_hrv.csv`;
+        // Use helpers from script.js
+        const [sleepText, hrvText] = await Promise.all([
+          fetchCSV(sleepPath).catch(()=>''),
+          fetchCSV(hrvPath).catch(()=>''),
+        ]);
+        const sleepRaw = sleepText ? parseCSV(sleepText) : [];
+        const hrvRaw = hrvText ? parseCSV(hrvText) : [];
+        console.log(`Raw CSV rows for ${profileId}:`, { sleepRaw: sleepRaw.length, hrvRaw: hrvRaw.length });
+        console.log(`Last sleep row for ${profileId}:`, sleepRaw[sleepRaw.length - 1]);
+        console.log(`Last HRV row for ${profileId}:`, hrvRaw[hrvRaw.length - 1]);
+        
+        const sleepRows = normalizeSleepRows(sleepRaw);
+        const hrvRows = normalizeHRVRows(hrvRaw);
+        console.log(`Normalized rows for ${profileId}:`, { sleepRows: sleepRows.length, hrvRows: hrvRows.length });
+        console.log(`Last normalized sleep for ${profileId}:`, sleepRows[sleepRows.length - 1]);
+        console.log(`Last normalized HRV for ${profileId}:`, hrvRows[hrvRows.length - 1]);
+        
+        const sleepDaily = aggregateSleepDaily(sleepRows);
+        const hrvDaily = aggregateHRVDaily(hrvRows);
+        const dates = dedupeSorted([...Object.keys(sleepDaily), ...Object.keys(hrvDaily)]);
+        console.log(`Aggregated data for ${profileId}:`, { 
+          sleepDailyKeys: Object.keys(sleepDaily).length,
+          hrvDailyKeys: Object.keys(hrvDaily).length,
+          lastSleepDate: Object.keys(sleepDaily).slice(-1)[0],
+          lastHRVDate: Object.keys(hrvDaily).slice(-1)[0],
+          allDates: dates.slice(-5)
+        });
+        
+        return { id: profileId, dates, sleepDaily, hrvDaily };
+      }
+
+      function normalizeHRVRows(rows){
+        try{
+          return rows.map(r=>{
+            const d = parseDate(r.date);
+            const iso = d ? d.toISOString().slice(0,10) : null;
+            const val = Number(r.dailyRmssd ?? r.rmssd);
+            return { dateISO: iso, rmssd: Number.isFinite(val) ? val : NaN };
+          }).filter(r=> r.dateISO && Number.isFinite(r.rmssd));
+        }catch(_){ return [] }
+      }
+
+      function aggregateSleepDaily(rows){
+        // Prefer main sleep; else pick by largest minutesAsleep
+        const map = new Map();
+        for(const r of rows){
+          const k = r.dateISO;
+          if (!k) continue;
+          const prev = map.get(k);
+          if (!prev) { map.set(k, r); continue; }
+          const prevMain = !!prev.isMainSleep;
+          const curMain = !!r.isMainSleep;
+          if (curMain && !prevMain) { map.set(k, r); continue; }
+          if (curMain === prevMain) {
+            const prevMin = Number.isFinite(prev.minutesAsleep) ? prev.minutesAsleep : -1;
+            const curMin = Number.isFinite(r.minutesAsleep) ? r.minutesAsleep : -1;
+            if (curMin > prevMin) map.set(k, r);
+          }
+        }
+        const out = {};
+        for(const [k,v] of map.entries()) out[k] = v.sleepScore;
+        return out;
+      }
+
+      function aggregateHRVDaily(rows){
+        const out = {};
+        for(const r of rows){
+          if (r.dateISO && Number.isFinite(r.rmssd)) out[r.dateISO] = r.rmssd;
+        }
+        return out;
+      }
+
+      function dedupeSorted(arr){
+        const s = Array.from(new Set(arr.filter(Boolean)));
+        s.sort((a,b)=> a.localeCompare(b));
+        return s;
+      }
+
+      function quantile(values, p){
+        const a = values.filter(Number.isFinite).slice().sort((x,y)=>x-y);
+        if (a.length === 0) return NaN;
+        const idx = (a.length - 1) * p;
+        const lo = Math.floor(idx), hi = Math.ceil(idx);
+        if (lo === hi) return a[lo];
+        return a[lo] + (a[hi] - a[lo]) * (idx - lo);
+      }
+
+      function median(values){
+        return quantile(values, 0.5);
+      }
+
+      function mad(values){
+        const m = median(values);
+        const dev = values.filter(Number.isFinite).map(v=>Math.abs(v - m));
+        const md = median(dev);
+        return (Number.isFinite(md) ? Math.max(1, md) : 1); // floor at 1
+      }
+
+      function normalCdf(x){
+        // Abramowitz-Stegun approximation
+        const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429;
+        const sign = x < 0 ? -1 : 1;
+        const absx = Math.abs(x)/Math.sqrt(2);
+        const t = 1/(1+0.3275911*absx);
+        const erf = 1 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*Math.exp(-absx*absx);
+        return 0.5*(1 + sign*erf);
+      }
+
+      function winsorizeHRV(x, history){
+        const vals = history.filter(Number.isFinite);
+        if (vals.length >= 10){
+          const lo = quantile(vals, 0.10), hi = quantile(vals, 0.90);
+          return Math.max(lo, Math.min(hi, x));
+        }
+        return Math.max(PARAMS.HRV_min, Math.min(PARAMS.HRV_max, x));
+      }
+
+      function robustNormalize(series, dates){
+        // Build normalized S_norm and HRV_norm per day with baseline windows and winsorized HRV
+        const { W_baseline:W, gap, HRV_min, HRV_max } = PARAMS;
+        const S_norm = new Map();
+        const HRV_norm = new Map();
+        const usedRobust = { sleep: new Map(), hrv: new Map() };
+
+        const getS = d => Number.isFinite(series.sleepDaily[d]) ? series.sleepDaily[d] : NaN;
+        const getH = d => Number.isFinite(series.hrvDaily[d]) ? series.hrvDaily[d] : NaN;
+
+        const hHistory = []; // rolling HRV history of valid values (for winsorization only)
+        for (let i=0;i<dates.length;i++){
+          const d = dates[i];
+          const sRaw = getS(d);
+          const hRaw = getH(d);
+
+          // Build baseline window indices: [i-gap-W+1, i-gap]
+          const bEnd = i - gap;
+          const bStart = bEnd - (W - 1);
+          const bIdx = [];
+          for (let j=bStart; j<=bEnd; j++) if (j>=0 && j<i) bIdx.push(j);
+
+          const sHist = bIdx.map(k => getS(dates[k])).filter(Number.isFinite);
+          const hHist = bIdx.map(k => getH(dates[k])).filter(Number.isFinite);
+
+          // Winsorize HRV using last W valid values (we can use hHistory as well)
+          const recentH = hHistory.slice(-W);
+          const hClean = Number.isFinite(hRaw) ? winsorizeHRV(hRaw, recentH.length?recentH:hHist) : NaN;
+
+          // Decide normalization mode for each signal
+          const enoughDays = i >= (W + gap);
+          const robustSleep = enoughDays && sHist.length >= 10;
+          const robustHRV = enoughDays && hHist.length >= 10;
+
+          // Sleep normalization
+          if (Number.isFinite(sRaw)){
+            if (robustSleep){
+              const medS = median(sHist);
+              const madS = mad(sHist);
+              const zS = (sRaw - medS) / (1.4826 * madS);
+              const pS = 100 * normalCdf(zS);
+              S_norm.set(d, Math.max(0, Math.min(100, pS)));
+              usedRobust.sleep.set(d, true);
+            } else {
+              const v = Math.max(0, Math.min(100, sRaw));
+              S_norm.set(d, v);
+              usedRobust.sleep.set(d, false);
+            }
+          }
+
+          // HRV normalization
+          if (Number.isFinite(hClean)){
+            if (robustHRV){
+              const medH = median(hHist);
+              const madH = mad(hHist);
+              const zH = (hClean - medH) / (1.4826 * madH);
+              const pH = 100 * normalCdf(zH);
+              HRV_norm.set(d, Math.max(0, Math.min(100, pH)));
+              usedRobust.hrv.set(d, true);
+            } else {
+              const v = 100 * (hClean - HRV_min) / (HRV_max - HRV_min);
+              HRV_norm.set(d, Math.max(0, Math.min(100, v)));
+              usedRobust.hrv.set(d, false);
+            }
+          }
+
+          // Update HRV history after processing day i
+          if (Number.isFinite(hRaw)) hHistory.push(hRaw);
+        }
+
+        return { S_norm, HRV_norm, usedRobust };
+      }
+
+      function emaSeries(valuesMap, dates, alpha){
+        const out = new Map();
+        let prev = null;
+        for(const d of dates){
+          const v = valuesMap.has(d) ? valuesMap.get(d) : NaN;
+          if (Number.isFinite(v)){
+            prev = (prev == null) ? v : (alpha * v + (1 - alpha) * prev);
+            out.set(d, prev);
+          } else if (prev != null) {
+            // carry forward unchanged (do not create a new sample)
+            out.set(d, prev);
+          }
+        }
+        return out;
+      }
+
+      function olsSlope(lastNValues){
+        const ys = lastNValues.filter(Number.isFinite);
+        const n = ys.length;
+        if (n < 2) return 0;
+        // x = 0..n-1
+        let sumX=0, sumY=0, sumXX=0, sumXY=0;
+        for(let i=0;i<n;i++){
+          const x=i, y=ys[i];
+          sumX += x; sumY += y; sumXX += x*x; sumXY += x*y;
+        }
+        const denom = n*sumXX - sumX*sumX;
+        if (denom === 0) return 0;
+        return (n*sumXY - sumX*sumY)/denom; // points per day
+      }
+
+      function computeWellness(series){
+        const dates = series.dates;
+        if (!dates || dates.length === 0) return null;
+
+        const { S_norm, HRV_norm, usedRobust } = robustNormalize(series, dates);
+        const S_sm = emaSeries(S_norm, dates, PARAMS.alpha_sleep);
+        const H_sm = emaSeries(HRV_norm, dates, PARAMS.alpha_hrv);
+
+        // Choose evaluation day t as the latest date with at least one signal
+        let t = null;
+        for (let i=dates.length-1; i>=0; i--){
+          const d = dates[i];
+          if (S_norm.has(d) || HRV_norm.has(d)) { t = d; break; }
+        }
+        console.log(`Evaluation day selected: ${t}`);
+        console.log(`S_norm has this date: ${S_norm.has(t)}, HRV_norm has this date: ${HRV_norm.has(t)}`);
+        console.log(`Last 5 dates in series:`, dates.slice(-5));
+        console.log(`S_norm keys (last 5):`, Array.from(S_norm.keys()).slice(-5));
+        console.log(`HRV_norm keys (last 5):`, Array.from(HRV_norm.keys()).slice(-5));
+        if (!t) return null;
+
+        const sToday = S_norm.get(t); // may be undefined
+        const hToday = HRV_norm.get(t);
+        const sSmToday = S_sm.get(t);
+        const hSmToday = H_sm.get(t);
+
+        // Base Meta score with renormalized weights if needed
+        const haveS = Number.isFinite(sSmToday);
+        const haveH = Number.isFinite(hSmToday);
+        let wS = PARAMS.w_sleep, wH = PARAMS.w_hrv;
+        if (haveS && !haveH) { wS = 1; wH = 0; }
+        else if (!haveS && haveH) { wS = 0; wH = 1; }
+        else if (!haveS && !haveH) return {
+          date: t,
+          metaFinal: NaN,
+          latestSleep: Number.isFinite(series.sleepDaily[t]) ? series.sleepDaily[t] : NaN,
+          latestHRV: Number.isFinite(series.hrvDaily[t]) ? series.hrvDaily[t] : NaN
+        };
+        const metaBase = (wS * (sSmToday || 0)) + (wH * (hSmToday || 0));
+
+        // Dynamic modifiers
+        let pen_sleep = 0;
+        const robustSleepToday = usedRobust.sleep.get(t) === true;
+        if (robustSleepToday) {
+          // 3-day mean of ΔS = S_norm - 50
+          const last3 = [];
+          for (let i=dates.indexOf(t), count=0; i>=0 && count<3; i--){
+            const d = dates[i];
+            if (S_norm.has(d)) { last3.push(S_norm.get(d) - 50); count++; }
+          }
+          if (last3.length >= 3) {
+            const mean3 = last3.reduce((a,b)=>a+b,0)/3;
+            if (mean3 < -10) pen_sleep = -5;
+          }
+        }
+
+        // 7-day slopes of smoothed series
+        function lastNSmoothed(map, uptoDate, n){
+          const idx = dates.indexOf(uptoDate);
+          const vals = [];
+          for (let i=Math.max(0, idx - (n-1)); i<=idx; i++){
+            const d = dates[i];
+            vals.push(map.has(d) ? map.get(d) : NaN);
+          }
+          return vals;
+        }
+        const hSlope = olsSlope(lastNSmoothed(H_sm, t, PARAMS.slope_days));
+        const sSlope = olsSlope(lastNSmoothed(S_sm, t, PARAMS.slope_days));
+        let mod_hrv = 0;
+        if (haveH) {
+          if (hSlope >= PARAMS.slope_pos) mod_hrv = +3; else if (hSlope <= PARAMS.slope_neg) mod_hrv = -3; else mod_hrv = 0;
+        }
+        let boost_sync = 0;
+        if (haveH && haveS && hSlope >= 0.5 && sSlope >= 0.5) boost_sync = +2;
+
+        let mod_total = pen_sleep + mod_hrv + boost_sync;
+        mod_total = Math.max(-PARAMS.mod_cap, Math.min(PARAMS.mod_cap, mod_total));
+
+        const metaFinal = Math.max(0, Math.min(100, metaBase + mod_total));
+
+        return {
+          date: t,
+          metaBase,
+          mod_total,
+          metaFinal,
+          sSlope, hSlope,
+          sSmToday, hSmToday,
+          sNormToday: sToday, hNormToday: hToday,
+          usedRobustToday: { sleep: usedRobust.sleep.get(t) === true, hrv: usedRobust.hrv.get(t) === true },
+          latestSleep: Number.isFinite(series.sleepDaily[t]) ? series.sleepDaily[t] : NaN,
+          latestHRV: Number.isFinite(series.hrvDaily[t]) ? series.hrvDaily[t] : NaN,
+        };
+      }
+
+      function coupleAggregate(a, b){
+        if (!a && !b) return null;
+        if (a && !b) return { score: clampScore((Number.isFinite(a.metaFinal)?a.metaFinal:0) - 15), label: 'low confidence', details: { only: 'A' } };
+        if (!a && b) return { score: clampScore((Number.isFinite(b.metaFinal)?b.metaFinal:0) - 15), label: 'low confidence', details: { only: 'B' } };
+        const A = Number.isFinite(a.metaFinal) ? a.metaFinal : null;
+        const B = Number.isFinite(b.metaFinal) ? b.metaFinal : null;
+        if (A==null && B==null) return null;
+        if (A==null && B!=null) return { score: clampScore(B - 15), label: 'low confidence', details: { only: 'B' } };
+        if (B==null && A!=null) return { score: clampScore(A - 15), label: 'low confidence', details: { only: 'A' } };
+        const mu = (A + B)/2;
+        const delta = Math.abs(A - B);
+        const pen_div = 0.25 * delta;
+        let raw = mu - pen_div;
+        // Synchrony trend bonus
+        const sgn = x => (x>0?1:(x<0?-1:0));
+        const sgnSA = sgn(a.sSlope), sgnSB = sgn(b.sSlope);
+        const sgnHA = sgn(a.hSlope), sgnHB = sgn(b.hSlope);
+        const bonus = (sgnSA === sgnSB && sgnHA === sgnHB) ? 3 : 0;
+        const score = clampScore(raw + bonus);
+        return { score, label: null, details: { mu, delta, pen_div, bonus } };
+      }
+
+      function clampScore(x){ return Math.max(0, Math.min(100, x)); }
+
+      function bandLabel(x){
+        if (!Number.isFinite(x)) return '';
+        if (x >= 80) return 'Excellent';
+        if (x >= 60) return 'Good';
+        if (x >= 40) return 'Fair';
+        return 'Low';
+      }
+
+      function getBandColor(x){
+        if (!Number.isFinite(x)) return '#9aa5c6';
+        if (x >= 80) return '#4CAF50'; // Green for Excellent
+        if (x >= 60) return '#ffcc66'; // Yellow for Good
+        if (x >= 40) return '#ff9500'; // Orange for Fair
+        return '#ff6b6b'; // Red for Low
+      }
+
+      function labelScore(x){
+        if (!Number.isFinite(x)) return '--';
+        const lbl = bandLabel(x);
+        const color = getBandColor(x);
+        return `<span style="color:${color}">${Math.round(x)} (${lbl})</span>`;
+      }
+
+      function renderCoupleSummary(a,b){
+        let host = document.getElementById('coupleWellness');
+        if (!host){
+          const container = document.createElement('div');
+          container.id = 'coupleWellness';
+          container.style.marginTop = '16px';
+          container.style.background = '#1a2349';
+          container.style.borderRadius = '12px';
+          container.style.padding = '20px';
+          container.style.textAlign = 'center';
+          const parent = document.getElementById('spousalSignalsView');
+          parent.appendChild(container);
+          host = container;
+        }
+        const agg = coupleAggregate(a,b);
+        if (!agg){ 
+          host.innerHTML = `
+            <div style="font-size:28px;font-weight:bold;color:#9aa5c6;margin:10px 0;">--</div>
+            <div style="font-size:12px;color:#9aa5c6;">Couple Wellness</div>
+          `;
+          return; 
+        }
+        const lbl = bandLabel(agg.score);
+        const color = getBandColor(agg.score);
+        const conf = agg.label ? ` • ${agg.label}` : '';
+        host.innerHTML = `
+          <div style="font-size:28px;font-weight:bold;color:${color};margin:10px 0;">${Math.round(agg.score)} (${lbl})</div>
+          <div style="font-size:12px;color:#9aa5c6;">Couple Wellness${conf}</div>
+        `;
+      }
+
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,850 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>FitBaus Mobile</title>
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@latest/dist/chartjs-chart-matrix.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Mobile-specific tweaks: keep UI minimal */
+    .controls .cell:not(.profile-cell) { display: none; }
+    .toolbar .btn { display: none; }
+    .dropdown-wrapper { width: 100%; }
+    .wrap { padding: 8px; }
+    .inline-logo { font-size: 14.5px !important; letter-spacing: 2px !important; }
+    .inline-logo::before { width: 17.5px !important; height: 17.5px !important; }
+    
+    /* Portrait mode adjustments */
+    @media screen and (orientation: portrait) and (max-width: 768px) {
+      .controls .logo-cell { grid-row: 1; margin-bottom: 8px; }
+      .controls .profile-cell { grid-row: 2; }
+    }
+  </style>
+  <script>
+    // If explicitly requested desktop, bounce back
+    (function(){
+      try {
+        var params = new URLSearchParams(location.search||'');
+        if (params.has('desktop')) {
+          location.replace('index.html' + (location.search || ''));
+        }
+      } catch(_){}
+    })();
+  </script>
+  <style>
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" style="padding:16px">
+      <!-- Dropdowns and logo outside controls -->
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <label for="profileSelect" style="font-size:12px;color:#a9b3d8;width:120px;"><span id="profileStatus" style="color:#666;font-size:10px;">•</span> Profile</label>
+          <label for="viewSelect" style="font-size:12px;color:#a9b3d8;width:150px;">Mobile View</label>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;width:100%;">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="profileSelect" style="width:120px;"></select>
+            <select id="viewSelect" style="width:150px;">
+              <option value="predictions">Predictions & Family</option>
+              <option value="spousal">Spousal Signals</option>
+            </select>
+          </div>
+          <div class="inline-logo" aria-label="FitBaus brand" style="align-self:center;margin-top:16px;">FitBaus</div>
+        </div>
+      </div>
+      
+       <!-- Spousal Signals View -->
+       <div id="spousalSignalsView" style="display:none;">
+        <div style="display:flex;gap:16px;justify-content:center;">
+          <div style="flex:1;text-align:center;background:#1a2349;border-radius:12px;padding:20px;">
+            <h3 style="color:#ffffff;margin:0 0 10px 0;">Profile 1</h3>
+            <div style="margin-bottom:20px;">
+              <div id="profile1HRV" style="font-size:32px;font-weight:bold;color:#4a90e2;margin:10px 0;">--</div>
+              <div style="font-size:12px;color:#9aa5c6;">Heart Rate Variability</div>
+            </div>
+            <div>
+              <div id="profile1Sleep" style="font-size:32px;font-weight:bold;color:#ffcc66;margin:10px 0;">--</div>
+              <div style="font-size:12px;color:#9aa5c6;">Sleep Score</div>
+            </div>
+            <div style="margin-top:20px;">
+              <div id="profile1Wellness" style="font-size:28px;font-weight:bold;color:#4CAF50;margin:10px 0;">--</div>
+              <div style="font-size:12px;color:#9aa5c6;">Wellness Score</div>
+            </div>
+          </div>
+          <div style="flex:1;text-align:center;background:#1a2349;border-radius:12px;padding:20px;">
+            <h3 style="color:#ffffff;margin:0 0 10px 0;">Profile 2</h3>
+            <div style="margin-bottom:20px;">
+              <div id="profile2HRV" style="font-size:32px;font-weight:bold;color:#4a90e2;margin:10px 0;">--</div>
+              <div style="font-size:12px;color:#9aa5c6;">Heart Rate Variability</div>
+            </div>
+            <div>
+              <div id="profile2Sleep" style="font-size:32px;font-weight:bold;color:#ffcc66;margin:10px 0;">--</div>
+              <div style="font-size:12px;color:#9aa5c6;">Sleep Score</div>
+            </div>
+            <div style="margin-top:20px;">
+              <div id="profile2Wellness" style="font-size:28px;font-weight:bold;color:#4CAF50;margin:10px 0;">--</div>
+              <div style="font-size:12px;color:#9aa5c6;">Wellness Score</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="controls">
+        <!-- Minimal: Profile status only -->
+        <div class="cell profile-cell" style="display:block">
+          <div id="fetchStatus" style="font-size:10px;color:#9aa5c6;margin-top:2px;"></div>
+        </div>
+
+        <!-- Hidden stubs required by script.js -->
+        <div class="cell" style="display:none">
+          <label>Chart</label>
+          <div class="dropdown-wrapper">
+            <select id="chartType">
+              <option value="predictions" selected>Predictions &amp; Family Insights</option>
+            </select>
+          </div>
+        </div>
+        <div class="cell" style="display:none">
+          <label>Date From</label>
+          <input type="date" id="dateFrom"/>
+        </div>
+        <div class="cell" style="display:none">
+          <label>Date To</label>
+          <input type="date" id="dateTo"/>
+        </div>
+        <div class="cell" id="sameDayToggleCell" style="display:none;">
+          <label>Include same-day</label>
+          <div class="switch"><input type="checkbox" id="includeSameDay"></div>
+        </div>
+        <div class="cell" style="display:none">
+          <label>Ignore Naps</label>
+          <div class="switch"><input type="checkbox" id="mainOnly" checked></div>
+        </div>
+        <div class="cell" style="display:none">
+          <label>Steps &amp; Activity View</label>
+          <div class="tri-state-toggle">
+            <input type="range" id="stepsViewToggle" min="0" max="2" value="0" step="1">
+            <div class="toggle-labels">
+              <span class="label-left" data-value="0">Daily</span>
+              <span class="label-center" data-value="1">Monthly</span>
+              <span class="label-right" data-value="2">Yearly</span>
+            </div>
+          </div>
+        </div>
+        <div class="cell" style="display:none">
+          <label>RHR View</label>
+          <div class="tri-state-toggle">
+            <input type="range" id="rhrViewToggle" min="0" max="2" value="0" step="1">
+            <div class="toggle-labels">
+              <span class="label-left" data-value="0">Daily</span>
+              <span class="label-center" data-value="1">Monthly</span>
+              <span class="label-right" data-value="2">Yearly</span>
+            </div>
+          </div>
+        </div>
+        <div class="cell" style="display:none">
+          <label>Sleep View</label>
+          <div class="tri-state-toggle">
+            <input type="range" id="sleepViewToggle" min="0" max="2" value="0" step="1">
+            <div class="toggle-labels">
+              <span class="label-left" data-value="0">Daily</span>
+              <span class="label-center" data-value="1">Monthly</span>
+              <span class="label-right" data-value="2">Yearly</span>
+            </div>
+          </div>
+        </div>
+        <div class="cell" style="display:none">
+          <label>Minutes Asleep View</label>
+          <div class="tri-state-toggle">
+            <input type="range" id="minutesViewToggle" min="0" max="1" value="0" step="1">
+            <div class="toggle-labels">
+              <span class="label-left" data-value="0">Daily</span>
+              <span class="label-center" data-value="1">Monthly</span>
+            </div>
+          </div>
+        </div>
+        <div class="cell" style="display:none">
+          <label>
+            <input type="checkbox" id="hrvCusumIgnoreZero" checked>
+            HRV Ignore zero values
+          </label>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <span class="muted" id="note"></span>
+        <!-- Hidden buttons required by script listeners -->
+        <button class="btn" id="downloadMonthly" style="display:none">Download Monthly Summary</button>
+        <button class="btn" id="downloadYearly" style="display:none">Download Yearly Summary</button>
+        <button class="btn" id="downloadAnalytics" style="display:none" disabled>Download Analytics Summary</button>
+        <button class="btn" id="sleepHistogramDownloadBtn" style="display:none">Download Histogram Data</button>
+      </div>
+
+      <!-- Keep placeholder for analytics badges -->
+      <div id="analyticsBadges" class="hidden" style="display:none"></div>
+
+      <!-- Chart host (hidden by predictions view) and predictions container insertion point -->
+      <canvas id="chart" height="120"></canvas>
+
+      <!-- Minimal, hidden placeholders required by script.js to avoid null refs -->
+      <div id="dualHRVCorrelationCharts" style="display:none; margin-top: 20px;">
+        <canvas id="hrvCorrNextChart" height="120"></canvas>
+      </div>
+      <div id="dualStepsCorrelationCharts" style="display:none; margin-top: 20px;">
+        <canvas id="stepsCorrSleepChart" height="120"></canvas>
+      </div>
+      <div id="stepsHistogramChart" style="display:none; margin-top: 20px;"></div>
+      <div id="sedentaryLineChart" style="display:none; margin-top: 20px;"></div>
+      <div id="sleepHistogramChart" style="display:none; margin-top: 20px;"></div>
+
+      <!-- Sections placeholders -->
+      <div id="topStepsSection" style="display:none"></div>
+      <div id="bottomStepsSection" style="display:none"></div>
+      <div id="topRHRSection" style="display:none"></div>
+      <div id="bottomRHRSection" style="display:none"></div>
+      <div id="rhrCusumSection" style="display:none"></div>
+      <div id="hrvCusumSection" style="display:none"></div>
+      <div id="topSleepScoreSection" style="display:none"></div>
+      <div id="bottomSleepScoreSection" style="display:none"></div>
+      <div id="topHRVSection" style="display:none"></div>
+      <div id="bottomHRVSection" style="display:none"></div>
+
+      <!-- Hidden file display stubs used by tryLoadDefaults() -->
+      <div style="display:none">
+        <div id="sleepFileDisplay" class="file-display">No file chosen</div>
+        <div id="hrvFileDisplay" class="file-display">No file chosen</div>
+        <div id="stepsFileDisplay" class="file-display">No file chosen</div>
+        <div id="rhrFileDisplay" class="file-display">No file chosen</div>
+      </div>
+
+      <div class="footer muted" id="meta"></div>
+    </div>
+  </div>
+
+  <!-- Minimal set of modals used by script.js -->
+  <!-- Modal -->
+  <div id="logoModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" aria-label="FitBaus">
+          <div class="inline-logo" aria-hidden="false">FitBaus</div>
+        </h2>
+        <button class="modal-close" id="modalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Thanks for trying this app! Comments? Feedback? Support? Email me at <a href="mailto:markraidc@gmail.com">markraidc@gmail.com</a></p>
+        <p class="signature">- <a href="https://www.reddit.com/user/markraidc/" target="_blank">u/markraidc</a></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- No Profile Modal -->
+  <div id="noProfileModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">
+          <div class="inline-logo" aria-label="FitBaus brand">FitBaus</div>
+        </h2>
+        <button class="modal-close" id="noProfileModalClose" style="display: none;">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="tab-navigation">
+          <button class="tab-btn active" data-tab="new-profile">New Profile</button>
+          <button class="tab-btn" data-tab="existing-profiles">Existing Profiles</button>
+        </div>
+        <div id="newProfileTab" class="tab-content active">
+          <div id="profileCreationForm">
+            <h3>Create New Profile</h3>
+            <form id="createProfileForm">
+              <div class="form-group">
+                <label for="profileName">Profile Name:</label>
+                <input type="text" id="profileName" name="profileName" required placeholder="e.g., john, jane, myprofile" pattern="[a-zA-Z0-9_-]+" title="Only letters, numbers, hyphens, and underscores allowed">
+              </div>
+              <div class="form-group">
+                <label for="clientId">Fitbit Client ID:</label>
+                <input type="text" id="clientId" name="clientId" required placeholder="Your Fitbit App Client ID">
+              </div>
+              <div class="form-group">
+                <label for="clientSecret">Fitbit Client Secret:</label>
+                <input type="password" id="clientSecret" name="clientSecret" required placeholder="Your Fitbit App Client Secret">
+              </div>
+              <div class="form-actions">
+                <button type="submit" id="createProfileBtn" class="btn btn-primary">Create Profile</button>
+                <div id="profileCreationStatus" class="status-message"></div>
+              </div>
+            </form>
+          </div>
+          <div id="profileCreatedSuccess" style="display: none;">
+            <h3>✅ Profile Created Successfully!</h3>
+            <p>Your profile has been created. You can now proceed to authorize with Fitbit.</p>
+            <button id="authorizeBtn" class="btn btn-primary">Authorize with Fitbit</button>
+            <div id="authorizationStatus" class="status-message"></div>
+          </div>
+        </div>
+        <div id="existingProfilesTab" class="tab-content">
+          <h3>Manage Existing Profiles</h3>
+          <div id="profilesList">
+            <div id="profilesLoading" class="status-message info">Loading profiles...</div>
+          </div>
+          <div id="profileDeletionStatus" class="status-message"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Authorize Profile Modal -->
+  <div id="authorizeProfileModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="authorizeProfileTitle">Authorize Profile</h2>
+        <button class="modal-close" id="authorizeProfileModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="authorizeProfileIntro" class="status-message info" style="display:none;"></div>
+        <div id="authorizeProfileContent"></div>
+        <div id="authorizeProfileStatus" class="status-message" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Authorization Acknowledgement Modal -->
+  <div id="authAckModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">Please Confirm</h2>
+        <button class="modal-close" id="authAckClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="status-message info" style="text-align:left">
+          For this to work, you MUST be logged out of any other user accounts on:<br>
+          <a href="https://www.fitbit.com/dashboard" target="_blank" rel="noopener">https://www.fitbit.com/dashboard</a><br>
+          <a href="https://dev.fitbit.com/apps" target="_blank" rel="noopener">https://dev.fitbit.com/apps</a><br>
+          and you must be logged into the accounts for the profile you are trying to activate.<br><br>
+          Once you press okay, you will go to Fitbit's authorization page, which will then redirect you to the call-back URL, with the code. Copy this URL from the address bar, and paste it back here.
+        </div>
+        <div class="form-actions" style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn-primary" id="authAckOkBtn">Okay</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Delete Modal -->
+  <div id="confirmDeleteModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="confirmDeleteTitle">Delete Profile</h2>
+        <button class="modal-close" id="confirmDeleteClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="confirmDeleteBody" class="status-message info" style="text-align:left"></div>
+        <div id="confirmDeleteActions" class="form-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+          <button class="btn-secondary" id="confirmDeleteCancelBtn">Cancel</button>
+          <button class="btn-danger" id="confirmDeleteProceedBtn">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    // Mobile view switching
+    document.addEventListener('DOMContentLoaded', function() {
+      const viewSelect = document.getElementById('viewSelect');
+      const controls = document.querySelector('.controls');
+      const chart = document.getElementById('chart');
+      const spousalView = document.getElementById('spousalSignalsView');
+      
+      function switchView() {
+        const selectedView = viewSelect.value;
+        
+        if (selectedView === 'spousal') {
+          // Hide everything else
+          if (controls) controls.style.display = 'none';
+          if (chart) chart.style.display = 'none';
+          if (spousalView) spousalView.style.display = 'block';
+          
+          // Load today's HRV data for both profiles
+          loadSpousalHRVData();
+        } else {
+          // Show everything else
+          if (controls) controls.style.display = 'block';
+          if (chart) chart.style.display = 'block';
+          if (spousalView) spousalView.style.display = 'none';
+        }
+      }
+      
+      async function loadSpousalHRVData() {
+        try {
+          const { profileIds, labels } = getFirstTwoProfiles();
+          const profileTitles = document.querySelectorAll('#spousalSignalsView h3');
+          profileTitles[0].textContent = labels[0];
+          profileTitles[1].textContent = labels[1];
+
+          // Load data for each profile in parallel
+          const [p1, p2] = await Promise.all([
+            profileIds[0] ? loadProfileSeries(profileIds[0]) : Promise.resolve(null),
+            profileIds[1] ? loadProfileSeries(profileIds[1]) : Promise.resolve(null)
+          ]);
+
+          const result1 = p1 ? computeWellness(p1) : null;
+          const result2 = p2 ? computeWellness(p2) : null;
+
+           // Update per-person displays
+           const p1HRV = document.getElementById('profile1HRV');
+           const p2HRV = document.getElementById('profile2HRV');
+           const p1Sleep = document.getElementById('profile1Sleep');
+           const p2Sleep = document.getElementById('profile2Sleep');
+           const p1Well = document.getElementById('profile1Wellness');
+           const p2Well = document.getElementById('profile2Wellness');
+
+           if (result1) {
+             p1HRV.textContent = Number.isFinite(result1.latestHRV) ? Math.round(result1.latestHRV) : '--';
+             p1Sleep.textContent = Number.isFinite(result1.latestSleep) ? Math.round(result1.latestSleep) : '--';
+             p1Well.innerHTML = labelScore(result1.metaFinal);
+           } else {
+             p1HRV.textContent = '--';
+             p1Sleep.textContent = '--';
+             p1Well.textContent = '--';
+           }
+
+           if (result2) {
+             p2HRV.textContent = Number.isFinite(result2.latestHRV) ? Math.round(result2.latestHRV) : '--';
+             p2Sleep.textContent = Number.isFinite(result2.latestSleep) ? Math.round(result2.latestSleep) : '--';
+             p2Well.innerHTML = labelScore(result2.metaFinal);
+           } else {
+             p2HRV.textContent = '--';
+             p2Sleep.textContent = '--';
+             p2Well.textContent = '--';
+           }
+
+          // Couple aggregation display (create on first run if missing)
+          renderCoupleSummary(result1, result2);
+        } catch (e) {
+          console.warn('Spousal view error:', e);
+        }
+      }
+
+      // --- Robust Wellness Implementation ---
+      const PARAMS = {
+        W_baseline: 28,
+        gap: 2,
+        alpha_sleep: 0.4,
+        alpha_hrv: 0.3,
+        w_sleep: 0.6,
+        w_hrv: 0.4,
+        HRV_min: 20,
+        HRV_max: 120,
+        mod_cap: 8,
+        slope_days: 7,
+        slope_pos: 1.0,
+        slope_neg: -1.0
+      };
+
+      function getFirstTwoProfiles(){
+        const select = document.getElementById('profileSelect');
+        const opts = select ? Array.from(select.options) : [];
+        const ids = [];
+        for (const o of opts) {
+          if (!o.value || o.value === '__profile_management__') continue;
+          ids.push(o.value);
+          if (ids.length === 2) break;
+        }
+        const labels = [ids[0] || 'No Profile', ids[1] || (ids.length === 1 ? 'No Second Profile' : 'No Profiles')];
+        return { profileIds: [ids[0] || null, ids[1] || null], labels };
+      }
+
+      async function loadProfileSeries(profileId){
+        // Build CSV paths using BASE_PREFIX from script.js
+        const sleepPath = `${BASE_PREFIX}profiles/${profileId}/csv/fitbit_sleep.csv`;
+        const hrvPath   = `${BASE_PREFIX}profiles/${profileId}/csv/fitbit_hrv.csv`;
+        // Use helpers from script.js
+        const [sleepText, hrvText] = await Promise.all([
+          fetchCSV(sleepPath).catch(()=>''),
+          fetchCSV(hrvPath).catch(()=>''),
+        ]);
+        const sleepRaw = sleepText ? parseCSV(sleepText) : [];
+        const hrvRaw = hrvText ? parseCSV(hrvText) : [];
+        const sleepRows = normalizeSleepRows(sleepRaw);
+        const hrvRows = normalizeHRVRows(hrvRaw);
+        const sleepDaily = aggregateSleepDaily(sleepRows);
+        const hrvDaily = aggregateHRVDaily(hrvRows);
+        const dates = dedupeSorted([...Object.keys(sleepDaily), ...Object.keys(hrvDaily)]);
+        return { id: profileId, dates, sleepDaily, hrvDaily };
+      }
+
+      function normalizeHRVRows(rows){
+        try{
+          return rows.map(r=>{
+            const d = parseDate(r.date);
+            const iso = d ? d.toISOString().slice(0,10) : null;
+            const val = Number(r.dailyRmssd ?? r.rmssd);
+            return { dateISO: iso, rmssd: Number.isFinite(val) ? val : NaN };
+          }).filter(r=> r.dateISO && Number.isFinite(r.rmssd));
+        }catch(_){ return [] }
+      }
+
+      function aggregateSleepDaily(rows){
+        // Prefer main sleep; else pick by largest minutesAsleep
+        const map = new Map();
+        for(const r of rows){
+          const k = r.dateISO;
+          if (!k) continue;
+          const prev = map.get(k);
+          if (!prev) { map.set(k, r); continue; }
+          const prevMain = !!prev.isMainSleep;
+          const curMain = !!r.isMainSleep;
+          if (curMain && !prevMain) { map.set(k, r); continue; }
+          if (curMain === prevMain) {
+            const prevMin = Number.isFinite(prev.minutesAsleep) ? prev.minutesAsleep : -1;
+            const curMin = Number.isFinite(r.minutesAsleep) ? r.minutesAsleep : -1;
+            if (curMin > prevMin) map.set(k, r);
+          }
+        }
+        const out = {};
+        for(const [k,v] of map.entries()) out[k] = v.sleepScore;
+        return out;
+      }
+
+      function aggregateHRVDaily(rows){
+        const out = {};
+        for(const r of rows){
+          if (r.dateISO && Number.isFinite(r.rmssd)) out[r.dateISO] = r.rmssd;
+        }
+        return out;
+      }
+
+      function dedupeSorted(arr){
+        const s = Array.from(new Set(arr.filter(Boolean)));
+        s.sort((a,b)=> a.localeCompare(b));
+        return s;
+      }
+
+      function quantile(values, p){
+        const a = values.filter(Number.isFinite).slice().sort((x,y)=>x-y);
+        if (a.length === 0) return NaN;
+        const idx = (a.length - 1) * p;
+        const lo = Math.floor(idx), hi = Math.ceil(idx);
+        if (lo === hi) return a[lo];
+        return a[lo] + (a[hi] - a[lo]) * (idx - lo);
+      }
+
+      function median(values){
+        return quantile(values, 0.5);
+      }
+
+      function mad(values){
+        const m = median(values);
+        const dev = values.filter(Number.isFinite).map(v=>Math.abs(v - m));
+        const md = median(dev);
+        return (Number.isFinite(md) ? Math.max(1, md) : 1); // floor at 1
+      }
+
+      function normalCdf(x){
+        // Abramowitz-Stegun approximation
+        const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429;
+        const sign = x < 0 ? -1 : 1;
+        const absx = Math.abs(x)/Math.sqrt(2);
+        const t = 1/(1+0.3275911*absx);
+        const erf = 1 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*Math.exp(-absx*absx);
+        return 0.5*(1 + sign*erf);
+      }
+
+      function winsorizeHRV(x, history){
+        const vals = history.filter(Number.isFinite);
+        if (vals.length >= 10){
+          const lo = quantile(vals, 0.10), hi = quantile(vals, 0.90);
+          return Math.max(lo, Math.min(hi, x));
+        }
+        return Math.max(PARAMS.HRV_min, Math.min(PARAMS.HRV_max, x));
+      }
+
+      function robustNormalize(series, dates){
+        // Build normalized S_norm and HRV_norm per day with baseline windows and winsorized HRV
+        const { W_baseline:W, gap, HRV_min, HRV_max } = PARAMS;
+        const S_norm = new Map();
+        const HRV_norm = new Map();
+        const usedRobust = { sleep: new Map(), hrv: new Map() };
+
+        const getS = d => Number.isFinite(series.sleepDaily[d]) ? series.sleepDaily[d] : NaN;
+        const getH = d => Number.isFinite(series.hrvDaily[d]) ? series.hrvDaily[d] : NaN;
+
+        const hHistory = []; // rolling HRV history of valid values (for winsorization only)
+        for (let i=0;i<dates.length;i++){
+          const d = dates[i];
+          const sRaw = getS(d);
+          const hRaw = getH(d);
+
+          // Build baseline window indices: [i-gap-W+1, i-gap]
+          const bEnd = i - gap;
+          const bStart = bEnd - (W - 1);
+          const bIdx = [];
+          for (let j=bStart; j<=bEnd; j++) if (j>=0 && j<i) bIdx.push(j);
+
+          const sHist = bIdx.map(k => getS(dates[k])).filter(Number.isFinite);
+          const hHist = bIdx.map(k => getH(dates[k])).filter(Number.isFinite);
+
+          // Winsorize HRV using last W valid values (we can use hHistory as well)
+          const recentH = hHistory.slice(-W);
+          const hClean = Number.isFinite(hRaw) ? winsorizeHRV(hRaw, recentH.length?recentH:hHist) : NaN;
+
+          // Decide normalization mode for each signal
+          const enoughDays = i >= (W + gap);
+          const robustSleep = enoughDays && sHist.length >= 10;
+          const robustHRV = enoughDays && hHist.length >= 10;
+
+          // Sleep normalization
+          if (Number.isFinite(sRaw)){
+            if (robustSleep){
+              const medS = median(sHist);
+              const madS = mad(sHist);
+              const zS = (sRaw - medS) / (1.4826 * madS);
+              const pS = 100 * normalCdf(zS);
+              S_norm.set(d, Math.max(0, Math.min(100, pS)));
+              usedRobust.sleep.set(d, true);
+            } else {
+              const v = Math.max(0, Math.min(100, sRaw));
+              S_norm.set(d, v);
+              usedRobust.sleep.set(d, false);
+            }
+          }
+
+          // HRV normalization
+          if (Number.isFinite(hClean)){
+            if (robustHRV){
+              const medH = median(hHist);
+              const madH = mad(hHist);
+              const zH = (hClean - medH) / (1.4826 * madH);
+              const pH = 100 * normalCdf(zH);
+              HRV_norm.set(d, Math.max(0, Math.min(100, pH)));
+              usedRobust.hrv.set(d, true);
+            } else {
+              const v = 100 * (hClean - HRV_min) / (HRV_max - HRV_min);
+              HRV_norm.set(d, Math.max(0, Math.min(100, v)));
+              usedRobust.hrv.set(d, false);
+            }
+          }
+
+          // Update HRV history after processing day i
+          if (Number.isFinite(hRaw)) hHistory.push(hRaw);
+        }
+
+        return { S_norm, HRV_norm, usedRobust };
+      }
+
+      function emaSeries(valuesMap, dates, alpha){
+        const out = new Map();
+        let prev = null;
+        for(const d of dates){
+          const v = valuesMap.has(d) ? valuesMap.get(d) : NaN;
+          if (Number.isFinite(v)){
+            prev = (prev == null) ? v : (alpha * v + (1 - alpha) * prev);
+            out.set(d, prev);
+          } else if (prev != null) {
+            // carry forward unchanged (do not create a new sample)
+            out.set(d, prev);
+          }
+        }
+        return out;
+      }
+
+      function olsSlope(lastNValues){
+        const ys = lastNValues.filter(Number.isFinite);
+        const n = ys.length;
+        if (n < 2) return 0;
+        // x = 0..n-1
+        let sumX=0, sumY=0, sumXX=0, sumXY=0;
+        for(let i=0;i<n;i++){
+          const x=i, y=ys[i];
+          sumX += x; sumY += y; sumXX += x*x; sumXY += x*y;
+        }
+        const denom = n*sumXX - sumX*sumX;
+        if (denom === 0) return 0;
+        return (n*sumXY - sumX*sumY)/denom; // points per day
+      }
+
+      function computeWellness(series){
+        const dates = series.dates;
+        if (!dates || dates.length === 0) return null;
+
+        const { S_norm, HRV_norm, usedRobust } = robustNormalize(series, dates);
+        const S_sm = emaSeries(S_norm, dates, PARAMS.alpha_sleep);
+        const H_sm = emaSeries(HRV_norm, dates, PARAMS.alpha_hrv);
+
+        // Choose evaluation day t as the latest date with at least one signal
+        let t = null;
+        for (let i=dates.length-1; i>=0; i--){
+          const d = dates[i];
+          if (S_norm.has(d) || HRV_norm.has(d)) { t = d; break; }
+        }
+        if (!t) return null;
+
+        const sToday = S_norm.get(t); // may be undefined
+        const hToday = HRV_norm.get(t);
+        const sSmToday = S_sm.get(t);
+        const hSmToday = H_sm.get(t);
+
+        // Base Meta score with renormalized weights if needed
+        const haveS = Number.isFinite(sSmToday);
+        const haveH = Number.isFinite(hSmToday);
+        let wS = PARAMS.w_sleep, wH = PARAMS.w_hrv;
+        if (haveS && !haveH) { wS = 1; wH = 0; }
+        else if (!haveS && haveH) { wS = 0; wH = 1; }
+        else if (!haveS && !haveH) return {
+          date: t,
+          metaFinal: NaN,
+          latestSleep: Number.isFinite(series.sleepDaily[t]) ? series.sleepDaily[t] : NaN,
+          latestHRV: Number.isFinite(series.hrvDaily[t]) ? series.hrvDaily[t] : NaN
+        };
+        const metaBase = (wS * (sSmToday || 0)) + (wH * (hSmToday || 0));
+
+        // Dynamic modifiers
+        let pen_sleep = 0;
+        const robustSleepToday = usedRobust.sleep.get(t) === true;
+        if (robustSleepToday) {
+          // 3-day mean of ΔS = S_norm - 50
+          const last3 = [];
+          for (let i=dates.indexOf(t), count=0; i>=0 && count<3; i--){
+            const d = dates[i];
+            if (S_norm.has(d)) { last3.push(S_norm.get(d) - 50); count++; }
+          }
+          if (last3.length >= 3) {
+            const mean3 = last3.reduce((a,b)=>a+b,0)/3;
+            if (mean3 < -10) pen_sleep = -5;
+          }
+        }
+
+        // 7-day slopes of smoothed series
+        function lastNSmoothed(map, uptoDate, n){
+          const idx = dates.indexOf(uptoDate);
+          const vals = [];
+          for (let i=Math.max(0, idx - (n-1)); i<=idx; i++){
+            const d = dates[i];
+            vals.push(map.has(d) ? map.get(d) : NaN);
+          }
+          return vals;
+        }
+        const hSlope = olsSlope(lastNSmoothed(H_sm, t, PARAMS.slope_days));
+        const sSlope = olsSlope(lastNSmoothed(S_sm, t, PARAMS.slope_days));
+        let mod_hrv = 0;
+        if (haveH) {
+          if (hSlope >= PARAMS.slope_pos) mod_hrv = +3; else if (hSlope <= PARAMS.slope_neg) mod_hrv = -3; else mod_hrv = 0;
+        }
+        let boost_sync = 0;
+        if (haveH && haveS && hSlope >= 0.5 && sSlope >= 0.5) boost_sync = +2;
+
+        let mod_total = pen_sleep + mod_hrv + boost_sync;
+        mod_total = Math.max(-PARAMS.mod_cap, Math.min(PARAMS.mod_cap, mod_total));
+
+        const metaFinal = Math.max(0, Math.min(100, metaBase + mod_total));
+
+        return {
+          date: t,
+          metaBase,
+          mod_total,
+          metaFinal,
+          sSlope, hSlope,
+          sSmToday, hSmToday,
+          sNormToday: sToday, hNormToday: hToday,
+          usedRobustToday: { sleep: usedRobust.sleep.get(t) === true, hrv: usedRobust.hrv.get(t) === true },
+          latestSleep: Number.isFinite(series.sleepDaily[t]) ? series.sleepDaily[t] : NaN,
+          latestHRV: Number.isFinite(series.hrvDaily[t]) ? series.hrvDaily[t] : NaN,
+        };
+      }
+
+      function coupleAggregate(a, b){
+        if (!a && !b) return null;
+        if (a && !b) return { score: clampScore((Number.isFinite(a.metaFinal)?a.metaFinal:0) - 15), label: 'low confidence', details: { only: 'A' } };
+        if (!a && b) return { score: clampScore((Number.isFinite(b.metaFinal)?b.metaFinal:0) - 15), label: 'low confidence', details: { only: 'B' } };
+        const A = Number.isFinite(a.metaFinal) ? a.metaFinal : null;
+        const B = Number.isFinite(b.metaFinal) ? b.metaFinal : null;
+        if (A==null && B==null) return null;
+        if (A==null && B!=null) return { score: clampScore(B - 15), label: 'low confidence', details: { only: 'B' } };
+        if (B==null && A!=null) return { score: clampScore(A - 15), label: 'low confidence', details: { only: 'A' } };
+        const mu = (A + B)/2;
+        const delta = Math.abs(A - B);
+        const pen_div = 0.25 * delta;
+        let raw = mu - pen_div;
+        // Synchrony trend bonus
+        const sgn = x => (x>0?1:(x<0?-1:0));
+        const sgnSA = sgn(a.sSlope), sgnSB = sgn(b.sSlope);
+        const sgnHA = sgn(a.hSlope), sgnHB = sgn(b.hSlope);
+        const bonus = (sgnSA === sgnSB && sgnHA === sgnHB) ? 3 : 0;
+        const score = clampScore(raw + bonus);
+        return { score, label: null, details: { mu, delta, pen_div, bonus } };
+      }
+
+      function clampScore(x){ return Math.max(0, Math.min(100, x)); }
+
+      function bandLabel(x){
+        if (!Number.isFinite(x)) return '';
+        if (x >= 80) return 'Excellent';
+        if (x >= 60) return 'Good';
+        if (x >= 40) return 'Fair';
+        return 'Low';
+      }
+
+      function getBandColor(x){
+        if (!Number.isFinite(x)) return '#9aa5c6';
+        if (x >= 80) return '#4CAF50'; // Green for Excellent
+        if (x >= 60) return '#ffcc66'; // Yellow for Good
+        if (x >= 40) return '#ff9500'; // Orange for Fair
+        return '#ff6b6b'; // Red for Low
+      }
+
+      function labelScore(x){
+        if (!Number.isFinite(x)) return '--';
+        const lbl = bandLabel(x);
+        const color = getBandColor(x);
+        return `<span style="color:${color}">${Math.round(x)} (${lbl})</span>`;
+      }
+
+      function renderCoupleSummary(a,b){
+        let host = document.getElementById('coupleWellness');
+        if (!host){
+          const container = document.createElement('div');
+          container.id = 'coupleWellness';
+          container.style.marginTop = '16px';
+          container.style.background = '#1a2349';
+          container.style.borderRadius = '12px';
+          container.style.padding = '20px';
+          container.style.textAlign = 'center';
+          const parent = document.getElementById('spousalSignalsView');
+          parent.appendChild(container);
+          host = container;
+        }
+        const agg = coupleAggregate(a,b);
+        if (!agg){ 
+          host.innerHTML = `
+            <div style="font-size:28px;font-weight:bold;color:#9aa5c6;margin:10px 0;">--</div>
+            <div style="font-size:12px;color:#9aa5c6;">Couple Wellness</div>
+          `;
+          return; 
+        }
+        const lbl = bandLabel(agg.score);
+        const color = getBandColor(agg.score);
+        const conf = agg.label ? ` • ${agg.label}` : '';
+        host.innerHTML = `
+          <div style="font-size:28px;font-weight:bold;color:${color};margin:10px 0;">${Math.round(agg.score)} (${lbl})</div>
+          <div style="font-size:12px;color:#9aa5c6;">Couple Wellness${conf}</div>
+        `;
+      }
+
+      viewSelect.addEventListener('change', switchView);
+      // Initialize view
+      switchView();
+    });
+  </script>
+</body>
+</html>
