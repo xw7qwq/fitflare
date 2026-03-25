@@ -136,6 +136,9 @@ document.addEventListener('DOMContentLoaded', function() {
   padding: 14px;
   min-height: 112px;
 }
+.desktop-overview-card.is-wide {
+  grid-column: span 2;
+}
 .desktop-overview-label {
   color: #9aa5c6;
   font-size: 12px;
@@ -168,6 +171,9 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   .desktop-overview-actions {
     justify-content: flex-start;
+  }
+  .desktop-overview-card.is-wide {
+    grid-column: span 1;
   }
 }
 </style>
@@ -323,20 +329,25 @@ document.addEventListener('DOMContentLoaded', function() {
     <section id="desktopOverview" class="desktop-overview">
       <div class="desktop-overview-header">
         <div>
-          <div class="desktop-overview-kicker">Overview</div>
-          <h2 class="desktop-overview-title">综合概览</h2>
+          <div class="desktop-overview-kicker">Health Dashboard</div>
+          <h2 class="desktop-overview-title">健康总览</h2>
           <div id="desktopOverviewSubtitle" class="desktop-overview-subtitle">
-            数据来自 Fitbit 官方 API，同步后缓存为本地 CSV。这里默认先给你看最重要的摘要，不再先塞一张单图。
+            数据来自 Fitbit 官方 API，同步后缓存为本地 CSV。现在默认首页就是健康仪表盘，不再先给你一张单独睡眠分数图。
           </div>
         </div>
         <div class="desktop-overview-actions">
-          <button type="button" data-chart-jump="daily_minutes">睡眠时长</button>
-          <button type="button" data-chart-jump="daily_steps">步数活动</button>
-          <button type="button" data-chart-jump="daily_rhr">RHR</button>
-          <button type="button" data-chart-jump="hrv_heatmap">HRV</button>
+          <button type="button" data-chart-jump="daily_minutes">睡眠</button>
+          <button type="button" data-chart-jump="daily_steps">活动</button>
+          <button type="button" data-chart-jump="daily_rhr">心率</button>
+          <button type="button" data-chart-jump="hrv_heatmap">恢复</button>
         </div>
       </div>
       <div class="desktop-overview-grid">
+        <article class="desktop-overview-card" data-overview-card="stressScore">
+          <div class="desktop-overview-label">压力分数（推断）</div>
+          <div class="desktop-overview-value" id="overviewStressScoreValue">--</div>
+          <div class="desktop-overview-meta" id="overviewStressScoreMeta">等待数据</div>
+        </article>
         <article class="desktop-overview-card" data-overview-card="sleepScore">
           <div class="desktop-overview-label">睡眠分数</div>
           <div class="desktop-overview-value" id="overviewSleepScoreValue">--</div>
@@ -352,20 +363,40 @@ document.addEventListener('DOMContentLoaded', function() {
           <div class="desktop-overview-value" id="overviewStepsValue">--</div>
           <div class="desktop-overview-meta" id="overviewStepsMeta">等待数据</div>
         </article>
-        <article class="desktop-overview-card" data-overview-card="activity">
-          <div class="desktop-overview-label">非久坐时长</div>
-          <div class="desktop-overview-value" id="overviewActivityValue">--</div>
-          <div class="desktop-overview-meta" id="overviewActivityMeta">等待数据</div>
+        <article class="desktop-overview-card" data-overview-card="activeZone">
+          <div class="desktop-overview-label">活跃区间分钟数</div>
+          <div class="desktop-overview-value" id="overviewActiveZoneValue">--</div>
+          <div class="desktop-overview-meta" id="overviewActiveZoneMeta">等待数据</div>
+        </article>
+        <article class="desktop-overview-card" data-overview-card="exerciseDays">
+          <div class="desktop-overview-label">心肺达标锻炼天数</div>
+          <div class="desktop-overview-value" id="overviewExerciseDaysValue">--</div>
+          <div class="desktop-overview-meta" id="overviewExerciseDaysMeta">等待数据</div>
+        </article>
+        <article class="desktop-overview-card" data-overview-card="activityHours">
+          <div class="desktop-overview-label">活跃小时数</div>
+          <div class="desktop-overview-value" id="overviewActivityHoursValue">--</div>
+          <div class="desktop-overview-meta" id="overviewActivityHoursMeta">等待数据</div>
+        </article>
+        <article class="desktop-overview-card" data-overview-card="calories">
+          <div class="desktop-overview-label">消耗热量</div>
+          <div class="desktop-overview-value" id="overviewCaloriesValue">--</div>
+          <div class="desktop-overview-meta" id="overviewCaloriesMeta">等待数据</div>
         </article>
         <article class="desktop-overview-card" data-overview-card="rhr">
-          <div class="desktop-overview-label">静息心率 RHR</div>
+          <div class="desktop-overview-label">静息心率</div>
           <div class="desktop-overview-value" id="overviewRhrValue">--</div>
           <div class="desktop-overview-meta" id="overviewRhrMeta">等待数据</div>
         </article>
         <article class="desktop-overview-card" data-overview-card="hrv">
-          <div class="desktop-overview-label">HRV</div>
+          <div class="desktop-overview-label">HRV / 恢复</div>
           <div class="desktop-overview-value" id="overviewHrvValue">--</div>
           <div class="desktop-overview-meta" id="overviewHrvMeta">等待数据</div>
+        </article>
+        <article class="desktop-overview-card is-wide" data-overview-card="exerciseExamples">
+          <div class="desktop-overview-label">运动举例</div>
+          <div class="desktop-overview-value" id="overviewExerciseExamplesValue">--</div>
+          <div class="desktop-overview-meta" id="overviewExerciseExamplesMeta">等待数据</div>
         </article>
       </div>
     </section>
@@ -688,6 +719,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 <script src="script.js"></script>
+<script src="ui-cn.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const chartTypeSelect = document.getElementById('chartType');
@@ -698,38 +730,15 @@ document.addEventListener('DOMContentLoaded', function() {
   const stepsFileDisplay = document.getElementById('stepsFileDisplay');
   const rhrFileDisplay = document.getElementById('rhrFileDisplay');
   const subtitleEl = document.getElementById('desktopOverviewSubtitle');
-  const overviewCards = {
-    sleepScore: {
-      card: document.querySelector('[data-overview-card="sleepScore"]'),
-      value: document.getElementById('overviewSleepScoreValue'),
-      meta: document.getElementById('overviewSleepScoreMeta')
-    },
-    sleepDuration: {
-      card: document.querySelector('[data-overview-card="sleepDuration"]'),
-      value: document.getElementById('overviewSleepDurationValue'),
-      meta: document.getElementById('overviewSleepDurationMeta')
-    },
-    steps: {
-      card: document.querySelector('[data-overview-card="steps"]'),
-      value: document.getElementById('overviewStepsValue'),
-      meta: document.getElementById('overviewStepsMeta')
-    },
-    activity: {
-      card: document.querySelector('[data-overview-card="activity"]'),
-      value: document.getElementById('overviewActivityValue'),
-      meta: document.getElementById('overviewActivityMeta')
-    },
-    rhr: {
-      card: document.querySelector('[data-overview-card="rhr"]'),
-      value: document.getElementById('overviewRhrValue'),
-      meta: document.getElementById('overviewRhrMeta')
-    },
-    hrv: {
-      card: document.querySelector('[data-overview-card="hrv"]'),
-      value: document.getElementById('overviewHrvValue'),
-      meta: document.getElementById('overviewHrvMeta')
-    }
-  };
+  const overviewCards = {};
+  document.querySelectorAll('[data-overview-card]').forEach((card) => {
+    const key = card.getAttribute('data-overview-card');
+    overviewCards[key] = {
+      card,
+      value: card.querySelector('.desktop-overview-value'),
+      meta: card.querySelector('.desktop-overview-meta')
+    };
+  });
 
   function num(value) {
     const n = Number(value);
@@ -772,6 +781,13 @@ document.addEventListener('DOMContentLoaded', function() {
     return vals.reduce((sum, value) => sum + value, 0) / vals.length;
   }
 
+  function latestWithText(rows, valueKey) {
+    return rows
+      .filter((row) => row.dateISO && row[valueKey] && String(row[valueKey]).trim())
+      .sort((a, b) => a.dateISO.localeCompare(b.dateISO))
+      .at(-1) || null;
+  }
+
   function normalizeSleep(rows) {
     const normalized = rows.map((row) => ({
       dateISO: dateKey(row.date || row.dateOfSleep || row.dateTime),
@@ -801,13 +817,27 @@ document.addEventListener('DOMContentLoaded', function() {
     return Array.from(byDate.values()).sort((a, b) => a.dateISO.localeCompare(b.dateISO));
   }
 
-  function normalizeSteps(rows) {
+  function normalizeActivity(rows) {
     return rows.map((row) => {
-      const sedentary = num(row.sedentaryMinutes);
+      const activeMinutesRaw = num(row.activeMinutes);
+      const lightly = num(row.lightlyActiveMinutes);
+      const fairly = num(row.fairlyActiveMinutes);
+      const very = num(row.veryActiveMinutes);
+      const computedActiveMinutes = Number.isFinite(activeMinutesRaw)
+        ? activeMinutesRaw
+        : [lightly, fairly, very].filter(Number.isFinite).reduce((sum, value) => sum + value, 0);
       return {
         dateISO: dateKey(row.date || row.dateTime),
         steps: num(row.steps),
-        activeMinutes: Number.isFinite(sedentary) ? Math.max(0, 1440 - sedentary) : NaN
+        sedentaryMinutes: num(row.sedentaryMinutes),
+        activityCalories: num(row.activityCalories),
+        caloriesOut: num(row.caloriesOut),
+        lightlyActiveMinutes: lightly,
+        fairlyActiveMinutes: fairly,
+        veryActiveMinutes: very,
+        activeZoneMinutes: num(row.activeZoneMinutes),
+        activeMinutes: Number.isFinite(computedActiveMinutes) ? computedActiveMinutes : NaN,
+        exerciseExamples: (row.exerciseExamples || '').trim()
       };
     }).filter((row) => row.dateISO);
   }
@@ -842,9 +872,16 @@ document.addEventListener('DOMContentLoaded', function() {
     return `${hours}h ${String(minutes).padStart(2, '0')}m`;
   }
 
+  function fmtHours(value) {
+    return Number.isFinite(value) ? `${(value / 60).toFixed(1)}h` : '--';
+  }
+
   function fmtDate(value) {
-    if (!value) return '--';
-    return value;
+    return value || '--';
+  }
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
   }
 
   function setCardState(name, value, meta, isEmpty) {
@@ -864,7 +901,7 @@ document.addEventListener('DOMContentLoaded', function() {
   async function loadOverviewData(profileId) {
     const basePrefix = typeof BASE_PREFIX === 'string' ? BASE_PREFIX : '';
     const base = `${basePrefix}profiles/${profileId}/csv/`;
-    const [sleepText, stepsText, rhrText, hrvText] = await Promise.all([
+    const [sleepText, activityText, rhrText, hrvText] = await Promise.all([
       fetchText(`${base}fitbit_sleep.csv`).catch(() => ''),
       fetchText(`${base}fitbit_activity.csv`).catch(() => ''),
       fetchText(`${base}fitbit_rhr.csv`).catch(() => ''),
@@ -873,39 +910,90 @@ document.addEventListener('DOMContentLoaded', function() {
 
     return {
       sleep: normalizeSleep(parseCsvText(sleepText)),
-      steps: normalizeSteps(parseCsvText(stepsText)),
+      activity: normalizeActivity(parseCsvText(activityText)),
       rhr: normalizeRhr(parseCsvText(rhrText)),
       hrv: normalizeHrv(parseCsvText(hrvText))
     };
   }
 
+  function computeStressScore(latestSleep, latestRhr, latestHrv, avgSleep, avgRhr, avgHrv) {
+    if (!latestSleep && !latestRhr && !latestHrv) return { score: NaN, label: '数据不足' };
+    const sleepPenalty = latestSleep && Number.isFinite(latestSleep.sleepScore)
+      ? clamp((78 - latestSleep.sleepScore) / 30, 0, 1)
+      : 0.35;
+    const rhrPenalty = latestRhr && Number.isFinite(latestRhr.rhr) && Number.isFinite(avgRhr)
+      ? clamp((latestRhr.rhr - avgRhr) / Math.max(4, avgRhr * 0.08), 0, 1)
+      : 0.3;
+    const hrvPenalty = latestHrv && Number.isFinite(latestHrv.hrv) && Number.isFinite(avgHrv)
+      ? clamp((avgHrv - latestHrv.hrv) / Math.max(8, avgHrv * 0.18), 0, 1)
+      : 0.3;
+    const score = Math.round(clamp((sleepPenalty * 0.45 + rhrPenalty * 0.25 + hrvPenalty * 0.30) * 100, 0, 100));
+    const label = score >= 67 ? '偏高' : score >= 34 ? '中等' : '偏低';
+    return { score, label };
+  }
+
   function updateSubtitle(profileId, datasets) {
     const latestDates = [
       latestByDate(datasets.sleep, 'sleepScore')?.dateISO,
-      latestByDate(datasets.steps, 'steps')?.dateISO,
+      latestByDate(datasets.activity, 'steps')?.dateISO,
       latestByDate(datasets.rhr, 'rhr')?.dateISO,
       latestByDate(datasets.hrv, 'hrv')?.dateISO
     ].filter(Boolean).sort();
     const latestDate = latestDates.at(-1);
+    const latestActivity = latestByDate(datasets.activity, 'steps');
     const statusText = (fetchStatusEl && fetchStatusEl.textContent || '').trim();
-    let syncPart = latestDate ? `当前 profile：<strong>${profileId}</strong> · 最新数据日：<strong>${fmtDate(latestDate)}</strong>` : `当前 profile：<strong>${profileId}</strong>`;
-    if (statusText) syncPart += ` · 状态：<strong>${statusText}</strong>`;
-    subtitleEl.innerHTML = syncPart + '<br>数据来自 Fitbit 官方 API，同步后缓存为本地 CSV。默认先看摘要，细图再按上面的快捷按钮切。';
+    let head = latestDate
+      ? `当前档案：<strong>${profileId}</strong> · 最新数据日：<strong>${fmtDate(latestDate)}</strong>`
+      : `当前档案：<strong>${profileId}</strong>`;
+    if (latestActivity && Number.isFinite(latestActivity.steps)) {
+      head += ` · 最近步数：<strong>${fmtInt(latestActivity.steps)}</strong>`;
+    }
+    if (statusText) head += ` · 同步状态：<strong>${statusText}</strong>`;
+    subtitleEl.innerHTML = head + '<br>现已统一汇总睡眠、恢复、心率、步数、热量、活跃区间与运动示例。底层仍然来自 Fitbit 官方 API，同步后缓存到本地 CSV。';
   }
 
   function renderOverview(profileId, datasets) {
     const latestSleep = latestByDate(datasets.sleep, 'sleepScore');
     const latestSleepMinutes = latestByDate(datasets.sleep, 'minutesAsleep');
-    const latestSteps = latestByDate(datasets.steps, 'steps');
-    const latestActivity = latestByDate(datasets.steps, 'activeMinutes');
+    const latestSteps = latestByDate(datasets.activity, 'steps');
+    const latestActiveZone = latestByDate(datasets.activity, 'activeZoneMinutes');
+    const latestActiveHours = latestByDate(datasets.activity, 'activeMinutes');
+    const latestCalories = latestByDate(datasets.activity, 'caloriesOut');
+    const latestActivityCalories = latestByDate(datasets.activity, 'activityCalories');
     const latestRhr = latestByDate(datasets.rhr, 'rhr');
     const latestHrv = latestByDate(datasets.hrv, 'hrv');
+    const latestExerciseExample = latestWithText(datasets.activity, 'exerciseExamples');
+
+    const avgSleepScore7 = recentAverage(datasets.sleep, 'sleepScore', 7);
+    const avgSleepMinutes7 = recentAverage(datasets.sleep, 'minutesAsleep', 7);
+    const avgSteps7 = recentAverage(datasets.activity, 'steps', 7);
+    const avgAzm7 = recentAverage(datasets.activity, 'activeZoneMinutes', 7);
+    const avgActiveMinutes7 = recentAverage(datasets.activity, 'activeMinutes', 7);
+    const avgCalories7 = recentAverage(datasets.activity, 'caloriesOut', 7);
+    const avgRhr7 = recentAverage(datasets.rhr, 'rhr', 7);
+    const avgHrv7 = recentAverage(datasets.hrv, 'hrv', 7);
+    const exerciseDays7 = datasets.activity
+      .filter((row) => row.dateISO)
+      .sort((a, b) => a.dateISO.localeCompare(b.dateISO))
+      .slice(-7)
+      .filter((row) => (Number.isFinite(row.activeZoneMinutes) && row.activeZoneMinutes >= 22) || (Number.isFinite(row.activeMinutes) && row.activeMinutes >= 45))
+      .length;
+
+    const stress = computeStressScore(latestSleep, latestRhr, latestHrv, avgSleepScore7, avgRhr7, avgHrv7);
+    setCardState(
+      'stressScore',
+      Number.isFinite(stress.score) ? `${stress.score}` : '--',
+      Number.isFinite(stress.score)
+        ? `当前判断：<strong>${stress.label}</strong><br>结合睡眠分数、HRV、RHR 做推断，不是 Fitbit 官方原生字段`
+        : '还不足以计算压力分数',
+      !Number.isFinite(stress.score)
+    );
 
     setCardState(
       'sleepScore',
       latestSleep ? fmtOne(latestSleep.sleepScore) : '--',
       latestSleep
-        ? `最近一晚：<strong>${fmtDate(latestSleep.dateISO)}</strong><br>近 7 晚均值：<strong>${fmtOne(recentAverage(datasets.sleep, 'sleepScore', 7))}</strong>`
+        ? `最近一晚：<strong>${fmtDate(latestSleep.dateISO)}</strong><br>近 7 晚均值：<strong>${fmtOne(avgSleepScore7)}</strong>`
         : '还没有睡眠分数数据',
       !latestSleep
     );
@@ -914,7 +1002,7 @@ document.addEventListener('DOMContentLoaded', function() {
       'sleepDuration',
       latestSleepMinutes ? fmtMinutes(latestSleepMinutes.minutesAsleep) : '--',
       latestSleepMinutes
-        ? `最近一晚：<strong>${fmtDate(latestSleepMinutes.dateISO)}</strong><br>近 7 晚均值：<strong>${fmtMinutes(recentAverage(datasets.sleep, 'minutesAsleep', 7))}</strong>`
+        ? `最近一晚：<strong>${fmtDate(latestSleepMinutes.dateISO)}</strong><br>近 7 晚均值：<strong>${fmtMinutes(avgSleepMinutes7)}</strong>`
         : '还没有睡眠时长数据',
       !latestSleepMinutes
     );
@@ -923,26 +1011,51 @@ document.addEventListener('DOMContentLoaded', function() {
       'steps',
       latestSteps ? fmtInt(latestSteps.steps) : '--',
       latestSteps
-        ? `最近一天：<strong>${fmtDate(latestSteps.dateISO)}</strong><br>近 7 天均值：<strong>${fmtInt(recentAverage(datasets.steps, 'steps', 7))}</strong>`
+        ? `最近一天：<strong>${fmtDate(latestSteps.dateISO)}</strong><br>近 7 天均值：<strong>${fmtInt(avgSteps7)}</strong>`
         : '还没有步数数据',
       !latestSteps
     );
 
     setCardState(
-      'activity',
-      latestActivity ? fmtMinutes(latestActivity.activeMinutes) : '--',
-      latestActivity
-        ? `按 1440 - sedentaryMinutes 估算<br>近 7 天均值：<strong>${fmtMinutes(recentAverage(datasets.steps, 'activeMinutes', 7))}</strong>`
-        : '还没有活动时长数据',
-      !latestActivity
+      'activeZone',
+      latestActiveZone ? `${fmtInt(latestActiveZone.activeZoneMinutes)} 分钟` : '--',
+      latestActiveZone
+        ? `最近一天：<strong>${fmtDate(latestActiveZone.dateISO)}</strong><br>近 7 天均值：<strong>${fmtOne(avgAzm7)} 分钟</strong> · 若官方 AZM 缺失，则按 fairly + very×2 估算`
+        : '还没有活跃区间分钟数据',
+      !latestActiveZone
+    );
+
+    setCardState(
+      'exerciseDays',
+      `${exerciseDays7}/7`,
+      '按最近 7 天统计：Active Zone Minutes ≥ 22 或活跃分钟 ≥ 45 记为达标一天',
+      false
+    );
+
+    setCardState(
+      'activityHours',
+      latestActiveHours ? fmtHours(latestActiveHours.activeMinutes) : '--',
+      latestActiveHours
+        ? `最近一天：<strong>${fmtDate(latestActiveHours.dateISO)}</strong><br>近 7 天均值：<strong>${fmtHours(avgActiveMinutes7)}</strong>`
+        : '还没有活跃分钟数据',
+      !latestActiveHours
+    );
+
+    setCardState(
+      'calories',
+      latestCalories ? `${fmtInt(latestCalories.caloriesOut)} kcal` : '--',
+      latestCalories
+        ? `总消耗：<strong>${fmtInt(latestCalories.caloriesOut)} kcal</strong><br>活动热量：<strong>${latestActivityCalories ? fmtInt(latestActivityCalories.activityCalories) : '--'} kcal</strong> · 近 7 天均值：<strong>${fmtInt(avgCalories7)} kcal</strong>`
+        : '还没有热量数据',
+      !latestCalories
     );
 
     setCardState(
       'rhr',
       latestRhr ? `${fmtInt(latestRhr.rhr)} bpm` : '--',
       latestRhr
-        ? `最近一天：<strong>${fmtDate(latestRhr.dateISO)}</strong><br>近 7 条均值：<strong>${fmtOne(recentAverage(datasets.rhr, 'rhr', 7))} bpm</strong>`
-        : '还没有 RHR 数据',
+        ? `最近一天：<strong>${fmtDate(latestRhr.dateISO)}</strong><br>近 7 条均值：<strong>${fmtOne(avgRhr7)} bpm</strong>`
+        : '还没有静息心率数据',
       !latestRhr
     );
 
@@ -950,9 +1063,18 @@ document.addEventListener('DOMContentLoaded', function() {
       'hrv',
       latestHrv ? fmtOne(latestHrv.hrv) : '--',
       latestHrv
-        ? `最近一天：<strong>${fmtDate(latestHrv.dateISO)}</strong><br>近 7 条均值：<strong>${fmtOne(recentAverage(datasets.hrv, 'hrv', 7))}</strong>`
+        ? `最近一天：<strong>${fmtDate(latestHrv.dateISO)}</strong><br>近 7 条均值：<strong>${fmtOne(avgHrv7)}</strong> · 越高通常代表恢复更好`
         : '还没有 HRV 数据',
       !latestHrv
+    );
+
+    setCardState(
+      'exerciseExamples',
+      latestExerciseExample ? latestExerciseExample.exerciseExamples : '--',
+      latestExerciseExample
+        ? `最近有记录的一天：<strong>${fmtDate(latestExerciseExample.dateISO)}</strong><br>这里展示 Fitbit 日汇总里记录到的活动名称示例，用来帮你快速回想那天做了什么。`
+        : '最近没有抓到可展示的运动示例（可能当天只有步数，没有记录具体活动名称）',
+      !latestExerciseExample
     );
 
     updateSubtitle(profileId, datasets);
@@ -961,8 +1083,8 @@ document.addEventListener('DOMContentLoaded', function() {
   async function refreshDesktopOverview() {
     const profileId = profileSelect && profileSelect.value;
     if (!profileId || profileId === '__profile_management__') {
-      subtitleEl.textContent = '请先选择一个 profile。';
-      Object.keys(overviewCards).forEach((key) => setCardState(key, '--', '请先选择 profile', true));
+      subtitleEl.textContent = '请先选择一个档案。';
+      Object.keys(overviewCards).forEach((key) => setCardState(key, '--', '请先选择档案', true));
       return;
     }
 
@@ -971,7 +1093,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const datasets = await loadOverviewData(profileId);
       renderOverview(profileId, datasets);
     } catch (error) {
-      subtitleEl.textContent = '综合概览读取失败，通常是 CSV 还没同步完；点 ↻ 再试一次。';
+      subtitleEl.textContent = '健康总览读取失败，通常是 CSV 还没同步完；点 ↻ 再试一次。';
       Object.keys(overviewCards).forEach((key) => setCardState(key, '--', '数据暂不可用', true));
     }
   }
@@ -982,7 +1104,7 @@ document.addEventListener('DOMContentLoaded', function() {
     chartTypeSelect.dispatchEvent(new Event('change', { bubbles: true }));
     const chart = document.getElementById('chart');
     if (chart && typeof chart.scrollIntoView === 'function') {
-      setTimeout(() => chart.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+      setTimeout(() => chart.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
     }
   }
 
@@ -998,7 +1120,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   [fetchStatusEl, sleepFileDisplay, hrvFileDisplay, stepsFileDisplay, rhrFileDisplay].forEach((el) => {
     if (!el || typeof MutationObserver === 'undefined') return;
-    new MutationObserver(() => setTimeout(refreshDesktopOverview, 120)).observe(el, { childList: true, characterData: true, subtree: true });
+    new MutationObserver(() => setTimeout(refreshDesktopOverview, 150)).observe(el, { childList: true, characterData: true, subtree: true });
   });
 
   setTimeout(() => {
