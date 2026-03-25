@@ -15,8 +15,6 @@ from common.profile_paths import (
     client_credentials_file_for,
 )
 
-CLIENT_ID = "23R4ZY"
-CLIENT_SECRET = "REMOVED_HISTORICAL_CLIENT_SECRET"
 TIMEOUT = 30
 MAX_RETRIES = 4
 BACKOFF_BASE = 2.0
@@ -77,7 +75,12 @@ def _resolve_tokens_file() -> str:
 
 
 def _resolve_client_credentials() -> tuple[str, str]:
-    """Resolve client ID/secret from env or profile file, with defaults as fallback."""
+    """Resolve client ID/secret from env or profile file.
+
+    Production refreshes should use the app credentials that belong to the
+    current profile (or explicit env vars), instead of silently falling back to
+    a hardcoded shared developer app.
+    """
     def _find_repeating_segment(s: str, min_seg: int = 16) -> int | None:
         n = len(s)
         for seg in range(min_seg, (n // 2) + 1):
@@ -125,8 +128,11 @@ def _resolve_client_credentials() -> tuple[str, str]:
                 return cid, csec
     except Exception:
         pass
-    # Fallback to built-in defaults
-    return CLIENT_ID, CLIENT_SECRET
+
+    raise RuntimeError(
+        "[fitbit] Client credentials not found. Set FITBIT_CLIENT_ID and "
+        "FITBIT_CLIENT_SECRET, or make sure profiles/<profile>/auth/client.json exists."
+    )
 
 
 def refresh_token():

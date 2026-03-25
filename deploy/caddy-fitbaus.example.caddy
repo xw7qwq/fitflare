@@ -1,0 +1,15 @@
+# 示例：给 FitBaus 配一个独立域名
+# 使用前请先把域名 DNS A 记录指向当前服务器。
+
+fitbaus.example.com {
+	encode zstd gzip
+
+	reverse_proxy 127.0.0.1:19000 {
+		header_up Host {host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+	}
+
+	tls lucius7nya@gmail.com
+}
