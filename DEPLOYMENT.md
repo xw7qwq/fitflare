@@ -68,6 +68,8 @@ sudo docker compose down
 
 - `FITBAUS_BIND_HOST`：默认 `0.0.0.0`
 - `FITBAUS_PORT`：默认 `9000`
+- `FITBAUS_UID`：Linux 宿主机用户 UID，建议设为当前部署用户的 UID
+- `FITBAUS_GID`：Linux 宿主机用户 GID，建议设为当前部署用户的 GID
 - `FITBAUS_CALLBACK_BIND_HOST`：仅在需要开放 8080 OAuth 回调时使用
 - `TZ`：容器时区，默认 compose 里是 `Etc/UTC`
 

@@ -2,8 +2,8 @@ services:
   fitbaus:
     build: .
     container_name: fitbaus-app
-    # Optional (Linux): run container as your host user to avoid bind-mount permission issues
-    # user: "${UID:-10001}:${GID:-10001}"
+    # On Linux bind mounts, prefer running as the host user to avoid write failures
+    user: "${FITBAUS_UID:-1000}:${FITBAUS_GID:-1000}"
     ports:
       - "${FITBAUS_BIND_HOST:-0.0.0.0}:${FITBAUS_PORT:-9000}:9000"   # Web UI (host:container)
       # - "${FITBAUS_CALLBACK_BIND_HOST:-0.0.0.0}:8080:8080" # Optional: local HTTPS callback port for background OAuth
