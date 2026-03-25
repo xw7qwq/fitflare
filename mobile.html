@@ -32,6 +32,37 @@
     .wrap { padding: 8px; }
     .inline-logo { font-size: 14.5px !important; letter-spacing: 2px !important; }
     .inline-logo::before { width: 17.5px !important; height: 17.5px !important; }
+    .mobile-topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; width:100%; }
+    .mobile-profile-actions { display:flex; flex-direction:column; gap:8px; min-width:0; flex:1; }
+    .mobile-profile-row { display:flex; align-items:center; gap:8px; }
+    .mobile-profile-row select { min-width:0; flex:1; }
+    .mobile-sync-btn {
+      border:none;
+      border-radius:10px;
+      background:#1a2349;
+      color:#e6eaf3;
+      padding:10px 12px;
+      min-width:48px;
+      height:42px;
+      font-size:18px;
+      cursor:pointer;
+      flex-shrink:0;
+    }
+    .mobile-sync-btn:disabled { opacity:0.65; cursor:wait; }
+    .mobile-fetch-copy { font-size:12px; line-height:1.4; color:#9aa5c6; }
+    .mobile-fetch-copy strong { color:#e6eaf3; font-weight:600; }
+    .mobile-helper-card {
+      margin:0 0 14px;
+      padding:12px 14px;
+      border:1px solid #24305c;
+      border-radius:12px;
+      background:#101833;
+    }
+    .mobile-helper-card.hidden { display:none; }
+    .mobile-helper-title { font-size:13px; font-weight:700; color:#e6eaf3; margin-bottom:6px; }
+    .mobile-helper-body { font-size:12px; line-height:1.5; color:#9aa5c6; }
+    .mobile-helper-body a { color:#7bb7ff; text-decoration:none; }
+    .mobile-helper-body a:hover { text-decoration:underline; }
     
     /* Portrait mode adjustments */
     @media screen and (orientation: portrait) and (max-width: 768px) {
@@ -61,11 +92,27 @@
       <div style="margin-bottom:16px;">
         <div style="display:flex;gap:8px;margin-bottom:8px;">
         </div>
-        <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;width:100%;">
-          <div style="display:flex;gap:8px;align-items:center;">
-            <select id="profileSelect" style="width:120px;"></select>
+        <div class="mobile-topbar">
+          <div class="mobile-profile-actions">
+            <div class="mobile-profile-row">
+              <select id="profileSelect" style="width:120px;"></select>
+              <button id="fetchDataBtn" class="mobile-sync-btn" title="Sync Fitbit Data" aria-label="Sync Fitbit Data">↻</button>
+            </div>
+            <div class="mobile-fetch-copy">
+              <strong>移动端同步入口</strong><br>
+              授权完成后如果页面内容还是空的，点右边这个 ↻ 先同步一次数据。
+            </div>
+            <div id="fetchStatus" style="font-size:12px;color:#9aa5c6;"></div>
           </div>
           <div class="inline-logo" aria-label="FitBaus brand" style="align-self:center;margin-top:16px;">FitBaus</div>
+        </div>
+      </div>
+
+      <div id="mobileHelperCard" class="mobile-helper-card hidden">
+        <div id="mobileHelperTitle" class="mobile-helper-title">首次授权后需要同步数据</div>
+        <div id="mobileHelperBody" class="mobile-helper-body">
+          如果这里看起来像白页，通常只是还没抓到 Fitbit 数据。点上面的 ↻ 同步，完成后页面会自动显示内容。<br>
+          也可以临时改用 <a id="mobileDesktopLink" href="#">桌面版</a> 打开。
         </div>
       </div>
       
@@ -106,10 +153,8 @@
       </div>
       
       <div class="controls">
-        <!-- Minimal: Profile status only -->
-        <div class="cell profile-cell" style="display:block">
-          <div id="fetchStatus" style="font-size:10px;color:#9aa5c6;margin-top:2px;"></div>
-        </div>
+        <!-- Minimal: keep one visible cell so script.js layout assumptions still hold -->
+        <div class="cell profile-cell" style="display:block"></div>
 
         <!-- Hidden stubs required by script.js -->
         <div class="cell" style="display:none">
@@ -377,6 +422,105 @@
       
       // Note: Spousal Signals view is hidden by default
       // Users can access it via the main dashboard or spousal.html
+
+      const mobileHelperCard = document.getElementById('mobileHelperCard');
+      const mobileHelperTitle = document.getElementById('mobileHelperTitle');
+      const mobileHelperBody = document.getElementById('mobileHelperBody');
+      const fetchStatusEl = document.getElementById('fetchStatus');
+      const fetchDataBtn = document.getElementById('fetchDataBtn');
+      const metaEl = document.getElementById('meta');
+      const sleepFileDisplay = document.getElementById('sleepFileDisplay');
+      const hrvFileDisplay = document.getElementById('hrvFileDisplay');
+      const stepsFileDisplay = document.getElementById('stepsFileDisplay');
+      const rhrFileDisplay = document.getElementById('rhrFileDisplay');
+      const desktopLink = document.getElementById('mobileDesktopLink');
+
+      function setDesktopLink() {
+        if (!desktopLink) return;
+        try {
+          const params = new URLSearchParams(location.search || '');
+          params.set('desktop', '1');
+          desktopLink.href = (location.pathname || 'index.html') + '?' + params.toString();
+        } catch (_) {
+          desktopLink.href = 'index.html?desktop=1';
+        }
+      }
+
+      function getLoadedCsvCount() {
+        const displays = [sleepFileDisplay, hrvFileDisplay, stepsFileDisplay, rhrFileDisplay];
+        return displays.filter((el) => el && el.textContent && el.textContent.trim() !== 'No file chosen').length;
+      }
+
+      function helperStateFromStatus(text) {
+        const normalized = String(text || '').trim().toLowerCase();
+        if (!normalized) return null;
+        if (
+          normalized.includes('queued') ||
+          normalized.includes('fetch') ||
+          normalized.includes('authoriz') ||
+          normalized.includes('sync') ||
+          normalized.includes('running') ||
+          normalized.includes('started') ||
+          normalized.includes('loading')
+        ) return 'working';
+        if (
+          normalized.includes('error') ||
+          normalized.includes('failed') ||
+          normalized.includes('needs authorization') ||
+          normalized.includes('token')
+        ) return 'error';
+        return null;
+      }
+
+      function updateMobileHelper() {
+        if (!mobileHelperCard || !mobileHelperTitle || !mobileHelperBody) return;
+
+        const statusText = (fetchStatusEl && fetchStatusEl.textContent || '').trim();
+        const helperState = helperStateFromStatus(statusText);
+        const csvCount = getLoadedCsvCount();
+        const metaText = (metaEl && metaEl.textContent || '').trim();
+        const appearsEmpty = csvCount === 0 || metaText.startsWith('0 nights');
+
+        if (helperState === 'working') {
+          mobileHelperCard.classList.remove('hidden');
+          mobileHelperTitle.textContent = '正在同步 Fitbit 数据';
+          mobileHelperBody.innerHTML = '首次同步通常需要几十秒到几分钟。保持这个页面开着，完成后会自动显示内容。'
+            + '<br>如果长时间没变化，也可以切到 <a id="mobileDesktopLinkInlineWorking" href="' + (desktopLink ? desktopLink.href : 'index.html?desktop=1') + '">桌面版</a> 查看。';
+          return;
+        }
+
+        if (helperState === 'error') {
+          mobileHelperCard.classList.remove('hidden');
+          mobileHelperTitle.textContent = '同步失败或还未完成';
+          mobileHelperBody.innerHTML = '当前状态：' + statusText + '<br>可以再点一次上面的 ↻，或者先改用 <a id="mobileDesktopLinkInlineError" href="' + (desktopLink ? desktopLink.href : 'index.html?desktop=1') + '">桌面版</a> 继续。';
+          return;
+        }
+
+        if (appearsEmpty) {
+          mobileHelperCard.classList.remove('hidden');
+          mobileHelperTitle.textContent = '首次授权后需要同步数据';
+          mobileHelperBody.innerHTML = '如果这里看起来像白页，通常只是还没抓到 Fitbit 数据。点上面的 ↻ 同步，完成后页面会自动显示内容。'
+            + '<br>也可以临时改用 <a id="mobileDesktopLinkInlineDefault" href="' + (desktopLink ? desktopLink.href : 'index.html?desktop=1') + '">桌面版</a> 打开。';
+          return;
+        }
+
+        mobileHelperCard.classList.add('hidden');
+      }
+
+      setDesktopLink();
+      updateMobileHelper();
+      if (fetchDataBtn) {
+        fetchDataBtn.addEventListener('click', function() {
+          setTimeout(updateMobileHelper, 50);
+          setTimeout(updateMobileHelper, 1000);
+        });
+      }
+      [fetchStatusEl, metaEl, sleepFileDisplay, hrvFileDisplay, stepsFileDisplay, rhrFileDisplay].forEach(function(el) {
+        if (!el || typeof MutationObserver === 'undefined') return;
+        new MutationObserver(updateMobileHelper).observe(el, { childList: true, characterData: true, subtree: true });
+      });
+      setTimeout(updateMobileHelper, 1500);
+      setTimeout(updateMobileHelper, 4000);
       
       async function loadSpousalHRVData() {
         try {
