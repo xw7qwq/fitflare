@@ -1,3 +1,15 @@
 .env
 __pycache__/
 *.py[cod]
+.venv/
+cache/
+csv/
+auth/client.json
+auth/tokens.json
+auth/tokens.json.bak
+profiles/index.json
+profiles/*/auth/client.json
+profiles/*/auth/tokens.json
+profiles/*/auth/tokens.json.bak
+profiles/*/csv/
+profiles/*/cache/

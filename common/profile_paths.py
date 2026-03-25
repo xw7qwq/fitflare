@@ -42,6 +42,17 @@ def csv_path_for(profile_id: Optional[str], filename: str) -> str:
     return os.path.join(ROOT_DIR, "profiles", profile_id, "csv", filename)
 
 
+def cache_path_for(profile_id: Optional[str], filename: str) -> str:
+    """Absolute path to a cache file name for the profile.
+
+    - None profile -> legacy path: ROOT/cache/<filename>
+    - Otherwise -> ROOT/profiles/<id>/cache/<filename>
+    """
+    if not profile_id:
+        return os.path.join(ROOT_DIR, "cache", filename)
+    return os.path.join(ROOT_DIR, "profiles", profile_id, "cache", filename)
+
+
 def list_profiles() -> List[str]:
     """Return a sorted list of available profile IDs (folder names under profiles/)."""
     profiles_dir = os.path.join(ROOT_DIR, "profiles")
@@ -97,6 +108,11 @@ def ensure_dirs_for_tokens(path: str) -> None:
 
 def ensure_dirs_for_csv(path: str) -> None:
     """Ensure the parent directory for the csv file exists."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+
+
+def ensure_dirs_for_cache(path: str) -> None:
+    """Ensure the parent directory for the cache file exists."""
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
 
 

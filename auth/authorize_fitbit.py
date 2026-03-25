@@ -60,6 +60,7 @@ from common.profile_paths import (
     ensure_dirs_for_tokens,
     client_credentials_file_for,
 )
+from common.fitbit_scopes import FITBIT_DASHBOARD_SCOPE_TEXT
 
 # Credentials are loaded dynamically - no hardcoded values for security
 REDIRECT_URI = "http://localhost:8080/callback"
@@ -314,7 +315,7 @@ def get_auth_code_manual(redirect_uri: str, client_id: str):
     params = {
         "client_id": client_id,
         "response_type": "code",
-        "scope": "heartrate sleep activity profile",
+        "scope": FITBIT_DASHBOARD_SCOPE_TEXT,
         "redirect_uri": redirect_uri,
     }
     auth_url = f"https://www.fitbit.com/oauth2/authorize?{urlencode(params)}"
@@ -382,7 +383,7 @@ def get_auth_code_advanced(client_id: str):
     params = {
         "client_id": client_id,
         "response_type": "code",
-        "scope": "heartrate sleep activity profile",
+        "scope": FITBIT_DASHBOARD_SCOPE_TEXT,
         "redirect_uri": redirect_uri,
     }
     auth_url = f"https://www.fitbit.com/oauth2/authorize?{urlencode(params)}"
@@ -649,4 +650,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

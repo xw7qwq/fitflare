@@ -14,6 +14,9 @@ from datetime import datetime, date
 from flask import Flask, send_from_directory, send_file, request, jsonify
 from flask_cors import CORS
 
+from common.dashboard_cache import build_dashboard_cache, build_profile_cards, load_dashboard_cache
+from common.fitbit_scopes import FITBIT_DASHBOARD_SCOPE_TEXT
+
 app = Flask(__name__)
 CORS(app)  # Enable CORS for API endpoints
 
@@ -262,6 +265,7 @@ def run_fetch_script(profile_id, job_id):
             'fetch_hrv_data.py': 'fitbit_hrv.csv',
             'fetch_sleep_data.py': 'fitbit_sleep.csv',
             'fetch_sleep_data_alternate_version.py': 'fitbit_sleep.csv',
+            'fetch_profile_snapshot.py': 'fitbit_profile_snapshot.json',
         }
 
         def update_progress_for(last_date_str: str | None):
@@ -551,19 +555,7 @@ def run_fetch_script(profile_id, job_id):
 # Static file serving (maintains existing behavior)
 @app.route('/')
 def index():
-    """Serve the main HTML file with mobile detection"""
-    # Check for desktop override parameter
-    if request.args.get('desktop'):
-        return send_from_directory('.', 'index.html')
-    
-    # Server-side mobile detection as backup
-    user_agent = request.headers.get('User-Agent', '').lower()
-    is_mobile_ua = any(device in user_agent for device in ['android', 'iphone', 'ipad', 'ipod', 'iemobile', 'wpdesktop', 'mobile'])
-    
-    if is_mobile_ua:
-        print(f"[Mobile Detection] Server-side redirect to mobile.html for UA: {user_agent[:50]}...")
-        return send_from_directory('.', 'mobile.html')
-    
+    """Serve the unified app shell"""
     return send_from_directory('.', 'index.html')
 
 @app.route('/favicon.ico')
@@ -630,6 +622,7 @@ def create_profile():
         try:
             os.makedirs(f'{profile_dir}/auth', exist_ok=True)
             os.makedirs(f'{profile_dir}/csv', exist_ok=True)
+            os.makedirs(f'{profile_dir}/cache', exist_ok=True)
         except PermissionError as pe:
             # Provide a helpful message for common Docker-on-Linux bind-mount issues
             msg = (
@@ -961,6 +954,47 @@ def list_profiles():
     profiles.sort(key=lambda x: x['name'])
     return jsonify(profiles)
 
+
+@app.route('/api/dashboard/<profile_id>')
+def dashboard(profile_id):
+    """Return the unified dashboard cache for one profile."""
+    try:
+        profile_dir = os.path.join('profiles', profile_id)
+        if not os.path.isdir(profile_dir):
+            return jsonify({'error': f'Profile "{profile_id}" not found'}), 404
+        payload = load_dashboard_cache(profile_id, rebuild_if_missing=True)
+        return jsonify(payload)
+    except Exception as e:
+        print(f"Error building dashboard for {profile_id}: {e}")
+        return jsonify({'error': f'Failed to build dashboard: {str(e)}'}), 500
+
+
+@app.route('/api/profile-summaries')
+def profile_summaries():
+    """Return lightweight summary cards for all profiles."""
+    try:
+        return jsonify(build_profile_cards())
+    except Exception as e:
+        print(f"Error building profile summaries: {e}")
+        return jsonify({'error': f'Failed to build profile summaries: {str(e)}'}), 500
+
+
+@app.route('/api/rebuild-dashboard/<profile_id>', methods=['POST'])
+def rebuild_dashboard(profile_id):
+    """Force a dashboard cache rebuild for one profile."""
+    try:
+        profile_dir = os.path.join('profiles', profile_id)
+        if not os.path.isdir(profile_dir):
+            return jsonify({'error': f'Profile "{profile_id}" not found'}), 404
+        payload = build_dashboard_cache(profile_id)
+        return jsonify({
+            'message': f'Dashboard cache rebuilt for {profile_id}',
+            'generated_at': payload.get('generated_at'),
+        })
+    except Exception as e:
+        print(f"Error rebuilding dashboard for {profile_id}: {e}")
+        return jsonify({'error': f'Failed to rebuild dashboard: {str(e)}'}), 500
+
 @app.route('/api/health')
 def health_check():
     """Health check endpoint"""
@@ -1045,7 +1079,7 @@ def start_authorization(profile_id):
         params = {
             'client_id': client_id,
             'response_type': 'code',
-            'scope': 'heartrate sleep activity profile',
+            'scope': FITBIT_DASHBOARD_SCOPE_TEXT,
             'redirect_uri': redirect_uri,
         }
         auth_url = f"https://www.fitbit.com/oauth2/authorize?{urlencode(params)}"

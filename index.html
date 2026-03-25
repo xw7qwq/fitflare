@@ -1,1137 +1,531 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>FitBaus</title>
-<script>
-// Lightweight mobile redirect to simplified page
-(function(){
-  function checkMobileRedirect() {
-    try {
-      var params = new URLSearchParams(location.search || '');
-      if (params.has('desktop')) return; // allow override
-      
-      var ua = navigator.userAgent || navigator.vendor || window.opera || '';
-      var isMobileUA = /android|iphone|ipad|ipod|iemobile|wpdesktop|mobile/i.test(ua);
-      
-      // More reliable viewport detection
-      var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-      var screenWidth = window.screen ? window.screen.width : 0;
-      var smallViewport = Math.min(viewportWidth, screenWidth) <= 768;
-      
-      console.log('[Mobile Detection] UA:', ua.substring(0, 50) + '...');
-      console.log('[Mobile Detection] isMobileUA:', isMobileUA);
-      console.log('[Mobile Detection] viewportWidth:', viewportWidth);
-      console.log('[Mobile Detection] screenWidth:', screenWidth);
-      console.log('[Mobile Detection] smallViewport:', smallViewport);
-      console.log('[Mobile Detection] current path:', location.pathname);
-      
-      if ((isMobileUA || smallViewport) && !/mobile\.html$/i.test(location.pathname)) {
-        var dest = 'mobile.html' + (location.search || '');
-        console.log('[Mobile Detection] Redirecting to:', dest);
-        location.replace(dest);
-      } else {
-        console.log('[Mobile Detection] No redirect needed');
-      }
-    } catch(e) { 
-      console.error('[Mobile Detection] Error:', e);
-    }
-  }
-  
-  // Check immediately and after DOM loads
-  checkMobileRedirect();
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', checkMobileRedirect);
-  }
-})();
-</script>
-<link rel="icon" type="image/x-icon" href="assets/favicon.ico">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-<script src="version.js"></script>
-<script>
-// Update version display dynamically
-document.addEventListener('DOMContentLoaded', function() {
-  if (window.FITBAUS_VERSION) {
-    const style = document.createElement('style');
-    style.textContent = `.inline-logo::after { content: "${window.FITBAUS_VERSION}"; }`;
-    document.head.appendChild(style);
-  }
-});
-</script>
-<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@latest/dist/chartjs-chart-matrix.min.js"></script>
-<link rel="stylesheet" href="style.css">
-<style>
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-.desktop-overview {
-  margin: 16px 0 18px;
-  padding: 18px;
-  border: 1px solid #1a2349;
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(16,24,51,0.95), rgba(10,15,26,0.95));
-}
-.desktop-overview-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 14px;
-}
-.desktop-overview-kicker {
-  color: #7bb7ff;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
-.desktop-overview-title {
-  color: #e6eaf3;
-  font-size: 22px;
-  font-weight: 800;
-  margin: 0;
-}
-.desktop-overview-subtitle {
-  color: #9aa5c6;
-  font-size: 13px;
-  line-height: 1.5;
-  margin-top: 6px;
-}
-.desktop-overview-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-.desktop-overview-actions button {
-  background: #121a38;
-  color: #e6eaf3;
-  border: 1px solid #24305c;
-  border-radius: 999px;
-  padding: 8px 12px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.desktop-overview-actions button:hover {
-  border-color: #4a90e2;
-  color: #7bb7ff;
-}
-.desktop-overview-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 12px;
-}
-.desktop-overview-card {
-  border: 1px solid #1a2349;
-  border-radius: 14px;
-  background: rgba(11,16,32,0.92);
-  padding: 14px;
-  min-height: 112px;
-}
-.desktop-overview-card.is-wide {
-  grid-column: span 2;
-}
-.desktop-overview-label {
-  color: #9aa5c6;
-  font-size: 12px;
-  margin-bottom: 10px;
-}
-.desktop-overview-value {
-  color: #e6eaf3;
-  font-size: 28px;
-  font-weight: 800;
-  line-height: 1.05;
-}
-.desktop-overview-meta {
-  color: #9aa5c6;
-  font-size: 12px;
-  line-height: 1.5;
-  margin-top: 8px;
-  white-space: pre-line;
-}
-.desktop-overview-meta strong {
-  color: #e6eaf3;
-  font-weight: 600;
-}
-.desktop-overview-card.is-empty .desktop-overview-value,
-.desktop-overview-card.is-empty .desktop-overview-meta {
-  color: #6f7b9f;
-}
-@media (max-width: 900px) {
-  .desktop-overview-header {
-    flex-direction: column;
-  }
-  .desktop-overview-actions {
-    justify-content: flex-start;
-  }
-  .desktop-overview-card.is-wide {
-    grid-column: span 1;
-  }
-}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FitBaus 健康仪表盘</title>
+  <meta name="description" content="用中文查看 Fitbit 睡眠、活动、恢复和本地缓存数据。">
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <script src="version.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="wrap">
-  <div class="header">
-    
-  </div>
+  <div class="page-glow page-glow-one"></div>
+  <div class="page-glow page-glow-two"></div>
 
-  <div class="card" style="padding:16px">
-    <div class="controls">
-      
-      <div class="cell">
-        <label>Chart</label>
-        <div class="dropdown-wrapper">
-          <select id="chartType">
-            <option value="daily_score">💤 Sleep Score</option>
-            <option value="daily_minutes">Minutes Asleep</option>
-            <option value="stages_pct">Monthly Stage % (Deep/REM/Light)</option>
-            <option disabled>────────────────────────</option>
-            <option value="hrv_heatmap">📉 HRV: Heatmap, CUSUM, Min/Max</option>
-            <option value="corr_same">Correlation: Sleep Score vs HRV</option>
-            <option disabled>────────────────────────</option>
-            <option value="daily_steps">👟 Steps &amp; Activity</option>
-            <option value="corr_steps_hrv">Correlation: Steps vs HRV & Sleep Score</option>
-            <option disabled>────────────────────────</option>
-            <option value="daily_rhr">❤️ RHR</option>
-            <option value="hist_rhr">RHR: Histogram, CUSUM, Min/Max</option>
-          <option disabled>────────────────────────</option>
-              <option value="analytics">📊 Comprehensive Analytics</option>
-              <option value="correlation_matrix">Correlation Matrix</option>
-              <option value="predictions">Predictions & Family Insights</option>
-              <option value="life_events">Life Events</option>
+  <div class="app-shell">
+    <header class="surface topbar">
+      <div class="brand-stack">
+        <a class="brandmark" href="./" aria-label="FitBaus 首页">
+          <img src="assets/fitbauslogo.png" alt="">
+        </a>
+        <div class="brand-copy">
+          <div class="eyebrow">FitBaus Health Console</div>
+          <h1>Fitbit 中文健康仪表盘</h1>
+          <p class="subtitle">
+            先把 Fitbit 数据抓到本地，再用一个更清晰的页面看睡眠、活动、恢复和多档案对比。
+          </p>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <div class="version-chip" id="versionChip">本地缓存模式</div>
+        <button class="button button-secondary" id="openManagerBtn" type="button">档案管理</button>
+        <button class="button button-primary" id="syncBtn" type="button">同步 Fitbit</button>
+      </div>
+    </header>
+
+    <section class="surface control-rail">
+      <label class="field field-wide">
+        <span class="field-label">当前档案</span>
+        <div class="field-row">
+          <select id="profileSelect" aria-label="选择档案"></select>
+          <button class="button button-light" id="reloadBtn" type="button">重建缓存</button>
+        </div>
+      </label>
+
+      <label class="field">
+        <span class="field-label">展示范围</span>
+        <select id="rangeSelect" aria-label="选择展示范围">
+          <option value="14">最近 14 天</option>
+          <option value="30" selected>最近 30 天</option>
+          <option value="90">最近 90 天</option>
         </select>
-        </div>
-      </div>
-      <div class="cell">
-        <label>Date From</label>
-        <input type="date" id="dateFrom"/>
-      </div>
-      <div class="cell">
-        <label>Date To</label>
-        <input type="date" id="dateTo"/>
-      </div>
-      <div class="cell" id="sameDayToggleCell" style="display:none;">
-        <label>Include same-day</label>
-        <div class="switch"><input type="checkbox" id="includeSameDay"></div>
-      </div>
-      <div class="cell">
-        <label>Steps &amp; Activity View</label>
-        <div class="tri-state-toggle">
-          <input type="range" id="stepsViewToggle" min="0" max="2" value="0" step="1">
-          <div class="toggle-labels">
-            <span class="label-left" data-value="0">Daily</span>
-            <span class="label-center" data-value="1">Monthly</span>
-            <span class="label-right" data-value="2">Yearly</span>
-          </div>
-        </div>
-      </div>
-        <div class="cell">
-          <label>RHR View</label>
-          <div class="tri-state-toggle">
-            <input type="range" id="rhrViewToggle" min="0" max="2" value="0" step="1">
-            <div class="toggle-labels">
-              <span class="label-left" data-value="0">Daily</span>
-              <span class="label-center" data-value="1">Monthly</span>
-              <span class="label-right" data-value="2">Yearly</span>
-            </div>
-          </div>
-        </div>
+      </label>
 
-        <div class="cell">
-          <label>Sleep View</label>
-          <div class="tri-state-toggle">
-            <input type="range" id="sleepViewToggle" min="0" max="2" value="0" step="1">
-            <div class="toggle-labels">
-              <span class="label-left" data-value="0">Daily</span>
-              <span class="label-center" data-value="1">Monthly</span>
-              <span class="label-right" data-value="2">Yearly</span>
-            </div>
-          </div>
+      <div class="status-strip">
+        <div class="status-pill">
+          <span>最近同步</span>
+          <strong id="lastSyncText">等待数据</strong>
         </div>
-
-        <div class="cell">
-          <label>Minutes Asleep View</label>
-          <div class="tri-state-toggle">
-            <input type="range" id="minutesViewToggle" min="0" max="1" value="0" step="1">
-            <div class="toggle-labels">
-              <span class="label-left" data-value="0">Daily</span>
-              <span class="label-center" data-value="1">Monthly</span>
-            </div>
-          </div>
+        <div class="status-pill">
+          <span>当前状态</span>
+          <strong id="statusText">正在加载</strong>
         </div>
-      <div class="cell">
-        <label>Ignore Naps</label>
-        <div class="switch"><input type="checkbox" id="mainOnly" checked></div>
-      </div>
-      <div class="cell profile-cell">
-        <label for="profileSelect"><span id="profileStatus" style="color:#666;font-size:10px;">•</span> Profile</label>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <select id="profileSelect"></select>
-          <button id="fetchDataBtn" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:4px;font-size:16px;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:4px;transition:all 0.2s ease;flex-shrink:0;" title="Fetch New Data" onmouseover="this.style.background='rgba(154,165,198,0.1)'" onmouseout="this.style.background='none'">
-            ↻
-          </button>
-        </div>
-        <div id="fetchStatus" style="font-size:10px;color:#9aa5c6;margin-top:2px;"></div>
-      </div>
-      <div class="cell csv-row-start">
-        <label for="sleepFile"><span id="sleepStatus" style="color:#666;font-size:10px;">●</span> Load Sleep CSV</label>
-        <div style="position:relative;display:inline-block;width:100%">
-          <div id="sleepFileDisplay" class="file-display" style="cursor:pointer;text-align:center;position:relative">No file chosen
-            <input type="file" id="sleepFile" accept=".csv" style="opacity:0;position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer"/>
-          </div>
-        </div>
-      </div>
-      <div class="cell">
-        <label for="hrvFile"><span id="hrvStatus" style="color:#666;font-size:10px;">●</span> Load HRV CSV</label>
-        <div style="position:relative;display:inline-block;width:100%">
-          <div id="hrvFileDisplay" class="file-display" style="cursor:pointer;text-align:center;position:relative">No file chosen
-            <input type="file" id="hrvFile" accept=".csv" style="opacity:0;position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer"/>
-          </div>
-        </div>
-      </div>
-      <div class="cell">
-        <label for="stepsFile"><span id="stepsStatus" style="color:#666;font-size:10px;">●</span> Load Activity CSV</label>
-        <div style="position:relative;display:inline-block;width:100%">
-          <div id="stepsFileDisplay" class="file-display" style="cursor:pointer;text-align:center;position:relative">No file chosen
-            <input type="file" id="stepsFile" accept=".csv" style="opacity:0;position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer"/>
-          </div>
-        </div>
-      </div>
-      <div class="cell">
-        <label for="rhrFile"><span id="rhrStatus" style="color:#666;font-size:10px;">●</span> Load RHR CSV</label>
-        <div style="position:relative;display:inline-block;width:100%">
-          <div id="rhrFileDisplay" class="file-display" style="cursor:pointer;text-align:center;position:relative">No file chosen
-            <input type="file" id="rhrFile" accept=".csv" style="opacity:0;position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer"/>
-          </div>
-        </div>
-      </div>
-      <div class="cell logo-cell">
-        <label>&nbsp;</label>
-        <div class="inline-logo" aria-label="FitBaus brand">FitBaus</div>
-      </div>
-      <!-- Inline logo placed after Load RHR CSV (same row) -->
-      
-    </div>
-
-    <div class="toolbar">
-      <span class="muted" id="note"></span>
-    </div>
-
-    <section id="desktopOverview" class="desktop-overview">
-      <div class="desktop-overview-header">
-        <div>
-          <div class="desktop-overview-kicker">Health Dashboard</div>
-          <h2 class="desktop-overview-title">健康总览</h2>
-          <div id="desktopOverviewSubtitle" class="desktop-overview-subtitle">
-            数据来自 Fitbit 官方 API，同步后缓存为本地 CSV。现在默认首页就是健康仪表盘，不再先给你一张单独睡眠分数图。
-          </div>
-        </div>
-        <div class="desktop-overview-actions">
-          <button type="button" data-chart-jump="daily_minutes">睡眠</button>
-          <button type="button" data-chart-jump="daily_steps">活动</button>
-          <button type="button" data-chart-jump="daily_rhr">心率</button>
-          <button type="button" data-chart-jump="hrv_heatmap">恢复</button>
-        </div>
-      </div>
-      <div class="desktop-overview-grid">
-        <article class="desktop-overview-card" data-overview-card="stressScore">
-          <div class="desktop-overview-label">压力分数（推断）</div>
-          <div class="desktop-overview-value" id="overviewStressScoreValue">--</div>
-          <div class="desktop-overview-meta" id="overviewStressScoreMeta">等待数据</div>
-        </article>
-        <article class="desktop-overview-card" data-overview-card="sleepScore">
-          <div class="desktop-overview-label">睡眠分数</div>
-          <div class="desktop-overview-value" id="overviewSleepScoreValue">--</div>
-          <div class="desktop-overview-meta" id="overviewSleepScoreMeta">等待数据</div>
-        </article>
-        <article class="desktop-overview-card" data-overview-card="sleepDuration">
-          <div class="desktop-overview-label">睡眠时长</div>
-          <div class="desktop-overview-value" id="overviewSleepDurationValue">--</div>
-          <div class="desktop-overview-meta" id="overviewSleepDurationMeta">等待数据</div>
-        </article>
-        <article class="desktop-overview-card" data-overview-card="steps">
-          <div class="desktop-overview-label">步数</div>
-          <div class="desktop-overview-value" id="overviewStepsValue">--</div>
-          <div class="desktop-overview-meta" id="overviewStepsMeta">等待数据</div>
-        </article>
-        <article class="desktop-overview-card" data-overview-card="activeZone">
-          <div class="desktop-overview-label">活跃区间分钟数</div>
-          <div class="desktop-overview-value" id="overviewActiveZoneValue">--</div>
-          <div class="desktop-overview-meta" id="overviewActiveZoneMeta">等待数据</div>
-        </article>
-        <article class="desktop-overview-card" data-overview-card="exerciseDays">
-          <div class="desktop-overview-label">心肺达标锻炼天数</div>
-          <div class="desktop-overview-value" id="overviewExerciseDaysValue">--</div>
-          <div class="desktop-overview-meta" id="overviewExerciseDaysMeta">等待数据</div>
-        </article>
-        <article class="desktop-overview-card" data-overview-card="activityHours">
-          <div class="desktop-overview-label">活跃小时数</div>
-          <div class="desktop-overview-value" id="overviewActivityHoursValue">--</div>
-          <div class="desktop-overview-meta" id="overviewActivityHoursMeta">等待数据</div>
-        </article>
-        <article class="desktop-overview-card" data-overview-card="calories">
-          <div class="desktop-overview-label">消耗热量</div>
-          <div class="desktop-overview-value" id="overviewCaloriesValue">--</div>
-          <div class="desktop-overview-meta" id="overviewCaloriesMeta">等待数据</div>
-        </article>
-        <article class="desktop-overview-card" data-overview-card="rhr">
-          <div class="desktop-overview-label">静息心率</div>
-          <div class="desktop-overview-value" id="overviewRhrValue">--</div>
-          <div class="desktop-overview-meta" id="overviewRhrMeta">等待数据</div>
-        </article>
-        <article class="desktop-overview-card" data-overview-card="hrv">
-          <div class="desktop-overview-label">HRV / 恢复</div>
-          <div class="desktop-overview-value" id="overviewHrvValue">--</div>
-          <div class="desktop-overview-meta" id="overviewHrvMeta">等待数据</div>
-        </article>
-        <article class="desktop-overview-card is-wide" data-overview-card="exerciseExamples">
-          <div class="desktop-overview-label">运动举例</div>
-          <div class="desktop-overview-value" id="overviewExerciseExamplesValue">--</div>
-          <div class="desktop-overview-meta" id="overviewExerciseExamplesMeta">等待数据</div>
-        </article>
       </div>
     </section>
-    
-    <!-- Analytics badges (shown only when "Comprehensive Analytics" is selected) -->
-    <div id="analyticsBadges" class="hidden" style="display:none; flex-wrap:wrap; gap:12px; margin:16px 0; padding:16px; background:#0a0f1a; border-radius:12px; border:1px solid #1a2349"></div>
-    
-    <canvas id="chart" height="120"></canvas>
-    <!-- Collapsible Steps Preview (moved directly below first chart) -->
-    <div id="stepsPreviewCollapsible" class="muted" style="display:none; margin-top:8px;">
-      <button id="stepsPreviewToggle" class="disclosure" type="button" aria-expanded="false" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:0;display:flex;align-items:center;gap:6px;width:100%;position:relative;">
-        <span id="stepsPreviewTriangle" aria-hidden="true" style="margin-left:auto;" title="Data Preview">◀</span>
-      </button>
-      <div id="stepsPreviewContent" style="display:none; margin-top:8px; max-height:280px; overflow:auto;">
-        <table id="stepsPreviewTable"><thead></thead><tbody></tbody></table>
-      </div>
-    </div>
-    
-    <div class="toolbar">
-      <!-- Refresh hidden for Steps & Activity; removed from DOM per request -->
-      <button class="btn" id="downloadMonthly">Download Monthly Summary</button>
-      <button class="btn" id="downloadYearly">Download Yearly Summary</button>
-      <button class="btn" id="downloadAnalytics" disabled>Download Analytics Summary</button>
-    </div>
-    <div class="footer muted" id="meta"></div>
-    
-    <!-- Collapsible Sleep Preview (used for Daily Sleep Score) -->
-    <div id="sleepPreviewCollapsible" class="muted" style="display:none; margin-top:8px;">
-      <button id="sleepPreviewToggle" class="disclosure" type="button" aria-expanded="false" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:0;display:flex;align-items:center;gap:6px;width:100%;position:relative;">
-        <span id="sleepPreviewTriangle" aria-hidden="true" style="margin-left:auto;" title="Data Preview">◀</span>
-      </button>
-      <div id="sleepPreviewContent" style="display:none; margin-top:8px; max-height:280px; overflow:auto;">
-        <table id="sleepPreviewTable"><thead></thead><tbody></tbody></table>
-      </div>
-    </div>
-    
-    <!-- Additional HRV correlation chart -->
-    <div id="dualHRVCorrelationCharts" style="display:none; margin-top: 20px;">
-      <canvas id="hrvCorrNextChart" height="120"></canvas>
-    </div>
-    
-    <!-- Additional Steps correlation chart -->
-    <div id="dualStepsCorrelationCharts" style="display:none; margin-top: 20px;">
-      <canvas id="stepsCorrSleepChart" height="120"></canvas>
-    </div>
-    
-    <!-- Steps Histogram chart -->
-    <div id="stepsHistogramChart" style="display:none; margin-top: 20px;">
-      <canvas id="stepsHistogramCanvas" height="120"></canvas>
-      <div class="footer muted" id="histogramMeta"></div>
-    </div>
-    
-    <!-- Sedentary Minutes line chart (appears under Steps histogram) -->
-    <div id="sedentaryLineChart" style="display:none; margin-top: 20px;">
-      <canvas id="sedentaryLineCanvas" height="120"></canvas>
-      <div class="footer muted" id="sedentaryMeta"></div>
-    </div>
-    
-    <!-- Sleep Score Histogram chart -->
-    <div id="sleepHistogramChart" style="display:none; margin-top: 20px;">
-      <canvas id="sleepHistogramCanvas" height="120"></canvas>
-      <div class="toolbar">
-        <button class="btn" id="sleepHistogramDownloadBtn">Download Histogram Data</button>
-      </div>
-      <div class="footer muted" id="sleepHistogramMeta"></div>
-      
-      <!-- Collapsible Sleep Histogram Preview -->
-      <div id="sleepHistogramPreviewCollapsible" class="muted" style="display:none; margin-top:8px;">
-        <button id="sleepHistogramPreviewToggle" class="disclosure" type="button" aria-expanded="false" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:0;display:flex;align-items:center;gap:6px;width:100%;position:relative;">
-          <span id="sleepHistogramPreviewTriangle" aria-hidden="true" style="margin-left:auto;" title="Data Preview">◀</span>
-        </button>
-        <div id="sleepHistogramPreviewContent" style="display:none; margin-top:8px; max-height:280px; overflow:auto;">
-          <table id="sleepHistogramPreviewTable"><thead></thead><tbody></tbody></table>
+
+    <main class="dashboard-layout">
+      <section class="surface hero-panel">
+        <div class="hero-copy">
+          <div class="eyebrow">Unified Dashboard</div>
+          <h2 id="heroTitle">准备载入 Fitbit 数据</h2>
+          <p id="heroSubtitle" class="hero-subtitle">页面会优先读取本地缓存，如果缓存不存在就按档案自动重建。</p>
+          <div class="hero-meta" id="heroMeta"></div>
         </div>
-      </div>
-    </div>
-    <!-- Collapsible RHR Preview -->
-    <div id="rhrPreviewCollapsible" class="muted" style="display:none; margin-top:8px;">
-      <button id="rhrPreviewToggle" class="disclosure" type="button" aria-expanded="false" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:0;display:flex;align-items:center;gap:6px;width:100%;position:relative;">
-        <span id="rhrPreviewTriangle" aria-hidden="true" style="margin-left:auto;" title="Data Preview">◀</span>
-      </button>
-      <div id="rhrPreviewContent" style="display:none; margin-top:8px; max-height:280px; overflow:auto;">
-        <table id="rhrPreviewTable"><thead></thead><tbody></tbody></table>
-      </div>
-    </div>
-    <!-- Collapsible HRV Preview -->
-    <div id="hrvPreviewCollapsible" class="muted" style="display:none; margin-top:8px;">
-      <button id="hrvPreviewToggle" class="disclosure" type="button" aria-expanded="false" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:0;display:flex;align-items:center;gap:6px;width:100%;position:relative;">
-        <span id="hrvPreviewTriangle" aria-hidden="true" style="margin-left:auto;" title="Data Preview">◀</span>
-      </button>
-      <div id="hrvPreviewContent" style="display:none; margin-top:8px; max-height:280px; overflow:auto;">
-        <table id="hrvPreviewTable"><thead></thead><tbody></tbody></table>
-      </div>
-    </div>
-    <!-- Collapsible Analytics Preview -->
-    <div id="analyticsPreviewCollapsible" class="muted" style="display:none; margin-top:8px;">
-      <button id="analyticsPreviewToggle" class="disclosure" type="button" aria-expanded="false" style="background:none;border:none;color:#9aa5c6;cursor:pointer;padding:0;display:flex;align-items:center;gap:6px;width:100%;position:relative;">
-        <span id="analyticsPreviewTriangle" aria-hidden="true" style="margin-left:auto;" title="Data Preview">◀</span>
-      </button>
-      <div id="analyticsPreviewContent" style="display:none; margin-top:8px; max-height:280px; overflow:auto;">
-        <table id="analyticsPreviewTable"><thead></thead><tbody></tbody></table>
-      </div>
-    </div>
-  </div>
 
-  
+        <div class="hero-score-card">
+          <div class="hero-score-label">恢复指数</div>
+          <div class="hero-score-value" id="heroRecoveryScore">--</div>
+          <div class="hero-score-caption" id="heroRecoveryLabel">等待数据</div>
+          <div class="hero-score-footnote" id="heroRecoveryFootnote">由睡眠、HRV、静息心率和目标完成度综合估算。</div>
+        </div>
+      </section>
 
-  <div class="card" style="padding:16px;margin-top:16px" id="topStepsSection" style="display:none">
-    <div class="header"><h1 style="font-size:18px">Days with Most Steps</h1></div>
-    <div style="max-height:280px;overflow:auto">
-      <table id="topStepsTable"><thead></thead><tbody></tbody></table>
-    </div>
-  </div>
+      <section class="coverage-grid" id="coverageGrid"></section>
 
-  <div class="card" style="padding:16px;margin-top:16px" id="bottomStepsSection" style="display:none">
-    <div class="header"><h1 style="font-size:18px">Days with Least Steps (> 100)</h1></div>
-    <div style="max-height:280px;overflow:auto">
-      <table id="bottomStepsTable"><thead></thead><tbody></tbody></table>
-    </div>
-  </div>
+      <section class="stats-grid" id="statsGrid"></section>
 
-  <div class="card" style="padding:16px;margin-top:16px" id="rhrCusumSection" style="display:none">
-    <div class="header"><h1 style="font-size:18px">RHR CUSUM Chart</h1></div>
-    <div style="position:relative;height:400px">
-      <canvas id="rhrCusumChart"></canvas>
-    </div>
-  </div>
+      <section class="surface tab-strip">
+        <div class="tab-buttons" role="tablist" aria-label="仪表盘视图">
+          <button class="tab-button active" data-view="overview" type="button">总览</button>
+          <button class="tab-button" data-view="sleep" type="button">睡眠</button>
+          <button class="tab-button" data-view="activity" type="button">活动</button>
+          <button class="tab-button" data-view="recovery" type="button">恢复</button>
+          <button class="tab-button" data-view="body" type="button">体征</button>
+          <button class="tab-button" data-view="lifestyle" type="button">生活</button>
+          <button class="tab-button" data-view="account" type="button">账户</button>
+          <button class="tab-button" data-view="family" type="button">家庭</button>
+        </div>
+      </section>
 
-  <div class="card" style="padding:16px;margin-top:16px" id="topRHRSection" style="display:none">
-    <div class="header"><h1 style="font-size:18px">Days with Highest RHR</h1></div>
-    <div style="max-height:280px;overflow:auto">
-      <table id="topRHRTable"><thead></thead><tbody></tbody></table>
-    </div>
-  </div>
-
-  <div class="card" style="padding:16px;margin-top:16px" id="bottomRHRSection" style="display:none">
-    <div class="header"><h1 style="font-size:18px">Days with Lowest RHR</h1></div>
-    <div style="max-height:280px;overflow:auto">
-      <table id="bottomRHRTable"><thead></thead><tbody></tbody></table>
-    </div>
-  </div>
-
-  <div class="card" style="padding:16px;margin-top:16px" id="topSleepScoreSection" style="display:none">
-    <div class="header"><h1 style="font-size:18px">Days with Highest Sleep Score</h1></div>
-    <div style="max-height:280px;overflow:auto">
-      <table id="topSleepScoreTable"><thead></thead><tbody></tbody></table>
-    </div>
-  </div>
-
-  <div class="card" style="padding:16px;margin-top:16px" id="bottomSleepScoreSection" style="display:none">
-    <div class="header"><h1 style="font-size:18px">Days with Lowest Sleep Score</h1></div>
-    <div style="max-height:280px;overflow:auto">
-      <table id="bottomSleepScoreTable"><thead></thead><tbody></tbody></table>
-    </div>
-  </div>
-
-  <div class="card" style="padding:16px;margin-top:16px" id="hrvCusumSection" style="display:none">
-    <div class="header" style="display:flex;align-items:center;justify-content:space-between">
-      <h1 style="font-size:18px;margin:0">HRV CUSUM Chart</h1>
-      <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#e6eaf3;margin:0">
-        <input type="checkbox" id="hrvCusumIgnoreZero" checked style="transform:scale(1.2)">
-        Ignore zero values
-      </label>
-    </div>
-    <div style="position:relative;height:400px">
-      <canvas id="hrvCusumChart"></canvas>
-    </div>
-  </div>
-
-  <div class="card" style="padding:16px;margin-top:16px" id="topHRVSection" style="display:none">
-    <div class="header"><h1 style="font-size:18px">Days with Highest HRV</h1></div>
-    <div style="max-height:280px;overflow:auto">
-      <table id="topHRVTable"><thead></thead><tbody></tbody></table>
-    </div>
-  </div>
-
-  <div class="card" style="padding:16px;margin-top:16px" id="bottomHRVSection" style="display:none">
-    <div class="header"><h1 style="font-size:18px">Days with Lowest HRV</h1></div>
-    <div style="max-height:280px;overflow:auto">
-      <table id="bottomHRVTable"><thead></thead><tbody></tbody></table>
-    </div>
-  </div>
-
-</div>
-
-<!-- Modal -->
-<div id="logoModal" class="modal-overlay">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2 class="modal-title" aria-label="FitBaus">
-        <div class="inline-logo" aria-hidden="false">FitBaus</div>
-      </h2>
-      <button class="modal-close" id="modalClose">&times;</button>
-    </div>
-    <div class="modal-body">
-      <p>Thanks for trying this app! Comments? Feedback? Support? Email me at <a href="mailto:markraidc@gmail.com">markraidc@gmail.com</a></p>
-      <p class="signature">- <a href="https://www.reddit.com/user/markraidc/" target="_blank">u/markraidc</a></p>
-    </div>
-  </div>
-</div>
-
-<!-- No Profile Modal -->
-<div id="noProfileModal" class="modal-overlay">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2 class="modal-title">
-        <div class="inline-logo" aria-label="FitBaus brand">FitBaus</div>
-      </h2>
-      <button class="modal-close" id="noProfileModalClose" style="display: none;">&times;</button>
-    </div>
-    <div class="modal-body">
-      <!-- Tab Navigation -->
-      <div class="tab-navigation">
-        <button class="tab-btn active" data-tab="new-profile">New Profile</button>
-        <button class="tab-btn" data-tab="existing-profiles">Existing Profiles</button>
-      </div>
-      
-      <!-- New Profile Tab -->
-      <div id="newProfileTab" class="tab-content active">
-        <div id="profileCreationForm">
-          <h3>Create New Profile</h3>
-          <form id="createProfileForm">
-            <div class="form-group">
-              <label for="profileName">Profile Name:</label>
-              <input type="text" id="profileName" name="profileName" required 
-                     placeholder="e.g., john, jane, myprofile" 
-                     pattern="[a-zA-Z0-9_-]+" 
-                     title="Only letters, numbers, hyphens, and underscores allowed">
+      <section class="view-panel active" data-view-panel="overview">
+        <div class="panel-grid panel-grid-two">
+          <article class="surface chart-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Overview</div>
+                <h3>综合趋势</h3>
+              </div>
+              <p>把睡眠得分、步数和恢复核心指标放在同一个视图里。</p>
             </div>
-            <div class="form-group">
-              <label for="clientId">Fitbit Client ID:</label>
-              <input type="text" id="clientId" name="clientId" required 
-                     placeholder="Your Fitbit App Client ID">
+            <canvas id="overviewTrendChart" height="120"></canvas>
+          </article>
+
+          <article class="surface chart-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Rolling Mean</div>
+                <h3>周平均变化</h3>
+              </div>
+              <p>看每周平均值，而不是被单日波动干扰。</p>
             </div>
-            <div class="form-group">
-              <label for="clientSecret">Fitbit Client Secret:</label>
-              <input type="password" id="clientSecret" name="clientSecret" required 
-                     placeholder="Your Fitbit App Client Secret">
+            <canvas id="weeklyTrendChart" height="120"></canvas>
+          </article>
+        </div>
+
+        <article class="surface narrative-card">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">Signals</div>
+              <h3>相关性和当前判断</h3>
             </div>
-            <div class="form-actions">
-              <button type="submit" id="createProfileBtn" class="btn btn-primary">Create Profile</button>
-              <div id="profileCreationStatus" class="status-message"></div>
+            <p>这里给出本地缓存算出来的简单相关性，用来快速定位身体状态变化。</p>
+          </div>
+          <div class="narrative-grid" id="correlationCards"></div>
+        </article>
+
+        <article class="surface narrative-card">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">Highlights</div>
+              <h3>补充 Fitbit 数据摘要</h3>
             </div>
+            <p>把体征、生活和账户快照收在首页，先看有没有新增可用数据。</p>
+          </div>
+          <div class="detail-grid" id="overviewHighlightGrid"></div>
+        </article>
+      </section>
+
+      <section class="view-panel" data-view-panel="sleep">
+        <div class="panel-grid panel-grid-two">
+          <article class="surface chart-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Sleep</div>
+                <h3>睡眠得分与时长</h3>
+              </div>
+              <p>主睡眠记录会自动去重，小睡单独计数。</p>
+            </div>
+            <canvas id="sleepTrendChart" height="120"></canvas>
+          </article>
+
+          <article class="surface chart-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Stages</div>
+                <h3>深睡 / REM / 浅睡</h3>
+              </div>
+              <p>最近两周的睡眠结构，直接看质量变化。</p>
+            </div>
+            <canvas id="sleepStageChart" height="120"></canvas>
+          </article>
+        </div>
+
+        <article class="surface table-card">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">Sleep Table</div>
+              <h3>最近睡眠记录</h3>
+            </div>
+            <p>这里只显示主睡眠，避免表格被小睡刷屏。</p>
+          </div>
+          <div class="table-wrap" id="sleepTableWrap"></div>
+        </article>
+      </section>
+
+      <section class="view-panel" data-view-panel="activity">
+        <div class="panel-grid panel-grid-two">
+          <article class="surface chart-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Activity</div>
+                <h3>步数与活跃分钟</h3>
+              </div>
+              <p>同时看步数规模和真正的活跃时间。</p>
+            </div>
+            <canvas id="activityTrendChart" height="120"></canvas>
+          </article>
+
+          <article class="surface chart-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Burn</div>
+                <h3>燃脂区分钟与热量</h3>
+              </div>
+              <p>更接近训练强度，而不只是走了多少步。</p>
+            </div>
+            <canvas id="activityBurnChart" height="120"></canvas>
+          </article>
+        </div>
+
+        <article class="surface table-card">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">Activity Table</div>
+              <h3>最近活动记录</h3>
+            </div>
+            <p>如果 Fitbit 返回了活动样例，会直接显示在这里。</p>
+          </div>
+          <div class="table-wrap" id="activityTableWrap"></div>
+        </article>
+      </section>
+
+      <section class="view-panel" data-view-panel="recovery">
+        <div class="panel-grid panel-grid-two">
+          <article class="surface chart-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Recovery</div>
+                <h3>HRV 与静息心率</h3>
+              </div>
+              <p>HRV 越高通常越好，静息心率越低通常越稳。</p>
+            </div>
+            <canvas id="recoveryTrendChart" height="120"></canvas>
+          </article>
+
+          <article class="surface chart-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Scatter</div>
+                <h3>睡眠得分 vs HRV</h3>
+              </div>
+              <p>用散点看恢复和睡眠的联动强度。</p>
+            </div>
+            <canvas id="recoveryScatterChart" height="120"></canvas>
+          </article>
+        </div>
+
+        <article class="surface table-card">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">Recovery Table</div>
+              <h3>最近恢复记录</h3>
+            </div>
+            <p>把 HRV、深睡 HRV 和静息心率放在一张表里。</p>
+          </div>
+          <div class="table-wrap" id="recoveryTableWrap"></div>
+        </article>
+      </section>
+
+      <section class="view-panel" data-view-panel="body">
+        <div class="panel-grid panel-grid-two">
+          <article class="surface narrative-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Body</div>
+                <h3>体重、BMI 与体脂</h3>
+              </div>
+              <p>优先读取 Fitbit 体重目标和近期体重 / 体脂日志，没有就退回 profile 快照。</p>
+            </div>
+            <div class="detail-grid" id="bodyMetricGrid"></div>
+          </article>
+
+          <article class="surface narrative-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Vitals</div>
+                <h3>血氧、呼吸率与皮温</h3>
+              </div>
+              <p>这些指标来自 Fitbit 的补充 vitals 接口，支持时会自动缓存并展示。</p>
+            </div>
+            <div class="detail-grid" id="vitalMetricGrid"></div>
+          </article>
+        </div>
+
+        <div class="panel-grid panel-grid-two">
+          <article class="surface table-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Body Table</div>
+                <h3>近期体重 / 体脂记录</h3>
+              </div>
+              <p>如果 profile 中有体重但没有日志，会显示为空，等下一次同步补齐。</p>
+            </div>
+            <div class="table-wrap" id="bodyTableWrap"></div>
+          </article>
+
+          <article class="surface table-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Vitals Table</div>
+                <h3>近期 vitals 摘要</h3>
+              </div>
+              <p>展示每类额外体征的最新可解析数值，便于快速确认 Fitbit 是否返回了数据。</p>
+            </div>
+            <div class="table-wrap" id="vitalTableWrap"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view-panel" data-view-panel="lifestyle">
+        <div class="panel-grid panel-grid-two">
+          <article class="surface narrative-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Lifestyle</div>
+                <h3>营养与饮水</h3>
+              </div>
+              <p>把热量目标、今日摄入、饮水目标和今日饮水统一到一个中文视图。</p>
+            </div>
+            <div class="detail-grid" id="lifestyleMetricGrid"></div>
+          </article>
+
+          <article class="surface table-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Foods</div>
+                <h3>近期食物记录</h3>
+              </div>
+              <p>如果 nutrition scope 已授权，这里会显示 Fitbit recent foods 的本地缓存。</p>
+            </div>
+            <div class="table-wrap" id="foodTableWrap"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view-panel" data-view-panel="account">
+        <div class="panel-grid panel-grid-two">
+          <article class="surface narrative-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Account</div>
+                <h3>账户、设备与权限</h3>
+              </div>
+              <p>这里集中显示快照完成度、设备、徽章、闹钟和当前 token scope 缺口。</p>
+            </div>
+            <div class="detail-grid" id="accountMetricGrid"></div>
+          </article>
+
+          <article class="surface data-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Scopes</div>
+                <h3>授权范围与快照状态</h3>
+              </div>
+              <p>重新授权后，缺失 scope 的接口会在下一次同步自动补齐到本地缓存。</p>
+            </div>
+            <div class="scope-list" id="scopeList"></div>
+          </article>
+        </div>
+
+        <div class="panel-grid panel-grid-two">
+          <article class="surface table-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Devices</div>
+                <h3>Fitbit 设备</h3>
+              </div>
+              <p>显示设备电量、同步时间和基础标识信息。</p>
+            </div>
+            <div class="table-wrap" id="deviceTableWrap"></div>
+          </article>
+
+          <article class="surface table-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Badges</div>
+                <h3>最近徽章</h3>
+              </div>
+              <p>如果 profile scope 已授权，会展示 Fitbit badges 的本地快照。</p>
+            </div>
+            <div class="table-wrap" id="badgeTableWrap"></div>
+          </article>
+        </div>
+
+        <div class="panel-grid panel-grid-two">
+          <article class="surface table-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Alarms</div>
+                <h3>设备闹钟</h3>
+              </div>
+              <p>有 tracker 且 settings scope 授权时，会额外读取闹钟列表。</p>
+            </div>
+            <div class="table-wrap" id="alarmTableWrap"></div>
+          </article>
+
+          <article class="surface table-card">
+            <div class="section-head">
+              <div>
+                <div class="section-kicker">Endpoints</div>
+                <h3>Fitbit 接口缓存状态</h3>
+              </div>
+              <p>用来确认哪些接口已缓存、哪些因为 scope 缺失被跳过。</p>
+            </div>
+            <div class="table-wrap" id="endpointTableWrap"></div>
+          </article>
+        </div>
+
+        <article class="surface data-card">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">Cache</div>
+              <h3>本地缓存文件</h3>
+            </div>
+            <p>页面不再直接拼 CSV，而是优先读这些本地缓存与统一 dashboard.json。</p>
+          </div>
+          <div class="file-list" id="fileList"></div>
+        </article>
+      </section>
+
+      <section class="view-panel" data-view-panel="family">
+        <article class="surface family-card">
+          <div class="section-head">
+            <div>
+              <div class="section-kicker">Profiles</div>
+              <h3>多档案对比</h3>
+            </div>
+            <p>原来的 spousal 页面合并到了这里，只保留一个统一入口。</p>
+          </div>
+          <div class="family-grid" id="familyGrid"></div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast hidden" id="toast"></div>
+
+  <div class="modal hidden" id="profileModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="profileModal"></div>
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <div>
+          <div class="section-kicker">Profiles</div>
+          <h3>档案管理</h3>
+        </div>
+        <button class="icon-button" data-close-modal="profileModal" type="button" aria-label="关闭">×</button>
+      </div>
+
+      <div class="modal-body modal-grid">
+        <section class="surface modal-panel">
+          <div class="section-head compact">
+            <div>
+              <div class="section-kicker">New Profile</div>
+              <h4>创建新档案</h4>
+            </div>
+            <p>填入 Fitbit 开发者应用的 Client ID 和 Client Secret。</p>
+          </div>
+
+          <form id="createProfileForm" class="form-stack">
+            <label class="field">
+              <span class="field-label">档案名</span>
+              <input id="newProfileName" type="text" placeholder="例如 Lucius7" required>
+            </label>
+            <label class="field">
+              <span class="field-label">Client ID</span>
+              <input id="newClientId" type="text" placeholder="Fitbit Client ID" required>
+            </label>
+            <label class="field">
+              <span class="field-label">Client Secret</span>
+              <input id="newClientSecret" type="text" placeholder="Fitbit Client Secret" required>
+            </label>
+            <button class="button button-primary button-block" id="createProfileSubmit" type="submit">创建档案</button>
           </form>
+        </section>
+
+        <section class="surface modal-panel">
+          <div class="section-head compact">
+            <div>
+              <div class="section-kicker">Existing Profiles</div>
+              <h4>现有档案</h4>
+            </div>
+            <p>授权、删除和切换都在这里处理。</p>
+          </div>
+
+          <div class="existing-list" id="existingProfilesList"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="authModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="authModal"></div>
+    <div class="modal-dialog modal-dialog-narrow">
+      <div class="modal-head">
+        <div>
+          <div class="section-kicker">Authorize</div>
+          <h3 id="authModalTitle">授权 Fitbit 档案</h3>
         </div>
-        <div id="profileCreatedSuccess" style="display: none;">
-          <h3>✅ Profile Created Successfully!</h3>
-          <p>Your profile has been created. You can now proceed to authorize with Fitbit.</p>
-          <button id="authorizeBtn" class="btn btn-primary">Authorize with Fitbit</button>
-          <div id="authorizationStatus" class="status-message"></div>
+        <button class="icon-button" data-close-modal="authModal" type="button" aria-label="关闭">×</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="auth-steps">
+          <p>1. 点下面按钮打开 Fitbit 授权页。</p>
+          <p>2. 完成授权后，把浏览器地址栏里最终跳转的完整 URL 粘贴回来。</p>
+          <p>3. 如果你只拿到了 `code`，直接粘贴 `code` 也可以。</p>
         </div>
-      </div>
-      
-      <!-- Existing Profiles Tab -->
-      <div id="existingProfilesTab" class="tab-content">
-        <h3>Manage Existing Profiles</h3>
-        <div id="profilesList">
-          <div id="profilesLoading" class="status-message info">Loading profiles...</div>
+
+        <div class="auth-actions">
+          <a class="button button-primary" id="authOpenLink" href="#" rel="noreferrer noopener" target="_blank">打开 Fitbit 授权页</a>
         </div>
-        <div id="profileDeletionStatus" class="status-message"></div>
+
+        <form id="authExchangeForm" class="form-stack">
+          <label class="field">
+            <span class="field-label">回调 URL 或 code</span>
+            <textarea id="authRedirectValue" rows="4" placeholder="粘贴 https://localhost:... 或单独的 code" required></textarea>
+          </label>
+          <button class="button button-primary button-block" id="authExchangeSubmit" type="submit">提交授权结果</button>
+        </form>
       </div>
     </div>
   </div>
-</div>
 
-<!-- Authorize Profile Modal -->
-<div id="authorizeProfileModal" class="modal-overlay">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2 class="modal-title" id="authorizeProfileTitle">Authorize Profile</h2>
-      <button class="modal-close" id="authorizeProfileModalClose">&times;</button>
-    </div>
-    <div class="modal-body">
-      <div id="authorizeProfileIntro" class="status-message info" style="display:none;"></div>
-      <div id="authorizeProfileContent"></div>
-      <div id="authorizeProfileStatus" class="status-message" style="display:none;"></div>
-    </div>
-  </div>
-  
-</div>
-
-<!-- Authorization Acknowledgement Modal -->
-<div id="authAckModal" class="modal-overlay">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2 class="modal-title">Please Confirm</h2>
-      <button class="modal-close" id="authAckClose">&times;</button>
-    </div>
-    <div class="modal-body">
-      <div class="status-message info" style="text-align:left">
-        For this to work, you MUST be logged out of any other user accounts on:<br>
-        <a href="https://www.fitbit.com/dashboard" target="_blank" rel="noopener">https://www.fitbit.com/dashboard</a><br>
-        <a href="https://dev.fitbit.com/apps" target="_blank" rel="noopener">https://dev.fitbit.com/apps</a><br>
-        and you must be logged into the accounts for the profile you are trying to activate.<br><br>
-        Once you press okay, you will go to Fitbit's authorization page, which will then redirect you to the call-back URL, with the code. Copy this URL from the address bar, and paste it back here.
-      </div>
-      <div class="form-actions" style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
-        <button class="btn-primary" id="authAckOkBtn">Okay</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Confirm Delete Modal -->
-<div id="confirmDeleteModal" class="modal-overlay">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2 class="modal-title" id="confirmDeleteTitle">Delete Profile</h2>
-      <button class="modal-close" id="confirmDeleteClose">&times;</button>
-    </div>
-    <div class="modal-body">
-      <div id="confirmDeleteBody" class="status-message info" style="text-align:left"></div>
-      <div id="confirmDeleteActions" class="form-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-        <button class="btn-secondary" id="confirmDeleteCancelBtn">Cancel</button>
-        <button class="btn-danger" id="confirmDeleteProceedBtn">Delete</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-
-<script src="script.js"></script>
-<script src="ui-cn.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  const chartTypeSelect = document.getElementById('chartType');
-  const profileSelect = document.getElementById('profileSelect');
-  const fetchStatusEl = document.getElementById('fetchStatus');
-  const sleepFileDisplay = document.getElementById('sleepFileDisplay');
-  const hrvFileDisplay = document.getElementById('hrvFileDisplay');
-  const stepsFileDisplay = document.getElementById('stepsFileDisplay');
-  const rhrFileDisplay = document.getElementById('rhrFileDisplay');
-  const subtitleEl = document.getElementById('desktopOverviewSubtitle');
-  const overviewCards = {};
-  document.querySelectorAll('[data-overview-card]').forEach((card) => {
-    const key = card.getAttribute('data-overview-card');
-    overviewCards[key] = {
-      card,
-      value: card.querySelector('.desktop-overview-value'),
-      meta: card.querySelector('.desktop-overview-meta')
-    };
-  });
-
-  function num(value) {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : NaN;
-  }
-
-  function parseCsvText(text) {
-    if (!text || !String(text).trim()) return [];
-    if (window.Papa && typeof window.Papa.parse === 'function') {
-      return window.Papa.parse(text, { header: true, skipEmptyLines: true }).data || [];
-    }
-    return [];
-  }
-
-  function dateKey(value) {
-    if (!value) return null;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value);
-    try {
-      const d = new Date(value);
-      return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  function latestByDate(rows, valueKey) {
-    return rows
-      .filter((row) => row.dateISO && Number.isFinite(row[valueKey]))
-      .sort((a, b) => a.dateISO.localeCompare(b.dateISO))
-      .at(-1) || null;
-  }
-
-  function recentAverage(rows, valueKey, count) {
-    const vals = rows
-      .filter((row) => row.dateISO && Number.isFinite(row[valueKey]))
-      .sort((a, b) => a.dateISO.localeCompare(b.dateISO))
-      .slice(-count)
-      .map((row) => row[valueKey]);
-    if (!vals.length) return NaN;
-    return vals.reduce((sum, value) => sum + value, 0) / vals.length;
-  }
-
-  function latestWithText(rows, valueKey) {
-    return rows
-      .filter((row) => row.dateISO && row[valueKey] && String(row[valueKey]).trim())
-      .sort((a, b) => a.dateISO.localeCompare(b.dateISO))
-      .at(-1) || null;
-  }
-
-  function normalizeSleep(rows) {
-    const normalized = rows.map((row) => ({
-      dateISO: dateKey(row.date || row.dateOfSleep || row.dateTime),
-      isMainSleep: String(row.isMainSleep).toLowerCase() === 'true',
-      minutesAsleep: num(row.minutesAsleep),
-      sleepScore: num(row.sleepScore)
-    })).filter((row) => row.dateISO);
-
-    const byDate = new Map();
-    normalized.forEach((row) => {
-      const prev = byDate.get(row.dateISO);
-      if (!prev) {
-        byDate.set(row.dateISO, row);
-        return;
-      }
-      if (row.isMainSleep && !prev.isMainSleep) {
-        byDate.set(row.dateISO, row);
-        return;
-      }
-      if (row.isMainSleep === prev.isMainSleep) {
-        const prevMinutes = Number.isFinite(prev.minutesAsleep) ? prev.minutesAsleep : -1;
-        const curMinutes = Number.isFinite(row.minutesAsleep) ? row.minutesAsleep : -1;
-        if (curMinutes > prevMinutes) byDate.set(row.dateISO, row);
-      }
-    });
-
-    return Array.from(byDate.values()).sort((a, b) => a.dateISO.localeCompare(b.dateISO));
-  }
-
-  function normalizeActivity(rows) {
-    return rows.map((row) => {
-      const activeMinutesRaw = num(row.activeMinutes);
-      const lightly = num(row.lightlyActiveMinutes);
-      const fairly = num(row.fairlyActiveMinutes);
-      const very = num(row.veryActiveMinutes);
-      const computedActiveMinutes = Number.isFinite(activeMinutesRaw)
-        ? activeMinutesRaw
-        : [lightly, fairly, very].filter(Number.isFinite).reduce((sum, value) => sum + value, 0);
-      return {
-        dateISO: dateKey(row.date || row.dateTime),
-        steps: num(row.steps),
-        sedentaryMinutes: num(row.sedentaryMinutes),
-        activityCalories: num(row.activityCalories),
-        caloriesOut: num(row.caloriesOut),
-        lightlyActiveMinutes: lightly,
-        fairlyActiveMinutes: fairly,
-        veryActiveMinutes: very,
-        activeZoneMinutes: num(row.activeZoneMinutes),
-        activeMinutes: Number.isFinite(computedActiveMinutes) ? computedActiveMinutes : NaN,
-        exerciseExamples: (row.exerciseExamples || '').trim()
-      };
-    }).filter((row) => row.dateISO);
-  }
-
-  function normalizeRhr(rows) {
-    return rows.map((row) => ({
-      dateISO: dateKey(row.date || row.dateTime),
-      rhr: num(row.resting_heart_rate || row.restingHeartRate)
-    })).filter((row) => row.dateISO);
-  }
-
-  function normalizeHrv(rows) {
-    return rows.map((row) => ({
-      dateISO: dateKey(row.date || row.dateTime),
-      hrv: num(row.dailyRmssd || row.rmssd)
-    })).filter((row) => row.dateISO);
-  }
-
-  function fmtInt(value) {
-    return Number.isFinite(value) ? Math.round(value).toLocaleString('en-US') : '--';
-  }
-
-  function fmtOne(value) {
-    return Number.isFinite(value) ? value.toFixed(1) : '--';
-  }
-
-  function fmtMinutes(value) {
-    if (!Number.isFinite(value)) return '--';
-    const total = Math.round(value);
-    const hours = Math.floor(total / 60);
-    const minutes = total % 60;
-    return `${hours}h ${String(minutes).padStart(2, '0')}m`;
-  }
-
-  function fmtHours(value) {
-    return Number.isFinite(value) ? `${(value / 60).toFixed(1)}h` : '--';
-  }
-
-  function fmtDate(value) {
-    return value || '--';
-  }
-
-  function clamp(value, min, max) {
-    return Math.min(max, Math.max(min, value));
-  }
-
-  function setCardState(name, value, meta, isEmpty) {
-    const card = overviewCards[name];
-    if (!card) return;
-    card.value.textContent = value;
-    card.meta.innerHTML = meta;
-    card.card.classList.toggle('is-empty', !!isEmpty);
-  }
-
-  async function fetchText(path) {
-    const response = await fetch(path, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`failed to fetch ${path}`);
-    return response.text();
-  }
-
-  async function loadOverviewData(profileId) {
-    const basePrefix = typeof BASE_PREFIX === 'string' ? BASE_PREFIX : '';
-    const base = `${basePrefix}profiles/${profileId}/csv/`;
-    const [sleepText, activityText, rhrText, hrvText] = await Promise.all([
-      fetchText(`${base}fitbit_sleep.csv`).catch(() => ''),
-      fetchText(`${base}fitbit_activity.csv`).catch(() => ''),
-      fetchText(`${base}fitbit_rhr.csv`).catch(() => ''),
-      fetchText(`${base}fitbit_hrv.csv`).catch(() => '')
-    ]);
-
-    return {
-      sleep: normalizeSleep(parseCsvText(sleepText)),
-      activity: normalizeActivity(parseCsvText(activityText)),
-      rhr: normalizeRhr(parseCsvText(rhrText)),
-      hrv: normalizeHrv(parseCsvText(hrvText))
-    };
-  }
-
-  function computeStressScore(latestSleep, latestRhr, latestHrv, avgSleep, avgRhr, avgHrv) {
-    if (!latestSleep && !latestRhr && !latestHrv) return { score: NaN, label: '数据不足' };
-    const sleepPenalty = latestSleep && Number.isFinite(latestSleep.sleepScore)
-      ? clamp((78 - latestSleep.sleepScore) / 30, 0, 1)
-      : 0.35;
-    const rhrPenalty = latestRhr && Number.isFinite(latestRhr.rhr) && Number.isFinite(avgRhr)
-      ? clamp((latestRhr.rhr - avgRhr) / Math.max(4, avgRhr * 0.08), 0, 1)
-      : 0.3;
-    const hrvPenalty = latestHrv && Number.isFinite(latestHrv.hrv) && Number.isFinite(avgHrv)
-      ? clamp((avgHrv - latestHrv.hrv) / Math.max(8, avgHrv * 0.18), 0, 1)
-      : 0.3;
-    const score = Math.round(clamp((sleepPenalty * 0.45 + rhrPenalty * 0.25 + hrvPenalty * 0.30) * 100, 0, 100));
-    const label = score >= 67 ? '偏高' : score >= 34 ? '中等' : '偏低';
-    return { score, label };
-  }
-
-  function updateSubtitle(profileId, datasets) {
-    const latestDates = [
-      latestByDate(datasets.sleep, 'sleepScore')?.dateISO,
-      latestByDate(datasets.activity, 'steps')?.dateISO,
-      latestByDate(datasets.rhr, 'rhr')?.dateISO,
-      latestByDate(datasets.hrv, 'hrv')?.dateISO
-    ].filter(Boolean).sort();
-    const latestDate = latestDates.at(-1);
-    const latestActivity = latestByDate(datasets.activity, 'steps');
-    const statusText = (fetchStatusEl && fetchStatusEl.textContent || '').trim();
-    let head = latestDate
-      ? `当前档案：<strong>${profileId}</strong> · 最新数据日：<strong>${fmtDate(latestDate)}</strong>`
-      : `当前档案：<strong>${profileId}</strong>`;
-    if (latestActivity && Number.isFinite(latestActivity.steps)) {
-      head += ` · 最近步数：<strong>${fmtInt(latestActivity.steps)}</strong>`;
-    }
-    if (statusText) head += ` · 同步状态：<strong>${statusText}</strong>`;
-    subtitleEl.innerHTML = head + '<br>现已统一汇总睡眠、恢复、心率、步数、热量、活跃区间与运动示例。底层仍然来自 Fitbit 官方 API，同步后缓存到本地 CSV。';
-  }
-
-  function renderOverview(profileId, datasets) {
-    const latestSleep = latestByDate(datasets.sleep, 'sleepScore');
-    const latestSleepMinutes = latestByDate(datasets.sleep, 'minutesAsleep');
-    const latestSteps = latestByDate(datasets.activity, 'steps');
-    const latestActiveZone = latestByDate(datasets.activity, 'activeZoneMinutes');
-    const latestActiveHours = latestByDate(datasets.activity, 'activeMinutes');
-    const latestCalories = latestByDate(datasets.activity, 'caloriesOut');
-    const latestActivityCalories = latestByDate(datasets.activity, 'activityCalories');
-    const latestRhr = latestByDate(datasets.rhr, 'rhr');
-    const latestHrv = latestByDate(datasets.hrv, 'hrv');
-    const latestExerciseExample = latestWithText(datasets.activity, 'exerciseExamples');
-
-    const avgSleepScore7 = recentAverage(datasets.sleep, 'sleepScore', 7);
-    const avgSleepMinutes7 = recentAverage(datasets.sleep, 'minutesAsleep', 7);
-    const avgSteps7 = recentAverage(datasets.activity, 'steps', 7);
-    const avgAzm7 = recentAverage(datasets.activity, 'activeZoneMinutes', 7);
-    const avgActiveMinutes7 = recentAverage(datasets.activity, 'activeMinutes', 7);
-    const avgCalories7 = recentAverage(datasets.activity, 'caloriesOut', 7);
-    const avgRhr7 = recentAverage(datasets.rhr, 'rhr', 7);
-    const avgHrv7 = recentAverage(datasets.hrv, 'hrv', 7);
-    const exerciseDays7 = datasets.activity
-      .filter((row) => row.dateISO)
-      .sort((a, b) => a.dateISO.localeCompare(b.dateISO))
-      .slice(-7)
-      .filter((row) => (Number.isFinite(row.activeZoneMinutes) && row.activeZoneMinutes >= 22) || (Number.isFinite(row.activeMinutes) && row.activeMinutes >= 45))
-      .length;
-
-    const stress = computeStressScore(latestSleep, latestRhr, latestHrv, avgSleepScore7, avgRhr7, avgHrv7);
-    setCardState(
-      'stressScore',
-      Number.isFinite(stress.score) ? `${stress.score}` : '--',
-      Number.isFinite(stress.score)
-        ? `当前判断：<strong>${stress.label}</strong><br>结合睡眠分数、HRV、RHR 做推断，不是 Fitbit 官方原生字段`
-        : '还不足以计算压力分数',
-      !Number.isFinite(stress.score)
-    );
-
-    setCardState(
-      'sleepScore',
-      latestSleep ? fmtOne(latestSleep.sleepScore) : '--',
-      latestSleep
-        ? `最近一晚：<strong>${fmtDate(latestSleep.dateISO)}</strong><br>近 7 晚均值：<strong>${fmtOne(avgSleepScore7)}</strong>`
-        : '还没有睡眠分数数据',
-      !latestSleep
-    );
-
-    setCardState(
-      'sleepDuration',
-      latestSleepMinutes ? fmtMinutes(latestSleepMinutes.minutesAsleep) : '--',
-      latestSleepMinutes
-        ? `最近一晚：<strong>${fmtDate(latestSleepMinutes.dateISO)}</strong><br>近 7 晚均值：<strong>${fmtMinutes(avgSleepMinutes7)}</strong>`
-        : '还没有睡眠时长数据',
-      !latestSleepMinutes
-    );
-
-    setCardState(
-      'steps',
-      latestSteps ? fmtInt(latestSteps.steps) : '--',
-      latestSteps
-        ? `最近一天：<strong>${fmtDate(latestSteps.dateISO)}</strong><br>近 7 天均值：<strong>${fmtInt(avgSteps7)}</strong>`
-        : '还没有步数数据',
-      !latestSteps
-    );
-
-    setCardState(
-      'activeZone',
-      latestActiveZone ? `${fmtInt(latestActiveZone.activeZoneMinutes)} 分钟` : '--',
-      latestActiveZone
-        ? `最近一天：<strong>${fmtDate(latestActiveZone.dateISO)}</strong><br>近 7 天均值：<strong>${fmtOne(avgAzm7)} 分钟</strong> · 若官方 AZM 缺失，则按 fairly + very×2 估算`
-        : '还没有活跃区间分钟数据',
-      !latestActiveZone
-    );
-
-    setCardState(
-      'exerciseDays',
-      `${exerciseDays7}/7`,
-      '按最近 7 天统计：Active Zone Minutes ≥ 22 或活跃分钟 ≥ 45 记为达标一天',
-      false
-    );
-
-    setCardState(
-      'activityHours',
-      latestActiveHours ? fmtHours(latestActiveHours.activeMinutes) : '--',
-      latestActiveHours
-        ? `最近一天：<strong>${fmtDate(latestActiveHours.dateISO)}</strong><br>近 7 天均值：<strong>${fmtHours(avgActiveMinutes7)}</strong>`
-        : '还没有活跃分钟数据',
-      !latestActiveHours
-    );
-
-    setCardState(
-      'calories',
-      latestCalories ? `${fmtInt(latestCalories.caloriesOut)} kcal` : '--',
-      latestCalories
-        ? `总消耗：<strong>${fmtInt(latestCalories.caloriesOut)} kcal</strong><br>活动热量：<strong>${latestActivityCalories ? fmtInt(latestActivityCalories.activityCalories) : '--'} kcal</strong> · 近 7 天均值：<strong>${fmtInt(avgCalories7)} kcal</strong>`
-        : '还没有热量数据',
-      !latestCalories
-    );
-
-    setCardState(
-      'rhr',
-      latestRhr ? `${fmtInt(latestRhr.rhr)} bpm` : '--',
-      latestRhr
-        ? `最近一天：<strong>${fmtDate(latestRhr.dateISO)}</strong><br>近 7 条均值：<strong>${fmtOne(avgRhr7)} bpm</strong>`
-        : '还没有静息心率数据',
-      !latestRhr
-    );
-
-    setCardState(
-      'hrv',
-      latestHrv ? fmtOne(latestHrv.hrv) : '--',
-      latestHrv
-        ? `最近一天：<strong>${fmtDate(latestHrv.dateISO)}</strong><br>近 7 条均值：<strong>${fmtOne(avgHrv7)}</strong> · 越高通常代表恢复更好`
-        : '还没有 HRV 数据',
-      !latestHrv
-    );
-
-    setCardState(
-      'exerciseExamples',
-      latestExerciseExample ? latestExerciseExample.exerciseExamples : '--',
-      latestExerciseExample
-        ? `最近有记录的一天：<strong>${fmtDate(latestExerciseExample.dateISO)}</strong><br>这里展示 Fitbit 日汇总里记录到的活动名称示例，用来帮你快速回想那天做了什么。`
-        : '最近没有抓到可展示的运动示例（可能当天只有步数，没有记录具体活动名称）',
-      !latestExerciseExample
-    );
-
-    updateSubtitle(profileId, datasets);
-  }
-
-  async function refreshDesktopOverview() {
-    const profileId = profileSelect && profileSelect.value;
-    if (!profileId || profileId === '__profile_management__') {
-      subtitleEl.textContent = '请先选择一个档案。';
-      Object.keys(overviewCards).forEach((key) => setCardState(key, '--', '请先选择档案', true));
-      return;
-    }
-
-    subtitleEl.textContent = '正在读取最新缓存数据…';
-    try {
-      const datasets = await loadOverviewData(profileId);
-      renderOverview(profileId, datasets);
-    } catch (error) {
-      subtitleEl.textContent = '健康总览读取失败，通常是 CSV 还没同步完；点 ↻ 再试一次。';
-      Object.keys(overviewCards).forEach((key) => setCardState(key, '--', '数据暂不可用', true));
-    }
-  }
-
-  function jumpToChart(chartValue) {
-    if (!chartTypeSelect) return;
-    chartTypeSelect.value = chartValue;
-    chartTypeSelect.dispatchEvent(new Event('change', { bubbles: true }));
-    const chart = document.getElementById('chart');
-    if (chart && typeof chart.scrollIntoView === 'function') {
-      setTimeout(() => chart.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
-    }
-  }
-
-  document.querySelectorAll('[data-chart-jump]').forEach((button) => {
-    button.addEventListener('click', function() {
-      jumpToChart(this.getAttribute('data-chart-jump'));
-    });
-  });
-
-  if (profileSelect) {
-    profileSelect.addEventListener('change', () => setTimeout(refreshDesktopOverview, 120));
-  }
-
-  [fetchStatusEl, sleepFileDisplay, hrvFileDisplay, stepsFileDisplay, rhrFileDisplay].forEach((el) => {
-    if (!el || typeof MutationObserver === 'undefined') return;
-    new MutationObserver(() => setTimeout(refreshDesktopOverview, 150)).observe(el, { childList: true, characterData: true, subtree: true });
-  });
-
-  setTimeout(() => {
-    if (chartTypeSelect && chartTypeSelect.value === 'daily_score') {
-      chartTypeSelect.value = 'analytics';
-      chartTypeSelect.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    refreshDesktopOverview();
-  }, 900);
-  setTimeout(refreshDesktopOverview, 2500);
-});
-</script>
+  <script src="app.js"></script>
 </body>
 </html>

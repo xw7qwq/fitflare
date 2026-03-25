@@ -5,6 +5,9 @@ import subprocess
 import re
 from datetime import datetime
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from common.dashboard_cache import build_dashboard_cache
+
 
 def run_script(script_path: str, cwd: str, extra_args=None) -> tuple[int, str | None]:
     print("=" * 60)
@@ -127,6 +130,7 @@ def main():
         "fetch_rhr_data.py",
         "fetch_hrv_data.py",
         sleep_script,
+        "fetch_profile_snapshot.py",
     ]
 
     discovered = discover_profiles(this_dir)
@@ -179,6 +183,18 @@ def main():
                 any_fail = True
                 break
             print(f"✅ {name} completed")
+
+        try:
+            build_dashboard_cache(prof)
+            overall_results.append((prof, "build_dashboard_cache", 0, "Dashboard cache rebuilt"))
+            print("✅ build_dashboard_cache completed")
+        except Exception as e:
+            overall_results.append((prof, "build_dashboard_cache", 1, f"Dashboard cache failed: {e}"))
+            any_fail = True
+            print(f"ERR: build_dashboard_cache failed: {e}")
+            if args.stop_on_error:
+                print("stop-on-error enabled; aborting after cache build failure.")
+                break
 
     # Summary
     print("\n" + "=" * 60)
