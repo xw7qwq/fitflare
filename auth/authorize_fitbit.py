@@ -62,7 +62,7 @@ from common.profile_paths import (
 )
 
 # Credentials are loaded dynamically - no hardcoded values for security
-REDIRECT_URI = "https://localhost:8080/callback"
+REDIRECT_URI = "http://localhost:8080/callback"
 
 class CallbackHandler(BaseHTTPRequestHandler):
     def do_GET(self):

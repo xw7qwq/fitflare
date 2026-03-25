@@ -143,7 +143,7 @@ python fetch/fetch_all.py --profile lucius
 默认授权脚本使用：
 
 ```text
-https://localhost:8080/callback
+http://localhost:8080/callback
 ```
 
 这对“手动粘贴回调 URL”的流程是可用的，即使服务器本身不开放 8080 也能完成授权。

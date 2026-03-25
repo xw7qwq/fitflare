@@ -1051,13 +1051,27 @@ def start_authorization(profile_id):
         auth_url = f"https://www.fitbit.com/oauth2/authorize?{urlencode(params)}"
 
         if request.method == 'GET':
-            if needs_https_local and not has_https_creds:
+            localhost_redirect = (
+                redirect_uri.startswith('http://localhost:')
+                or redirect_uri.startswith('http://127.0.0.1:')
+                or redirect_uri.startswith('https://localhost:')
+                or redirect_uri.startswith('https://127.0.0.1:')
+            )
+
+            # For the hosted web UI, localhost callbacks are best handled with the
+            # manual flow: open Fitbit in the user's browser, then paste the final
+            # redirected URL/code back into the app.
+            if localhost_redirect:
+                detail = 'Localhost redirect detected: use manual flow.'
+                if needs_https_local and not has_https_creds:
+                    detail = 'HTTPS localhost redirect without certs: use manual flow.'
                 return jsonify({
                     'mode': 'manual',
                     'auth_url': auth_url,
                     'redirect_uri': redirect_uri,
-                    'message': 'HTTPS localhost redirect without certs: use manual flow.'
+                    'message': detail
                 })
+
             return jsonify({
                 'mode': 'background',
                 'auth_url': auth_url,
