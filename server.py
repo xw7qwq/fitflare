@@ -11,9 +11,13 @@ import threading
 import json
 import time
 import fcntl
-from datetime import datetime, date
-from flask import Flask, send_from_directory, send_file, request, jsonify
+import hmac
+import secrets
+from datetime import datetime, date, timedelta
+from functools import wraps
+from flask import Flask, send_from_directory, send_file, request, jsonify, session
 from flask_cors import CORS
+from werkzeug.security import check_password_hash
 
 from common.dashboard_cache import build_dashboard_cache, build_profile_cards, load_dashboard_cache
 from common.fitbit_scopes import FITBIT_DASHBOARD_SCOPE_TEXT
@@ -40,12 +44,36 @@ def _env_int(name: str, default: int, minimum: int) -> int:
         return default
 
 
+def _env_text(name: str, default: str = "") -> str:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip()
+
+
 AUTO_SYNC_ENABLED = _env_flag("FITBAUS_AUTO_SYNC_ENABLED", True)
 AUTO_SYNC_INTERVAL_SECONDS = _env_int("FITBAUS_AUTO_SYNC_INTERVAL_SECONDS", 6 * 60 * 60, 60)
 AUTO_SYNC_SCAN_INTERVAL_SECONDS = _env_int("FITBAUS_AUTO_SYNC_SCAN_INTERVAL_SECONDS", 5 * 60, 30)
 AUTO_SYNC_STARTUP_DELAY_SECONDS = _env_int("FITBAUS_AUTO_SYNC_STARTUP_DELAY_SECONDS", 45, 0)
+ADMIN_PASSWORD = _env_text("FITBAUS_ADMIN_PASSWORD")
+ADMIN_PASSWORD_HASH = _env_text("FITBAUS_ADMIN_PASSWORD_HASH")
+ADMIN_AUTH_CONFIGURED = bool(ADMIN_PASSWORD or ADMIN_PASSWORD_HASH)
+SESSION_SECRET = _env_text("FITBAUS_SESSION_SECRET")
+SESSION_COOKIE_SECURE = _env_flag("FITBAUS_SESSION_COOKIE_SECURE", True)
 auto_sync_thread = None
 auto_sync_stop_event = threading.Event()
+
+if not SESSION_SECRET:
+    SESSION_SECRET = ADMIN_PASSWORD_HASH or ADMIN_PASSWORD or secrets.token_hex(32)
+
+app.config.update(
+    SECRET_KEY=SESSION_SECRET,
+    SESSION_COOKIE_NAME="fitbaus_admin_session",
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=SESSION_COOKIE_SECURE,
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
+)
 
 NO_STORE_PATHS = {
     '/',
@@ -58,6 +86,21 @@ NO_STORE_PATHS = {
     '/script.js',
     '/ui-cn.js',
 }
+
+PUBLIC_STATIC_FILES = {
+    'index.html',
+    'app.js',
+    'style.css',
+    'version.js',
+    'mobile.html',
+    'spousal.html',
+    'script.js',
+    'ui-cn.js',
+}
+
+PUBLIC_STATIC_PREFIXES = (
+    'assets/',
+)
 
 
 @app.after_request
@@ -143,6 +186,94 @@ def _parse_date(s: str) -> date | None:
 
 def _now_iso() -> str:
     return datetime.now().isoformat()
+
+
+def _normalize_public_path(filename: str | None) -> str | None:
+    if not filename:
+        return None
+    normalized = os.path.normpath(str(filename)).replace("\\", "/").lstrip("./")
+    if not normalized or normalized == ".":
+        return None
+    if normalized.startswith("../") or "/../" in normalized or normalized == "..":
+        return None
+    return normalized
+
+
+def _is_public_static_path(filename: str) -> bool:
+    normalized = _normalize_public_path(filename)
+    if not normalized:
+        return False
+    if normalized in PUBLIC_STATIC_FILES:
+        return True
+    return normalized.startswith(PUBLIC_STATIC_PREFIXES)
+
+
+def _verify_admin_password(password: str) -> bool:
+    if not ADMIN_AUTH_CONFIGURED:
+        return False
+    candidate = (password or "").strip()
+    if not candidate:
+        return False
+    if ADMIN_PASSWORD_HASH:
+        try:
+            return check_password_hash(ADMIN_PASSWORD_HASH, candidate)
+        except Exception:
+            return False
+    return hmac.compare_digest(candidate, ADMIN_PASSWORD)
+
+
+def _admin_session_payload() -> dict:
+    authenticated = bool(ADMIN_AUTH_CONFIGURED and session.get("is_admin"))
+    return {
+        "configured": ADMIN_AUTH_CONFIGURED,
+        "authenticated": authenticated,
+        "csrf_token": session.get("csrf_token") if authenticated else None,
+    }
+
+
+def _set_admin_session():
+    session.clear()
+    session.permanent = True
+    session["is_admin"] = True
+    session["csrf_token"] = secrets.token_urlsafe(24)
+    session["login_at"] = _now_iso()
+
+
+def _clear_admin_session():
+    session.clear()
+
+
+def _admin_error(message: str, status_code: int, code: str):
+    return jsonify({
+        "error": message,
+        "code": code,
+        "configured": ADMIN_AUTH_CONFIGURED,
+        "authenticated": bool(session.get("is_admin")),
+        "csrf_token": None,
+    }), status_code
+
+
+def require_admin(csrf: bool = False):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if not ADMIN_AUTH_CONFIGURED:
+                return _admin_error("管理员口令尚未配置，管理功能已停用。", 503, "admin_not_configured")
+
+            if not session.get("is_admin"):
+                return _admin_error("需要管理员登录。", 401, "admin_auth_required")
+
+            if csrf and request.method not in ("GET", "HEAD", "OPTIONS"):
+                csrf_token = request.headers.get("X-FitBaus-CSRF", "").strip()
+                session_token = str(session.get("csrf_token") or "")
+                if not csrf_token or not session_token or not hmac.compare_digest(csrf_token, session_token):
+                    return _admin_error("管理员会话已失效，请重新登录。", 403, "invalid_admin_csrf")
+
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 def _parse_iso_datetime(value: str | None) -> datetime | None:
@@ -890,19 +1021,23 @@ def favicon():
 def static_files(filename):
     """Serve static files with proper MIME types"""
     try:
+        normalized = _normalize_public_path(filename)
+        if not normalized or not _is_public_static_path(normalized):
+            return "File not found", 404
+
         # Check if file exists before trying to serve it
-        if not os.path.exists(filename):
+        if not os.path.exists(normalized):
             return "File not found", 404
             
         # Handle CSV files with proper MIME type
-        if filename.endswith('.csv'):
-            return send_file(filename, mimetype='text/csv')
+        if normalized.endswith('.csv'):
+            return send_file(normalized, mimetype='text/csv')
         # Handle JSON files
-        elif filename.endswith('.json'):
-            return send_file(filename, mimetype='application/json')
+        elif normalized.endswith('.json'):
+            return send_file(normalized, mimetype='application/json')
         # Handle other static files
         else:
-            return send_from_directory('.', filename)
+            return send_from_directory('.', normalized)
     except FileNotFoundError:
         return "File not found", 404
     except Exception as e:
@@ -910,6 +1045,7 @@ def static_files(filename):
 
 # Profile-specific CSV serving
 @app.route('/profiles/<profile_id>/csv/<filename>')
+@require_admin()
 def serve_profile_csv(profile_id, filename):
     """Serve CSV files from profile directories"""
     file_path = f'profiles/{profile_id}/csv/{filename}'
@@ -918,7 +1054,46 @@ def serve_profile_csv(profile_id, filename):
     return "File not found", 404
 
 # API Endpoints
+@app.route('/api/admin/session')
+def admin_session():
+    return jsonify(_admin_session_payload())
+
+
+@app.route('/api/admin/login', methods=['POST'])
+def admin_login():
+    if not ADMIN_AUTH_CONFIGURED:
+        return _admin_error("管理员口令尚未配置，管理功能已停用。", 503, "admin_not_configured")
+
+    data = request.get_json() or {}
+    password = (data.get('password') or '').strip()
+    if not password:
+        return jsonify({'error': '管理员口令不能为空。'}), 400
+
+    if not _verify_admin_password(password):
+        time.sleep(0.35)
+        return _admin_error("管理员口令错误。", 401, "admin_login_failed")
+
+    _set_admin_session()
+    return jsonify({
+        'message': '已进入管理员模式。',
+        **_admin_session_payload(),
+    })
+
+
+@app.route('/api/admin/logout', methods=['POST'])
+@require_admin(csrf=True)
+def admin_logout():
+    _clear_admin_session()
+    return jsonify({
+        'message': '已退出管理员模式。',
+        'configured': ADMIN_AUTH_CONFIGURED,
+        'authenticated': False,
+        'csrf_token': None,
+    })
+
+
 @app.route('/api/create-profile', methods=['POST'])
+@require_admin(csrf=True)
 def create_profile():
     """Create a new profile with client credentials"""
     try:
@@ -992,6 +1167,7 @@ def create_profile():
         return jsonify({'error': f'Failed to create profile: {str(e)}'}), 500
 
 @app.route('/api/delete-profile', methods=['POST'])
+@require_admin(csrf=True)
 def delete_profile():
     """Delete a specific profile using the reset script"""
     try:
@@ -1074,6 +1250,7 @@ def delete_profile():
         return jsonify({'error': f'Failed to delete profile: {str(e)}'}), 500
 
 @app.route('/api/fetch-data', methods=['POST'])
+@require_admin(csrf=True)
 def fetch_data():
     """Start a data fetch operation"""
     global job_counter
@@ -1149,6 +1326,7 @@ def fetch_data():
     })
 
 @app.route('/api/fetch-status/<job_id>')
+@require_admin()
 def fetch_status(job_id):
     """Get status of a fetch operation"""
     # Check if fetch_jobs has been reassigned
@@ -1170,11 +1348,13 @@ def fetch_status(job_id):
     return jsonify(job)
 
 @app.route('/api/fetch-jobs')
+@require_admin()
 def list_fetch_jobs():
     """List all fetch jobs"""
     return jsonify(list(fetch_jobs.values()))
 
 @app.route('/api/cancel-fetch/<job_id>', methods=['POST'])
+@require_admin(csrf=True)
 def cancel_fetch(job_id):
     """Cancel a running fetch operation"""
     print(f"[DEBUG] Cancel request for job {job_id}")
@@ -1222,6 +1402,7 @@ def cancel_fetch(job_id):
         return jsonify({'error': f'Failed to cancel job: {str(e)}'}), 500
 
 @app.route('/api/fetch-logging', methods=['GET', 'POST'])
+@require_admin(csrf=True)
 def fetch_logging():
     """Get or set verbose fetch logging status"""
     global VERBOSE_FETCH_LOGGING
@@ -1303,6 +1484,7 @@ def profile_summaries():
 
 
 @app.route('/api/rebuild-dashboard/<profile_id>', methods=['POST'])
+@require_admin(csrf=True)
 def rebuild_dashboard(profile_id):
     """Force a dashboard cache rebuild for one profile."""
     try:
@@ -1371,6 +1553,7 @@ def run_authorize_script(profile_id, job_id):
         auth_jobs[job_id]['error'] = str(e)
 
 @app.route('/api/authorize/<profile_id>', methods=['GET', 'POST'])
+@require_admin(csrf=True)
 def start_authorization(profile_id):
     """
     GET: Return recommended mode and authorization URL.
@@ -1469,6 +1652,7 @@ def start_authorization(profile_id):
         return jsonify({'error': f'Failed to start or query authorization: {str(e)}'}), 500
 
 @app.route('/api/authorize-status/<job_id>')
+@require_admin()
 def authorize_status(job_id):
     """Get status of an authorization operation"""
     if job_id not in auth_jobs:
@@ -1476,6 +1660,7 @@ def authorize_status(job_id):
     return jsonify(auth_jobs[job_id])
 
 @app.route('/api/authorize-exchange', methods=['POST'])
+@require_admin(csrf=True)
 def authorize_exchange():
     """Exchange a pasted redirect URL or code for tokens (manual flow)"""
     try:

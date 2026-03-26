@@ -231,6 +231,24 @@ a {
   color: var(--blue);
 }
 
+.mode-chip[data-mode="admin"] {
+  color: var(--green);
+  background: rgba(230, 244, 234, 0.96);
+  border-color: rgba(24, 128, 56, 0.14);
+}
+
+.mode-chip[data-mode="public"] {
+  color: var(--amber);
+  background: rgba(255, 244, 214, 0.94);
+  border-color: rgba(249, 171, 0, 0.16);
+}
+
+.mode-chip[data-mode="disabled"] {
+  color: var(--red);
+  background: rgba(252, 232, 230, 0.96);
+  border-color: rgba(217, 48, 37, 0.16);
+}
+
 .button {
   border: 0;
   border-radius: 999px;
@@ -249,6 +267,14 @@ a {
 .icon-button:hover,
 .tab-button:hover {
   transform: translateY(-1px);
+}
+
+.button:disabled,
+.icon-button:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .button-primary {

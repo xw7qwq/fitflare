@@ -10,9 +10,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
-  <script src="version.js?v=20260326-3"></script>
+  <script src="version.js?v=20260326-4"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="style.css?v=20260326-3">
+  <link rel="stylesheet" href="style.css?v=20260326-4">
 </head>
 <body>
   <div class="page-glow page-glow-one"></div>
@@ -35,8 +35,11 @@
 
       <div class="topbar-actions">
         <div class="version-chip" id="versionChip">本地缓存模式</div>
-        <button class="button button-secondary" id="openManagerBtn" type="button">档案管理</button>
-        <button class="button button-primary" id="syncBtn" type="button">同步 Fitbit</button>
+        <div class="version-chip mode-chip" id="adminModeChip" data-mode="public">公开只读模式</div>
+        <button class="button button-secondary" id="adminLoginBtn" type="button">管理员登录</button>
+        <button class="button button-light hidden" id="adminLogoutBtn" type="button">退出管理</button>
+        <button class="button button-secondary hidden" id="openManagerBtn" type="button">档案管理</button>
+        <button class="button button-primary hidden" id="syncBtn" type="button">同步 Fitbit</button>
       </div>
     </header>
 
@@ -45,7 +48,7 @@
         <span class="field-label">当前档案</span>
         <div class="field-row">
           <select id="profileSelect" aria-label="选择档案"></select>
-          <button class="button button-light" id="reloadBtn" type="button">重建缓存</button>
+          <button class="button button-light hidden" id="reloadBtn" type="button">重建缓存</button>
         </div>
       </label>
 
@@ -457,6 +460,34 @@
 
   <div class="toast hidden" id="toast"></div>
 
+  <div class="modal hidden" id="adminModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="adminModal"></div>
+    <div class="modal-dialog modal-dialog-narrow">
+      <div class="modal-head">
+        <div>
+          <div class="section-kicker">Admin</div>
+          <h3>管理员登录</h3>
+        </div>
+        <button class="icon-button" data-close-modal="adminModal" type="button" aria-label="关闭">×</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="auth-steps">
+          <p>公开访客只允许查看健康数据。</p>
+          <p>只有管理员登录后，才能创建档案、发起 Fitbit 授权、删除档案或手动同步。</p>
+        </div>
+
+        <form id="adminPasswordForm" class="form-stack">
+          <label class="field">
+            <span class="field-label">管理员口令</span>
+            <input id="adminPasswordInput" type="password" autocomplete="current-password" placeholder="输入管理员口令" required>
+          </label>
+          <button class="button button-primary button-block" id="adminLoginSubmit" type="submit">进入管理模式</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <div class="modal hidden" id="profileModal" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="profileModal"></div>
     <div class="modal-dialog">
@@ -543,6 +574,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20260326-3"></script>
+  <script src="app.js?v=20260326-4"></script>
 </body>
 </html>

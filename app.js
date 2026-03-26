@@ -3,6 +3,11 @@ const state = {
   selectedProfile: null,
   dashboard: null,
   profileSummaries: [],
+  admin: {
+    configured: false,
+    authenticated: false,
+    csrfToken: null,
+  },
   activeView: "overview",
   authProfile: null,
   fetchJobId: null,
@@ -22,18 +27,26 @@ document.addEventListener("DOMContentLoaded", () => {
   hydrateVersion()
   const initialView = getQueryParam("view") || "overview"
   activateView(initialView)
-  refreshProfiles().catch((error) => {
+  initializeApp().catch((error) => {
     console.error(error)
     showToast(error.message || "初始化失败", true)
     setStatus("初始化失败")
   })
 })
 
+async function initializeApp() {
+  await refreshAdminSession({ silent: true })
+  await refreshProfiles()
+}
+
 function captureRefs() {
   const ids = [
     "versionChip",
+    "adminModeChip",
     "profileSelect",
     "rangeSelect",
+    "adminLoginBtn",
+    "adminLogoutBtn",
     "syncBtn",
     "reloadBtn",
     "openManagerBtn",
@@ -67,8 +80,12 @@ function captureRefs() {
     "scopeList",
     "familyGrid",
     "toast",
+    "adminModal",
     "profileModal",
     "authModal",
+    "adminPasswordForm",
+    "adminPasswordInput",
+    "adminLoginSubmit",
     "createProfileForm",
     "newProfileName",
     "newClientId",
@@ -109,6 +126,19 @@ function bindEvents() {
   refs.openManagerBtn?.addEventListener("click", () => {
     renderExistingProfilesList()
     openModal("profileModal")
+  })
+
+  refs.adminLoginBtn?.addEventListener("click", () => {
+    openAdminModal()
+  })
+
+  refs.adminLogoutBtn?.addEventListener("click", () => {
+    logoutAdmin().catch(handleAsyncError)
+  })
+
+  refs.adminPasswordForm?.addEventListener("submit", (event) => {
+    event.preventDefault()
+    loginAdmin().catch(handleAsyncError)
   })
 
   refs.createProfileForm?.addEventListener("submit", (event) => {
@@ -167,6 +197,104 @@ function hydrateVersion() {
   if (window.FITBAUS_VERSION && refs.versionChip) {
     refs.versionChip.textContent = `本地缓存模式 · ${window.FITBAUS_VERSION}`
   }
+}
+
+async function refreshAdminSession({ silent = false } = {}) {
+  try {
+    const payload = await apiRequest("/api/admin/session", { skipAdminHandling: true })
+    applyAdminSession(payload)
+    return payload
+  } catch (error) {
+    applyAdminSession({ configured: false, authenticated: false, csrf_token: null })
+    if (!silent) throw error
+    return null
+  }
+}
+
+function applyAdminSession(payload = {}) {
+  state.admin.configured = Boolean(payload.configured)
+  state.admin.authenticated = Boolean(payload.authenticated)
+  state.admin.csrfToken = state.admin.authenticated ? payload.csrf_token || null : null
+  renderAdminControls()
+}
+
+function renderAdminControls() {
+  const { configured, authenticated } = state.admin
+
+  if (refs.adminModeChip) {
+    refs.adminModeChip.dataset.mode = !configured ? "disabled" : authenticated ? "admin" : "public"
+    refs.adminModeChip.textContent = !configured
+      ? "管理未配置"
+      : authenticated
+        ? "管理员模式"
+        : "公开只读模式"
+  }
+
+  if (refs.adminLoginBtn) {
+    refs.adminLoginBtn.classList.toggle("hidden", !configured || authenticated)
+    refs.adminLoginBtn.disabled = !configured
+    refs.adminLoginBtn.textContent = configured ? "管理员登录" : "管理未配置"
+  }
+
+  refs.adminLogoutBtn?.classList.toggle("hidden", !authenticated)
+  refs.openManagerBtn?.classList.toggle("hidden", !authenticated)
+  refs.syncBtn?.classList.toggle("hidden", !authenticated)
+  refs.reloadBtn?.classList.toggle("hidden", !authenticated)
+
+  if (!authenticated) {
+    closeModal("profileModal")
+    closeModal("authModal")
+  }
+
+  renderExistingProfilesList()
+}
+
+function openAdminModal() {
+  if (!state.admin.configured) {
+    showToast("管理员口令尚未配置，当前仅支持公开只读。", true)
+    return
+  }
+  if (state.admin.authenticated) return
+  if (refs.adminPasswordForm) refs.adminPasswordForm.reset()
+  openModal("adminModal")
+  window.setTimeout(() => {
+    refs.adminPasswordInput?.focus()
+  }, 40)
+}
+
+async function loginAdmin() {
+  const password = refs.adminPasswordInput?.value?.trim() || ""
+  if (!password) {
+    showToast("请输入管理员口令。", true)
+    return
+  }
+  setButtonState(refs.adminLoginSubmit, true, "登录中...")
+  try {
+    const payload = await apiRequest("/api/admin/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+      skipAdminHandling: true,
+    })
+    applyAdminSession(payload)
+    closeModal("adminModal")
+    showToast("已进入管理员模式。")
+    setStatus("管理员模式已启用")
+  } finally {
+    setButtonState(refs.adminLoginSubmit, false, "进入管理模式")
+    if (refs.adminPasswordInput) refs.adminPasswordInput.value = ""
+  }
+}
+
+async function logoutAdmin() {
+  const payload = await apiRequest("/api/admin/logout", {
+    method: "POST",
+    requireAdmin: true,
+  })
+  applyAdminSession(payload)
+  closeModal("adminModal")
+  showToast("已退出管理员模式。")
+  setStatus("公开只读模式")
 }
 
 async function refreshProfiles(preferredProfile) {
@@ -1000,6 +1128,7 @@ async function createProfile() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ profileName, clientId, clientSecret }),
+      requireAdmin: true,
     })
     refs.createProfileForm.reset()
     showToast(`档案 ${profileName} 已创建，下一步继续授权。`)
@@ -1011,6 +1140,7 @@ async function createProfile() {
 }
 
 function renderExistingProfilesList() {
+  if (!refs.existingProfilesList) return
   if (!state.profiles.length) {
     refs.existingProfilesList.innerHTML = `<div class="empty-state">还没有任何档案。</div>`
     return
@@ -1029,8 +1159,8 @@ function renderExistingProfilesList() {
           </div>
           <div class="profile-actions">
             <button class="button button-light" type="button" data-action="open" data-profile="${escapeHtml(profile.name)}">打开</button>
-            <button class="button button-secondary" type="button" data-action="authorize" data-profile="${escapeHtml(profile.name)}">授权</button>
-            <button class="button button-secondary" type="button" data-action="delete" data-profile="${escapeHtml(profile.name)}">删除</button>
+            ${state.admin.authenticated ? `<button class="button button-secondary" type="button" data-action="authorize" data-profile="${escapeHtml(profile.name)}">授权</button>` : ""}
+            ${state.admin.authenticated ? `<button class="button button-secondary" type="button" data-action="delete" data-profile="${escapeHtml(profile.name)}">删除</button>` : ""}
           </div>
         </article>
       `
@@ -1039,7 +1169,9 @@ function renderExistingProfilesList() {
 }
 
 async function startAuthorization(profileName) {
-  const payload = await apiRequest(`/api/authorize/${encodeURIComponent(profileName)}`)
+  const payload = await apiRequest(`/api/authorize/${encodeURIComponent(profileName)}`, {
+    requireAdmin: true,
+  })
   state.authProfile = profileName
   refs.authModalTitle.textContent = `授权 Fitbit 档案：${profileName}`
   refs.authOpenLink.href = payload.auth_url || "#"
@@ -1067,6 +1199,7 @@ async function submitAuthorization() {
         profileName: state.authProfile,
         redirectUrl,
       }),
+      requireAdmin: true,
     })
     closeModal("authModal")
     showToast(`档案 ${state.authProfile} 授权完成，现在可以同步数据。`)
@@ -1084,6 +1217,7 @@ async function deleteProfile(profileName) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ profileName }),
+    requireAdmin: true,
   })
   showToast(`档案 ${profileName} 已删除。`)
   if (state.selectedProfile === profileName) {
@@ -1100,6 +1234,7 @@ async function rebuildDashboard() {
   setStatus("正在重建本地缓存")
   await apiRequest(`/api/rebuild-dashboard/${encodeURIComponent(state.selectedProfile)}`, {
     method: "POST",
+    requireAdmin: true,
   })
   await loadDashboard()
   await loadProfileSummaries()
@@ -1116,6 +1251,7 @@ async function startFetch() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ profile: state.selectedProfile }),
+    requireAdmin: true,
   })
 
   state.fetchJobId = payload.job_id
@@ -1130,7 +1266,10 @@ function pollFetchStatus() {
   clearInterval(state.fetchTimer)
   state.fetchTimer = setInterval(async () => {
     try {
-      const payload = await apiRequest(`/api/fetch-status/${encodeURIComponent(state.fetchJobId)}`, { ignore404: true })
+      const payload = await apiRequest(`/api/fetch-status/${encodeURIComponent(state.fetchJobId)}`, {
+        ignore404: true,
+        requireAdmin: true,
+      })
       if (!payload) {
         state.fetchNotFoundCount += 1
         if (state.fetchNotFoundCount >= 3) {
@@ -1434,8 +1573,17 @@ function destroyAllCharts() {
 }
 
 async function apiRequest(path, options = {}) {
-  const { ignore404, ...fetchOptions } = options
-  const response = await fetch(path, fetchOptions)
+  const { ignore404, requireAdmin, skipAdminHandling, ...fetchOptions } = options
+  const headers = new Headers(fetchOptions.headers || {})
+  if (requireAdmin && state.admin.csrfToken) {
+    headers.set("X-FitBaus-CSRF", state.admin.csrfToken)
+  }
+
+  const response = await fetch(path, {
+    credentials: "same-origin",
+    ...fetchOptions,
+    headers,
+  })
 
   if (ignore404 && response.status === 404) {
     return null
@@ -1444,6 +1592,9 @@ async function apiRequest(path, options = {}) {
   const contentType = response.headers.get("content-type") || ""
   const payload = contentType.includes("application/json") ? await response.json() : await response.text()
   if (!response.ok) {
+    if (requireAdmin && !skipAdminHandling && [401, 403, 503].includes(response.status) && typeof payload !== "string") {
+      applyAdminSession(payload)
+    }
     const message = typeof payload === "string" ? payload : payload.error || payload.message || "请求失败"
     throw new Error(message)
   }
