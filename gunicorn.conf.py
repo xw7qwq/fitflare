@@ -18,6 +18,8 @@ worker_class = "sync"
 worker_connections = 1000
 timeout = 300
 keepalive = 2
+# Avoid permission errors when the container root filesystem is not writable.
+worker_tmp_dir = "/tmp"
 
 # Restart workers after this many requests, to prevent memory leaks
 max_requests = 1000
