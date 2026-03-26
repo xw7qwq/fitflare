@@ -159,6 +159,8 @@ function bindEvents() {
       closeModal(element.dataset.closeModal)
     })
   })
+
+  window.addEventListener("resize", queueVisibleChartResize)
 }
 
 function hydrateVersion() {
@@ -287,7 +289,6 @@ function scheduleActiveViewRender() {
   }
   scheduleActiveViewRender.frameId = window.requestAnimationFrame(() => {
     renderActiveView()
-    resizeVisibleCharts()
   })
 }
 
@@ -1400,6 +1401,15 @@ function resizeVisibleCharts() {
       chart.resize()
     }
   })
+}
+
+function queueVisibleChartResize() {
+  if (queueVisibleChartResize.timeoutId) {
+    window.clearTimeout(queueVisibleChartResize.timeoutId)
+  }
+  queueVisibleChartResize.timeoutId = window.setTimeout(() => {
+    resizeVisibleCharts()
+  }, 120)
 }
 
 function dualAxisOptions(scales) {

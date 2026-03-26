@@ -10,9 +10,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
-  <script src="version.js?v=20260326-2"></script>
+  <script src="version.js?v=20260326-3"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="style.css?v=20260326-2">
+  <link rel="stylesheet" href="style.css?v=20260326-3">
 </head>
 <body>
   <div class="page-glow page-glow-one"></div>
@@ -114,7 +114,9 @@
               </div>
               <p>把睡眠得分、步数和恢复核心指标放在同一个视图里。</p>
             </div>
-            <canvas id="overviewTrendChart" height="120"></canvas>
+            <div class="chart-frame">
+              <canvas id="overviewTrendChart" height="120"></canvas>
+            </div>
           </article>
 
           <article class="surface chart-card">
@@ -125,7 +127,9 @@
               </div>
               <p>看每周平均值，而不是被单日波动干扰。</p>
             </div>
-            <canvas id="weeklyTrendChart" height="120"></canvas>
+            <div class="chart-frame">
+              <canvas id="weeklyTrendChart" height="120"></canvas>
+            </div>
           </article>
         </div>
 
@@ -162,7 +166,9 @@
               </div>
               <p>主睡眠记录会自动去重，小睡单独计数。</p>
             </div>
-            <canvas id="sleepTrendChart" height="120"></canvas>
+            <div class="chart-frame">
+              <canvas id="sleepTrendChart" height="120"></canvas>
+            </div>
           </article>
 
           <article class="surface chart-card">
@@ -173,7 +179,9 @@
               </div>
               <p>最近两周的睡眠结构，直接看质量变化。</p>
             </div>
-            <canvas id="sleepStageChart" height="120"></canvas>
+            <div class="chart-frame">
+              <canvas id="sleepStageChart" height="120"></canvas>
+            </div>
           </article>
         </div>
 
@@ -199,7 +207,9 @@
               </div>
               <p>同时看步数规模和真正的活跃时间。</p>
             </div>
-            <canvas id="activityTrendChart" height="120"></canvas>
+            <div class="chart-frame">
+              <canvas id="activityTrendChart" height="120"></canvas>
+            </div>
           </article>
 
           <article class="surface chart-card">
@@ -210,7 +220,9 @@
               </div>
               <p>更接近训练强度，而不只是走了多少步。</p>
             </div>
-            <canvas id="activityBurnChart" height="120"></canvas>
+            <div class="chart-frame">
+              <canvas id="activityBurnChart" height="120"></canvas>
+            </div>
           </article>
         </div>
 
@@ -236,7 +248,9 @@
               </div>
               <p>HRV 越高通常越好，静息心率越低通常越稳。</p>
             </div>
-            <canvas id="recoveryTrendChart" height="120"></canvas>
+            <div class="chart-frame">
+              <canvas id="recoveryTrendChart" height="120"></canvas>
+            </div>
           </article>
 
           <article class="surface chart-card">
@@ -247,7 +261,9 @@
               </div>
               <p>用散点看恢复和睡眠的联动强度。</p>
             </div>
-            <canvas id="recoveryScatterChart" height="120"></canvas>
+            <div class="chart-frame">
+              <canvas id="recoveryScatterChart" height="120"></canvas>
+            </div>
           </article>
         </div>
 
@@ -527,6 +543,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20260326-2"></script>
+  <script src="app.js?v=20260326-3"></script>
 </body>
 </html>
