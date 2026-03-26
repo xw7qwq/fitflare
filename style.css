@@ -3,11 +3,13 @@
   --bg-soft: #eef3fb;
   --surface: rgba(255, 255, 255, 0.88);
   --surface-strong: #ffffff;
+  --surface-tint: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 255, 0.92));
   --border: rgba(26, 115, 232, 0.11);
   --border-strong: rgba(26, 115, 232, 0.18);
   --text: #16253d;
   --muted: #66748c;
   --shadow: 0 18px 48px rgba(31, 53, 96, 0.12);
+  --shadow-soft: 0 14px 28px rgba(31, 53, 96, 0.08);
   --blue: #1a73e8;
   --green: #188038;
   --amber: #f9ab00;
@@ -43,6 +45,8 @@ body {
     linear-gradient(180deg, #f7faff 0%, #eef4fb 100%);
   color: var(--text);
   font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -99,10 +103,10 @@ a {
 }
 
 .surface {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--surface-tint);
+  border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.68);
   backdrop-filter: blur(18px);
 }
 
@@ -122,8 +126,15 @@ a {
 .topbar {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 24px;
   padding: 28px;
+  position: sticky;
+  top: 18px;
+  z-index: 18;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 251, 255, 0.88)),
+    radial-gradient(circle at top right, rgba(26, 115, 232, 0.12), transparent 32%);
 }
 
 .brand-stack {
@@ -206,8 +217,9 @@ a {
 .scope-chip,
 .family-profile-card {
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(26, 115, 232, 0.11);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(26, 115, 232, 0.1);
+  box-shadow: var(--shadow-soft);
 }
 
 .version-chip {
@@ -223,7 +235,7 @@ a {
   padding: 12px 18px;
   font-weight: 700;
   cursor: pointer;
-  transition: transform var(--ease), box-shadow var(--ease), background var(--ease), color var(--ease);
+  transition: transform var(--ease), box-shadow var(--ease), background var(--ease), color var(--ease), border-color var(--ease);
   text-decoration: none;
   display: inline-flex;
   align-items: center;
@@ -244,14 +256,16 @@ a {
 }
 
 .button-secondary {
-  background: var(--surface-strong);
+  background: rgba(255, 255, 255, 0.84);
   color: var(--text);
   border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-soft);
 }
 
 .button-light {
   background: var(--blue-soft);
   color: var(--blue);
+  box-shadow: var(--shadow-soft);
 }
 
 .button-block {
@@ -264,6 +278,9 @@ a {
   gap: 18px;
   margin-top: 18px;
   padding: 22px 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(246, 250, 255, 0.9)),
+    radial-gradient(circle at top left, rgba(15, 157, 88, 0.08), transparent 26%);
 }
 
 .field {
@@ -337,6 +354,7 @@ textarea:focus {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.88)),
     linear-gradient(135deg, rgba(26, 115, 232, 0.06), transparent 36%);
+  overflow: hidden;
 }
 
 .hero-copy {
@@ -493,6 +511,30 @@ textarea:focus {
   min-height: 180px;
 }
 
+.coverage-card,
+.metric-card,
+.detail-card,
+.narrative-pill,
+.family-profile-card,
+.file-item,
+.scope-chip,
+.profile-row {
+  transition: transform var(--ease), box-shadow var(--ease), border-color var(--ease);
+}
+
+.coverage-card:hover,
+.metric-card:hover,
+.detail-card:hover,
+.narrative-pill:hover,
+.family-profile-card:hover,
+.file-item:hover,
+.scope-chip:hover,
+.profile-row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 34px rgba(31, 53, 96, 0.12);
+  border-color: rgba(26, 115, 232, 0.18);
+}
+
 .metric-topline {
   display: flex;
   align-items: flex-start;
@@ -545,6 +587,8 @@ textarea:focus {
 
 .tab-strip {
   padding: 10px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 250, 255, 0.9));
 }
 
 .tab-buttons {
@@ -554,19 +598,21 @@ textarea:focus {
 }
 
 .tab-button {
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 999px;
   padding: 12px 16px;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.6);
   color: var(--muted);
   font-weight: 700;
   cursor: pointer;
-  transition: background var(--ease), color var(--ease), transform var(--ease);
+  transition: background var(--ease), color var(--ease), transform var(--ease), box-shadow var(--ease), border-color var(--ease);
 }
 
 .tab-button.active {
   background: var(--blue-soft);
   color: var(--blue);
+  border-color: rgba(26, 115, 232, 0.12);
+  box-shadow: 0 10px 22px rgba(26, 115, 232, 0.14);
 }
 
 .view-panel {
@@ -576,6 +622,7 @@ textarea:focus {
 .view-panel.active {
   display: grid;
   gap: 18px;
+  animation: riseIn 320ms var(--ease);
 }
 
 .panel-grid {
@@ -593,7 +640,56 @@ textarea:focus {
 .data-card,
 .family-card,
 .modal-panel {
+  position: relative;
+  overflow: hidden;
   padding: 24px;
+}
+
+.chart-card {
+  min-height: 430px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 249, 255, 0.94)),
+    radial-gradient(circle at top right, rgba(26, 115, 232, 0.08), transparent 28%);
+}
+
+.chart-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top left, rgba(249, 171, 0, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 32%);
+}
+
+.chart-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.chart-card canvas {
+  width: 100% !important;
+  min-height: 310px;
+  margin-top: 8px;
+}
+
+.chart-hidden {
+  visibility: hidden;
+}
+
+.chart-empty {
+  position: absolute;
+  inset: 110px 24px 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  border: 1px dashed rgba(26, 115, 232, 0.2);
+  background:
+    linear-gradient(180deg, rgba(249, 251, 255, 0.9), rgba(243, 248, 255, 0.94));
+  color: var(--muted);
+  text-align: center;
+  padding: 20px;
+  line-height: 1.7;
 }
 
 .section-head {
@@ -618,6 +714,7 @@ textarea:focus {
   margin: 0;
   max-width: 42ch;
   line-height: 1.7;
+  font-size: 14px;
 }
 
 .narrative-grid {
@@ -637,6 +734,7 @@ textarea:focus {
   padding: 18px;
   background: rgba(247, 250, 255, 0.9);
   border: 1px solid rgba(26, 115, 232, 0.1);
+  box-shadow: var(--shadow-soft);
 }
 
 .detail-card {
@@ -718,6 +816,8 @@ textarea:focus {
 
 .table-wrap {
   overflow: auto;
+  border-radius: 20px;
+  background: rgba(252, 253, 255, 0.72);
 }
 
 table {
@@ -915,6 +1015,7 @@ tbody tr:hover {
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(26, 115, 232, 0.1);
+  box-shadow: var(--shadow-soft);
 }
 
 .profile-row-head {
@@ -1018,6 +1119,7 @@ tbody tr:hover {
 
   .topbar {
     padding: 22px;
+    position: static;
   }
 
   .brand-stack {
@@ -1045,5 +1147,17 @@ tbody tr:hover {
 
   table {
     min-width: 520px;
+  }
+
+  .chart-card {
+    min-height: 380px;
+  }
+
+  .chart-card canvas {
+    min-height: 260px;
+  }
+
+  .chart-empty {
+    inset: 104px 20px 20px;
   }
 }

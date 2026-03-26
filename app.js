@@ -237,15 +237,55 @@ function renderDashboard() {
   renderHero()
   renderCoverage()
   renderStats()
-  renderCorrelations()
-  renderOverviewHighlights()
-  renderOverviewCharts()
-  renderSleepView()
-  renderActivityView()
-  renderRecoveryView()
-  renderBodyView()
-  renderLifestyleView()
-  renderAccountView()
+  scheduleActiveViewRender()
+}
+
+function renderActiveView() {
+  if (!state.dashboard) return
+  if (state.activeView === "overview") {
+    renderCorrelations()
+    renderOverviewHighlights()
+    renderOverviewCharts()
+    return
+  }
+  if (state.activeView === "sleep") {
+    renderSleepView()
+    return
+  }
+  if (state.activeView === "activity") {
+    renderActivityView()
+    return
+  }
+  if (state.activeView === "recovery") {
+    renderRecoveryView()
+    return
+  }
+  if (state.activeView === "body") {
+    renderBodyView()
+    return
+  }
+  if (state.activeView === "lifestyle") {
+    renderLifestyleView()
+    return
+  }
+  if (state.activeView === "account") {
+    renderAccountView()
+    return
+  }
+  if (state.activeView === "family") {
+    renderFamily()
+  }
+}
+
+function scheduleActiveViewRender() {
+  if (!state.dashboard) return
+  if (scheduleActiveViewRender.frameId) {
+    window.cancelAnimationFrame(scheduleActiveViewRender.frameId)
+  }
+  scheduleActiveViewRender.frameId = window.requestAnimationFrame(() => {
+    renderActiveView()
+    resizeVisibleCharts()
+  })
 }
 
 function renderEmptyState() {
@@ -470,7 +510,7 @@ function renderOverviewCharts() {
   upsertChart("weeklyTrendChart", {
     type: "line",
     data: {
-      labels: weekly.map((row) => row.period),
+      labels: weekly.map((row) => formatPeriodLabel(row.period)),
       datasets: [
         {
           label: "周平均睡眠时长",
@@ -478,7 +518,9 @@ function renderOverviewCharts() {
           borderColor: "#f9ab00",
           backgroundColor: "rgba(249, 171, 0, 0.18)",
           tension: 0.32,
-          pointRadius: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          fill: true,
           yAxisID: "y",
         },
         {
@@ -487,7 +529,9 @@ function renderOverviewCharts() {
           borderColor: "#1a73e8",
           backgroundColor: "rgba(26, 115, 232, 0.16)",
           tension: 0.32,
-          pointRadius: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          fill: true,
           yAxisID: "y1",
         },
       ],
@@ -1144,6 +1188,7 @@ function activateView(viewName) {
     panel.classList.toggle("active", panel.dataset.viewPanel === state.activeView)
   })
   syncQuery({ view: state.activeView })
+  scheduleActiveViewRender()
 }
 
 function openModal(id) {
@@ -1196,25 +1241,77 @@ function upsertChart(canvasId, config) {
   if (!canvas || typeof Chart === "undefined") return
   if (charts[canvasId]) {
     charts[canvasId].destroy()
+    delete charts[canvasId]
   }
+
+  const hasData = chartHasData(config.data)
+  toggleChartEmptyState(canvas, !hasData)
+  if (!hasData) {
+    clearCanvas(canvas)
+    return
+  }
+
   config.options = {
     responsive: true,
     maintainAspectRatio: false,
-    interaction: { mode: "index", intersect: false },
+    normalized: true,
+    animation: {
+      duration: 520,
+      easing: "easeOutCubic",
+    },
+    layout: {
+      padding: { top: 6, right: 4, bottom: 0, left: 0 },
+    },
+    interaction: {
+      mode: config.type === "scatter" ? "nearest" : "index",
+      intersect: false,
+    },
+    elements: {
+      line: {
+        borderCapStyle: "round",
+        borderJoinStyle: "round",
+      },
+      point: {
+        hoverRadius: 6,
+        hitRadius: 16,
+      },
+      bar: {
+        borderRadius: 10,
+        borderSkipped: false,
+      },
+    },
     ...config.options,
     plugins: {
       legend: {
+        position: "top",
+        align: "start",
         labels: {
           usePointStyle: true,
-          boxWidth: 8,
+          boxWidth: 10,
+          padding: 16,
           color: "#4f5d75",
-          font: { family: "Noto Sans SC" },
+          font: {
+            family: "Noto Sans SC",
+            size: 12,
+            weight: "600",
+          },
         },
       },
       tooltip: {
-        backgroundColor: "rgba(22, 37, 61, 0.95)",
-        padding: 12,
-        cornerRadius: 12,
+        backgroundColor: "rgba(18, 33, 61, 0.94)",
+        padding: 14,
+        cornerRadius: 14,
+        boxPadding: 5,
+        displayColors: true,
+        titleColor: "#f8fbff",
+        bodyColor: "#e8eef8",
+        titleFont: {
+          family: "Noto Sans SC",
+          weight: "700",
+        },
+        bodyFont: {
+          family: "Noto Sans SC",
+        },
       },
       ...(config.options?.plugins || {}),
     },
@@ -1223,8 +1320,25 @@ function upsertChart(canvasId, config) {
         Object.entries(config.options?.scales || {}).map(([key, value]) => [
           key,
           {
-            grid: { color: "rgba(26, 115, 232, 0.08)" },
-            ticks: { color: "#66748c" },
+            border: { display: false },
+            grid: {
+              color: "rgba(26, 115, 232, 0.08)",
+              drawTicks: false,
+              tickLength: 0,
+            },
+            ticks: {
+              color: "#66748c",
+              padding: 8,
+              maxRotation: 0,
+            },
+            title: {
+              color: "#66748c",
+              font: {
+                family: "Noto Sans SC",
+                size: 12,
+                weight: "600",
+              },
+            },
             ...value,
           },
         ])
@@ -1232,6 +1346,51 @@ function upsertChart(canvasId, config) {
     },
   }
   charts[canvasId] = new Chart(canvas.getContext("2d"), config)
+}
+
+function chartHasData(data) {
+  const datasets = Array.isArray(data?.datasets) ? data.datasets : []
+  return datasets.some((dataset) => {
+    const points = Array.isArray(dataset?.data) ? dataset.data : []
+    return points.some((point) => {
+      if (point == null) return false
+      if (typeof point === "object") {
+        return point.x != null && point.y != null
+      }
+      return Number.isFinite(Number(point))
+    })
+  })
+}
+
+function toggleChartEmptyState(canvas, isEmpty) {
+  const card = canvas.closest(".chart-card")
+  if (!card) return
+  let overlay = card.querySelector(".chart-empty")
+  if (!overlay) {
+    overlay = document.createElement("div")
+    overlay.className = "chart-empty hidden"
+    overlay.textContent = "当前范围没有可绘制的图表数据"
+    card.appendChild(overlay)
+  }
+  overlay.classList.toggle("hidden", !isEmpty)
+  canvas.classList.toggle("chart-hidden", isEmpty)
+}
+
+function clearCanvas(canvas) {
+  const context = canvas.getContext("2d")
+  if (context) {
+    context.clearRect(0, 0, canvas.width, canvas.height)
+  }
+}
+
+function resizeVisibleCharts() {
+  Object.entries(charts).forEach(([key, chart]) => {
+    const canvas = document.getElementById(key)
+    if (!canvas || !chart) return
+    if (canvas.offsetParent !== null) {
+      chart.resize()
+    }
+  })
 }
 
 function dualAxisOptions(scales) {
@@ -1376,6 +1535,19 @@ function formatDateTime(value) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date)
+}
+
+function formatPeriodLabel(value) {
+  if (!value) return "暂无"
+  const weekMatch = String(value).match(/^(\d{4})-W(\d{2})$/)
+  if (weekMatch) {
+    return `W${weekMatch[2]}`
+  }
+  const monthMatch = String(value).match(/^(\d{4})-(\d{2})$/)
+  if (monthMatch) {
+    return `${Number(monthMatch[2])} 月`
+  }
+  return String(value)
 }
 
 function statusLabel(status) {
