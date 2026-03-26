@@ -20,6 +20,8 @@ timeout = 300
 keepalive = 2
 # Avoid permission errors when the container root filesystem is not writable.
 worker_tmp_dir = "/tmp"
+# Gunicorn 25 enables a control socket by default; we do not use gunicornc here.
+control_socket_disable = True
 
 # Restart workers after this many requests, to prevent memory leaks
 max_requests = 1000
