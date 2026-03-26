@@ -2,6 +2,7 @@ const state = {
   profiles: [],
   selectedProfile: null,
   dashboard: null,
+  viewModel: null,
   profileSummaries: [],
   admin: {
     configured: false,
@@ -20,13 +21,39 @@ const refs = {}
 const CHART_EMPTY_TEXT = "当前范围没有可绘制的图表数据"
 const CHART_LIBRARY_ERROR_TEXT = "图表组件未加载，当前网络可能屏蔽了外部图表库。"
 const CHART_FONT_FAMILY = '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif'
+const DEFAULT_RANGE = "30"
+const VALID_RANGES = new Set(["14", "30", "90"])
+const VIEW_ORDER = ["overview", "sleep", "activity", "recovery", "body", "lifestyle", "account", "family"]
+const METRIC_VIEW_MAP = {
+  sleep_score: "sleep",
+  sleep_hours: "sleep",
+  steps: "activity",
+  active_minutes: "activity",
+  active_zone_minutes: "activity",
+  hrv: "recovery",
+  rhr: "recovery",
+  calories_out: "activity",
+}
+const VIEW_META = {
+  overview: { label: "总览", kicker: "Overview", summary: "趋势、相关性和重点信号", tone: "blue" },
+  sleep: { label: "睡眠", kicker: "Sleep", summary: "睡眠质量、时长和阶段结构", tone: "blue" },
+  activity: { label: "活动", kicker: "Activity", summary: "步数、活跃分钟和消耗热量", tone: "green" },
+  recovery: { label: "恢复", kicker: "Recovery", summary: "HRV、RHR 和睡眠联动", tone: "teal" },
+  body: { label: "体征", kicker: "Body", summary: "体重、BMI、体脂与补充 vitals", tone: "amber" },
+  lifestyle: { label: "生活", kicker: "Lifestyle", summary: "饮食、饮水和营养目标", tone: "amber" },
+  account: { label: "账户", kicker: "Account", summary: "设备、scope 和缓存状态", tone: "red" },
+  family: { label: "档案", kicker: "Profiles", summary: "多档案横向对比", tone: "blue" },
+}
 
 document.addEventListener("DOMContentLoaded", () => {
   captureRefs()
   bindEvents()
   hydrateVersion()
-  const initialView = getQueryParam("view") || "overview"
-  activateView(initialView)
+  const initialRoute = getRouteState()
+  if (refs.rangeSelect && VALID_RANGES.has(initialRoute.range || "")) {
+    refs.rangeSelect.value = initialRoute.range
+  }
+  activateView(initialRoute.view || "overview", { updateHistory: false, scroll: false })
   initializeApp().catch((error) => {
     console.error(error)
     showToast(error.message || "初始化失败", true)
@@ -54,10 +81,14 @@ function captureRefs() {
     "statusText",
     "heroTitle",
     "heroSubtitle",
+    "heroKpis",
     "heroMeta",
     "heroRecoveryScore",
     "heroRecoveryLabel",
     "heroRecoveryFootnote",
+    "quickNavGrid",
+    "healthDigestGrid",
+    "activeViewSummary",
     "coverageGrid",
     "statsGrid",
     "correlationCards",
@@ -106,12 +137,13 @@ function captureRefs() {
 function bindEvents() {
   refs.profileSelect?.addEventListener("change", async (event) => {
     state.selectedProfile = event.target.value || null
-    syncQuery({ profile: state.selectedProfile })
+    syncRoute({ profile: state.selectedProfile }, { mode: "push" })
     await loadDashboard()
     await loadProfileSummaries()
   })
 
   refs.rangeSelect?.addEventListener("change", () => {
+    syncRoute({ range: refs.rangeSelect.value || DEFAULT_RANGE }, { mode: "push" })
     renderDashboard()
   })
 
@@ -161,7 +193,7 @@ function bindEvents() {
     if (action === "open") {
       state.selectedProfile = profile
       refs.profileSelect.value = profile
-      syncQuery({ profile })
+      syncRoute({ profile }, { mode: "push" })
       closeModal("profileModal")
       loadDashboard().catch(handleAsyncError)
       loadProfileSummaries().catch(handleAsyncError)
@@ -180,7 +212,18 @@ function bindEvents() {
 
   document.querySelectorAll(".tab-button").forEach((button) => {
     button.addEventListener("click", () => {
-      activateView(button.dataset.view)
+      activateView(button.dataset.view, { historyMode: "push", scroll: true })
+    })
+    button.addEventListener("keydown", (event) => {
+      handleTabKeydown(event)
+    })
+  })
+
+  ;[refs.quickNavGrid, refs.healthDigestGrid, refs.statsGrid].forEach((container) => {
+    container?.addEventListener("click", (event) => {
+      const target = event.target.closest("[data-jump-view]")
+      if (!target) return
+      activateView(target.dataset.jumpView, { historyMode: "push", scroll: true })
     })
   })
 
@@ -191,6 +234,9 @@ function bindEvents() {
   })
 
   window.addEventListener("resize", queueVisibleChartResize)
+  window.addEventListener("popstate", () => {
+    applyRouteState().catch(handleAsyncError)
+  })
 }
 
 function hydrateVersion() {
@@ -328,7 +374,7 @@ function populateProfileSelect(preferredProfile) {
   }
 
   refs.profileSelect.disabled = false
-  const requested = preferredProfile || getQueryParam("profile") || state.selectedProfile || options[0].name
+  const requested = preferredProfile || getRouteState().profile || state.selectedProfile || options[0].name
   const nextProfile = options.find((item) => item.name === requested)?.name || options[0].name
 
   options.forEach((item) => {
@@ -340,17 +386,20 @@ function populateProfileSelect(preferredProfile) {
 
   state.selectedProfile = nextProfile
   refs.profileSelect.value = nextProfile
-  syncQuery({ profile: nextProfile })
+  syncRoute({ profile: nextProfile }, { mode: "replace" })
 }
 
 async function loadDashboard() {
   if (!state.selectedProfile) {
+    state.dashboard = null
+    state.viewModel = null
     renderEmptyState()
     return
   }
   setStatus("正在读取本地缓存")
   const payload = await apiRequest(`/api/dashboard/${encodeURIComponent(state.selectedProfile)}`)
   state.dashboard = payload
+  state.viewModel = normalizeDashboard(payload)
   renderDashboard()
   setStatus("本地缓存已载入")
 }
@@ -362,12 +411,15 @@ async function loadProfileSummaries() {
 }
 
 function renderDashboard() {
-  if (!state.dashboard || !state.selectedProfile) {
+  if (!state.dashboard || !state.selectedProfile || !state.viewModel) {
     renderEmptyState()
     return
   }
 
   renderHero()
+  renderQuickNav()
+  renderHealthDigest()
+  renderActiveViewSummary()
   renderCoverage()
   renderStats()
   scheduleActiveViewRender()
@@ -417,18 +469,25 @@ function scheduleActiveViewRender() {
   }
   scheduleActiveViewRender.frameId = window.requestAnimationFrame(() => {
     renderActiveView()
+    queueVisibleChartResize()
   })
 }
 
 function renderEmptyState() {
   refs.heroTitle.textContent = "先创建并授权一个 Fitbit 档案"
   refs.heroSubtitle.textContent = "页面已重构为统一单页。创建并授权档案后，会自动同步 Fitbit 核心数据、本地快照以及补充体征接口。"
+  if (refs.heroKpis) refs.heroKpis.innerHTML = ""
   refs.heroRecoveryScore.textContent = "--"
   refs.heroRecoveryLabel.textContent = "等待数据"
   refs.heroRecoveryFootnote.textContent = "完成授权并同步后，这里会显示恢复指数与快照状态。"
   refs.heroMeta.innerHTML = `<div class="empty-state">当前还没有可用档案。创建档案后，页面会从本地缓存读取睡眠、活动、恢复、体征、生活和账户数据。</div>`
+  if (refs.activeViewSummary) {
+    refs.activeViewSummary.innerHTML = `<div class="empty-state">选择档案后，这里会给出当前页面的重点说明、关键指标和最近范围。</div>`
+  }
 
   ;[
+    "quickNavGrid",
+    "healthDigestGrid",
     "coverageGrid",
     "statsGrid",
     "overviewHighlightGrid",
@@ -459,15 +518,22 @@ function renderEmptyState() {
 }
 
 function renderHero() {
-  const profile = state.dashboard.profile || {}
-  const overview = state.dashboard.overview || {}
-  const coverage = state.dashboard.coverage || {}
-  const snapshotStatus = state.dashboard.snapshot_status || {}
+  const { profile, overview, coverage, snapshotStatus, heroKpis } = state.viewModel
   const missingScopes = snapshotStatus.missing_scopes || []
 
   refs.heroTitle.textContent = `${profile.display_name || state.selectedProfile} 的 Fitbit 中文健康视图`
   refs.heroSubtitle.textContent =
-    `统一页面优先读取本地缓存。最近记录日期：${overview.latest_date || "暂无"}，总追踪天数：${overview.tracked_days || 0}。`
+    `统一页面优先读取本地缓存，并把 Fitbit 数据整理成更稳定的健康视图。最近记录日期：${overview.latest_date || "暂无"}，总追踪天数：${overview.tracked_days || 0}。`
+
+  refs.heroKpis.innerHTML = heroKpis
+    .map((item) => `
+      <div class="hero-kpi">
+        <span>${escapeHtml(item.label)}</span>
+        <strong>${escapeHtml(item.value)}</strong>
+        <small>${escapeHtml(item.detail)}</small>
+      </div>
+    `)
+    .join("")
 
   const meta = [
     ["档案", profile.id || state.selectedProfile],
@@ -491,27 +557,86 @@ function renderHero() {
   refs.lastSyncText.textContent = formatDateTime(snapshotStatus.saved_at || overview.latest_sync_at)
 }
 
-function renderCoverage() {
-  const coverage = state.dashboard.coverage || {}
-  const cards = [
-    { key: "activity", label: "活动数据", tone: "green" },
-    { key: "sleep", label: "睡眠数据", tone: "amber" },
-    { key: "hrv", label: "HRV 数据", tone: "blue" },
-    { key: "rhr", label: "静息心率", tone: "red" },
-    { key: "daily", label: "合并视图", tone: "teal" },
-    { key: "snapshot", label: "快照接口", tone: "blue" },
-  ]
+function renderQuickNav() {
+  refs.quickNavGrid.innerHTML = state.viewModel.quickNav
+    .map((item) => `
+      <button
+        class="nav-card ${item.view === state.activeView ? "active" : ""}"
+        type="button"
+        data-jump-view="${escapeHtml(item.view)}"
+        data-tone="${escapeHtml(item.tone || "blue")}"
+        aria-pressed="${item.view === state.activeView ? "true" : "false"}"
+      >
+        <div class="nav-card-top">
+          <span class="nav-card-kicker">${escapeHtml(item.kicker)}</span>
+          <span class="nav-card-state">${item.view === state.activeView ? "当前" : "进入"}</span>
+        </div>
+        <strong>${escapeHtml(item.label)}</strong>
+        <p>${escapeHtml(item.summary)}</p>
+      </button>
+    `)
+    .join("")
+}
 
-  refs.coverageGrid.innerHTML = cards
-    .map(({ key, label, tone }) => {
-      const item = coverage[key] || {}
+function renderHealthDigest() {
+  refs.healthDigestGrid.innerHTML = state.viewModel.healthPillars
+    .map((item) => `
+      <button
+        class="surface digest-card ${item.targetView === state.activeView ? "active" : ""}"
+        type="button"
+        data-jump-view="${escapeHtml(item.targetView)}"
+        data-tone="${escapeHtml(item.tone || "blue")}"
+        aria-pressed="${item.targetView === state.activeView ? "true" : "false"}"
+      >
+        <div class="digest-top">
+          <div>
+            <div class="section-kicker">${escapeHtml(item.kicker)}</div>
+            <h3>${escapeHtml(item.label)}</h3>
+          </div>
+          <span class="digest-badge">${escapeHtml(item.targetView === state.activeView ? "当前章节" : item.badge)}</span>
+        </div>
+        <div class="digest-value">${escapeHtml(item.value)}</div>
+        <div class="digest-meta">${escapeHtml(item.detail)}</div>
+      </button>
+    `)
+    .join("")
+}
+
+function renderActiveViewSummary() {
+  if (!refs.activeViewSummary || !state.viewModel) return
+  const summary = buildActiveViewSummary(state.activeView)
+  refs.activeViewSummary.innerHTML = `
+    <div class="view-summary-head">
+      <div>
+        <div class="section-kicker">${escapeHtml(summary.kicker)}</div>
+        <h3>${escapeHtml(summary.label)}</h3>
+        <p>${escapeHtml(summary.description)}</p>
+      </div>
+      <div class="view-summary-state" data-tone="${escapeHtml(summary.tone || "blue")}">
+        ${escapeHtml(summary.state)}
+      </div>
+    </div>
+    <div class="summary-rail">
+      ${summary.chips.map((item) => `
+        <article class="summary-chip">
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${escapeHtml(item.value)}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `
+}
+
+function renderCoverage() {
+  refs.coverageGrid.innerHTML = state.viewModel.coverageCards
+    .map(({ label, tone, count, startDate, endDate }) => {
       return `
         <article class="coverage-card" data-tone="${tone}">
           <div class="coverage-label">${escapeHtml(label)}</div>
-          <div class="coverage-value">${formatNumber(item.count || 0)}</div>
+          <div class="coverage-value">${formatNumber(count || 0)}</div>
           <div class="coverage-meta">
-            起始：${escapeHtml(item.start_date || "暂无")}<br>
-            截止：${escapeHtml(item.end_date || "暂无")}
+            起始：${escapeHtml(startDate || "暂无")}<br>
+            截止：${escapeHtml(endDate || "暂无")}
           </div>
         </article>
       `
@@ -520,21 +645,17 @@ function renderCoverage() {
 }
 
 function renderStats() {
-  const stats = Array.isArray(state.dashboard.stats) ? state.dashboard.stats : []
-  refs.statsGrid.innerHTML = stats
+  refs.statsGrid.innerHTML = state.viewModel.stats
     .map((card) => {
       const tone = card.tone || "blue"
       const trend = card.trend || {}
       const trendDirection = trend.direction || "flat"
-      const latest = formatMetricValue(card.key, card.latest, card.unit)
-      const avg7 = formatMetricValue(card.key, card.avg7, card.unit)
-      const avg30 = formatMetricValue(card.key, card.avg30, card.unit)
       return `
-        <article class="metric-card" data-tone="${escapeHtml(tone)}">
+        <button class="metric-card metric-card-button" type="button" data-tone="${escapeHtml(tone)}" data-jump-view="${escapeHtml(card.targetView || "overview")}">
           <div class="metric-topline">
             <div>
               <div class="metric-label">${escapeHtml(card.label || "--")}</div>
-              <div class="metric-value">${latest}</div>
+              <div class="metric-value">${escapeHtml(card.latestText)}</div>
             </div>
             <span class="metric-badge ${escapeHtml(trendDirection)}">${escapeHtml(trendText(card, trend))}</span>
           </div>
@@ -545,14 +666,14 @@ function renderStats() {
           <div class="metric-subline">
             <div>
               <span>近 7 天均值</span>
-              <strong>${avg7}</strong>
+              <strong>${escapeHtml(card.avg7Text)}</strong>
             </div>
             <div>
               <span>近 30 天均值</span>
-              <strong>${avg30}</strong>
+              <strong>${escapeHtml(card.avg30Text)}</strong>
             </div>
           </div>
-        </article>
+        </button>
       `
     })
     .join("")
@@ -581,14 +702,7 @@ function renderCorrelations() {
 }
 
 function renderOverviewHighlights() {
-  const sections = state.dashboard.sections || {}
-  const highlights = [
-    ...(sections.body?.metrics || []).slice(0, 2),
-    ...(sections.vitals?.metrics || []).slice(0, 2),
-    ...(sections.lifestyle?.metrics || []).slice(0, 1),
-    ...(sections.account?.metrics || []).slice(0, 1),
-  ]
-  renderDetailGrid(refs.overviewHighlightGrid, highlights)
+  renderDetailGrid(refs.overviewHighlightGrid, state.viewModel.highlights)
 }
 
 function renderOverviewCharts() {
@@ -948,8 +1062,8 @@ function renderLifestyleView() {
 }
 
 function renderAccountView() {
-  const snapshotStatus = state.dashboard.snapshot_status || {}
-  const files = state.dashboard.files || {}
+  const snapshotStatus = state.viewModel.snapshotStatus || {}
+  const files = state.viewModel.account.files || {}
   const accountSection = state.dashboard.sections?.account || {}
   const grantedScopes = snapshotStatus.scopes || []
   const missingScopes = snapshotStatus.missing_scopes || []
@@ -994,13 +1108,15 @@ function renderAccountView() {
     updated_at: (value) => formatDateTime(value),
   })
 
-  refs.fileList.innerHTML = Object.entries(files)
-    .map(([key, value]) => {
+  refs.fileList.innerHTML = state.viewModel.account.cacheLayers
+    .map((item) => {
+      const pathText = files[item.key]
+      const pathBlock = pathText ? `<code>${escapeHtml(pathText)}</code>` : ""
       return `
-        <div class="file-item">
-          <strong>${escapeHtml(prettyFileKey(key))}</strong>
-          <small>${escapeHtml(fileHint(key))}</small>
-          <code>${escapeHtml(value || "--")}</code>
+        <div class="file-item" data-tone="${escapeHtml(item.tone || "blue")}">
+          <strong>${escapeHtml(item.label)}</strong>
+          <small>${escapeHtml(item.detail)}</small>
+          ${pathBlock}
         </div>
       `
     })
@@ -1105,9 +1221,9 @@ function renderFamily() {
       if (!profile) return
       state.selectedProfile = profile
       refs.profileSelect.value = profile
-      syncQuery({ profile })
+      syncRoute({ profile }, { mode: "push" })
       await loadDashboard()
-      activateView("overview")
+      activateView("overview", { historyMode: "replace", scroll: true })
     })
   })
 }
@@ -1322,16 +1438,57 @@ function updateFetchStatus(payload) {
   setStatus(parts.join(" · "))
 }
 
-function activateView(viewName) {
-  state.activeView = viewName || "overview"
+function activateView(viewName, { updateHistory = true, historyMode = "replace", scroll = false } = {}) {
+  state.activeView = sanitizeView(viewName)
   document.querySelectorAll(".tab-button").forEach((button) => {
-    button.classList.toggle("active", button.dataset.view === state.activeView)
+    const isActive = button.dataset.view === state.activeView
+    button.classList.toggle("active", isActive)
+    button.setAttribute("aria-selected", isActive ? "true" : "false")
+    button.tabIndex = isActive ? 0 : -1
   })
   document.querySelectorAll("[data-view-panel]").forEach((panel) => {
     panel.classList.toggle("active", panel.dataset.viewPanel === state.activeView)
+    panel.setAttribute("aria-hidden", panel.dataset.viewPanel === state.activeView ? "false" : "true")
   })
-  syncQuery({ view: state.activeView })
+  if (state.viewModel) {
+    renderQuickNav()
+    renderHealthDigest()
+    renderActiveViewSummary()
+  }
+  if (updateHistory) {
+    syncRoute({ view: state.activeView }, { mode: historyMode })
+  }
   scheduleActiveViewRender()
+  if (scroll) {
+    window.requestAnimationFrame(() => {
+      ;(refs.activeViewSummary || document.querySelector(`[data-view-panel="${state.activeView}"]`))?.scrollIntoView({
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
+        block: "start",
+      })
+    })
+  }
+}
+
+function handleTabKeydown(event) {
+  const keys = ["ArrowLeft", "ArrowRight", "Home", "End"]
+  if (!keys.includes(event.key)) return
+
+  const buttons = Array.from(document.querySelectorAll(".tab-button"))
+  const currentIndex = buttons.indexOf(event.currentTarget)
+  if (currentIndex === -1 || !buttons.length) return
+
+  event.preventDefault()
+
+  let nextIndex = currentIndex
+  if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length
+  if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length
+  if (event.key === "Home") nextIndex = 0
+  if (event.key === "End") nextIndex = buttons.length - 1
+
+  const nextButton = buttons[nextIndex]
+  if (!nextButton) return
+  nextButton.focus()
+  activateView(nextButton.dataset.view, { historyMode: "push", scroll: false })
 }
 
 function openModal(id) {
@@ -1375,7 +1532,7 @@ function renderTable(container, columns, rows, formatters = {}) {
 
 function getDailySeries() {
   const source = Array.isArray(state.dashboard?.charts?.daily) ? state.dashboard.charts.daily : []
-  const windowSize = Number(refs.rangeSelect.value || 30)
+  const windowSize = Number(refs.rangeSelect.value || DEFAULT_RANGE)
   return source.slice(-windowSize)
 }
 
@@ -1394,6 +1551,8 @@ function upsertChart(canvasId, config) {
   }
 
   const hasData = chartHasData(config.data)
+  const pointCount = getChartPointCount(config.data)
+  const shouldAnimate = !prefersReducedMotion() && pointCount <= 60
   toggleChartEmptyState(canvas, hasData ? null : "data")
   if (!hasData) {
     clearCanvas(canvas)
@@ -1404,10 +1563,13 @@ function upsertChart(canvasId, config) {
     responsive: true,
     maintainAspectRatio: false,
     normalized: true,
-    animation: {
-      duration: 520,
-      easing: "easeOutCubic",
-    },
+    devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+    animation: shouldAnimate
+      ? {
+          duration: 420,
+          easing: "easeOutCubic",
+        }
+      : false,
     layout: {
       padding: { top: 6, right: 4, bottom: 0, left: 0 },
     },
@@ -1462,6 +1624,15 @@ function upsertChart(canvasId, config) {
           family: CHART_FONT_FAMILY,
         },
       },
+      decimation: config.type === "line" && pointCount > 48
+        ? {
+            enabled: true,
+            algorithm: "lttb",
+            samples: Math.min(48, pointCount),
+          }
+        : {
+            enabled: false,
+          },
       ...(config.options?.plugins || {}),
     },
     scales: {
@@ -1509,6 +1680,14 @@ function chartHasData(data) {
       return Number.isFinite(Number(point))
     })
   })
+}
+
+function getChartPointCount(data) {
+  const datasets = Array.isArray(data?.datasets) ? data.datasets : []
+  return datasets.reduce((max, dataset) => {
+    const count = Array.isArray(dataset?.data) ? dataset.data.length : 0
+    return Math.max(max, count)
+  }, 0)
 }
 
 function toggleChartEmptyState(canvas, reason) {
@@ -1570,6 +1749,369 @@ function stackedOptions(unitLabel) {
 function destroyAllCharts() {
   Object.values(charts).forEach((chart) => chart.destroy())
   Object.keys(charts).forEach((key) => delete charts[key])
+}
+
+async function applyRouteState() {
+  const route = getRouteState()
+  const nextView = sanitizeView(route.view)
+  const nextRange = sanitizeRange(route.range)
+
+  if (refs.rangeSelect && refs.rangeSelect.value !== nextRange) {
+    refs.rangeSelect.value = nextRange
+  }
+
+  if (
+    route.profile &&
+    route.profile !== state.selectedProfile &&
+    state.profiles.some((item) => item.name === route.profile)
+  ) {
+    state.selectedProfile = route.profile
+    if (refs.profileSelect) refs.profileSelect.value = route.profile
+    await loadDashboard()
+    await loadProfileSummaries()
+  }
+
+  activateView(nextView, { updateHistory: false, scroll: false })
+  if (state.dashboard) {
+    renderDashboard()
+  }
+}
+
+function normalizeDashboard(dashboard) {
+  const profile = dashboard?.profile || {}
+  const overview = dashboard?.overview || {}
+  const coverage = dashboard?.coverage || {}
+  const snapshotStatus = dashboard?.snapshot_status || {}
+  const sections = dashboard?.sections || {}
+  const stats = Array.isArray(dashboard?.stats) ? dashboard.stats : []
+  const statsByKey = Object.fromEntries(stats.map((card) => [card.key, card]))
+  const bodyMetrics = sections.body?.metrics || []
+  const vitalsMetrics = sections.vitals?.metrics || []
+  const lifestyleMetrics = sections.lifestyle?.metrics || []
+  const accountMetrics = sections.account?.metrics || []
+  const selectedRange = sanitizeRange(refs.rangeSelect?.value)
+  const trackedDays = Number(overview.tracked_days || coverage.daily?.count || 0)
+
+  const normalizedStats = stats.map((card) => ({
+    ...card,
+    targetView: METRIC_VIEW_MAP[card.key] || "overview",
+    latestText: formatMetricValue(card.key, card.latest, card.unit),
+    avg7Text: formatMetricValue(card.key, card.avg7, card.unit),
+    avg30Text: formatMetricValue(card.key, card.avg30, card.unit),
+  }))
+
+  const heroKpis = [
+    {
+      label: "当前范围",
+      value: `最近 ${selectedRange} 天`,
+      detail: "图表和趋势会随范围切换同步刷新",
+    },
+    {
+      label: "睡眠得分",
+      value: formatMetricValue("sleep_score", statsByKey.sleep_score?.latest, statsByKey.sleep_score?.unit),
+      detail: `近 7 天均值 ${formatMetricValue("sleep_score", statsByKey.sleep_score?.avg7, statsByKey.sleep_score?.unit)}`,
+    },
+    {
+      label: "活动",
+      value: formatMetricValue("steps", statsByKey.steps?.latest, statsByKey.steps?.unit),
+      detail: `活跃分钟 ${formatMetricValue("active_minutes", statsByKey.active_minutes?.latest, statsByKey.active_minutes?.unit)}`,
+    },
+    {
+      label: "覆盖",
+      value: `${trackedDays} 天`,
+      detail: `快照 ${overview.snapshot_ok_count || 0}/${overview.snapshot_total_count || 0}`,
+    },
+  ]
+
+  const coverageCards = [
+    { key: "activity", label: "活动数据", tone: "green" },
+    { key: "sleep", label: "睡眠数据", tone: "amber" },
+    { key: "hrv", label: "HRV 数据", tone: "blue" },
+    { key: "rhr", label: "静息心率", tone: "red" },
+    { key: "daily", label: "合并视图", tone: "teal" },
+    { key: "snapshot", label: "快照接口", tone: "blue" },
+  ].map((item) => ({
+    ...item,
+    count: coverage[item.key]?.count || 0,
+    startDate: coverage[item.key]?.start_date || null,
+    endDate: coverage[item.key]?.end_date || null,
+  }))
+
+  const highlights = [
+    ...(bodyMetrics || []).slice(0, 2),
+    ...(vitalsMetrics || []).slice(0, 2),
+    ...(lifestyleMetrics || []).slice(0, 1),
+    ...(accountMetrics || []).slice(0, 1),
+  ]
+
+  const healthPillars = [
+    {
+      kicker: "Sleep",
+      label: "睡眠",
+      badge: "质量",
+      value: formatMetricValue("sleep_score", statsByKey.sleep_score?.latest, statsByKey.sleep_score?.unit),
+      detail: `时长 ${formatMetricValue("sleep_hours", statsByKey.sleep_hours?.latest, statsByKey.sleep_hours?.unit)} · 目标 ${goalText(statsByKey.sleep_hours || {})}`,
+      targetView: "sleep",
+      tone: "blue",
+    },
+    {
+      kicker: "Activity",
+      label: "活动",
+      badge: "运动量",
+      value: formatMetricValue("steps", statsByKey.steps?.latest, statsByKey.steps?.unit),
+      detail: `活跃 ${formatMetricValue("active_minutes", statsByKey.active_minutes?.latest, statsByKey.active_minutes?.unit)} · 燃脂区 ${formatMetricValue("active_zone_minutes", statsByKey.active_zone_minutes?.latest, statsByKey.active_zone_minutes?.unit)}`,
+      targetView: "activity",
+      tone: "green",
+    },
+    {
+      kicker: "Recovery",
+      label: "恢复",
+      badge: "核心",
+      value: formatMetricValue("hrv", statsByKey.hrv?.latest, statsByKey.hrv?.unit),
+      detail: `静息心率 ${formatMetricValue("rhr", statsByKey.rhr?.latest, statsByKey.rhr?.unit)} · ${overview.recovery_label || "等待恢复判断"}`,
+      targetView: "recovery",
+      tone: "teal",
+    },
+    {
+      kicker: "Coverage",
+      label: "缓存",
+      badge: "完整度",
+      value: `${overview.snapshot_ok_count || 0}/${overview.snapshot_total_count || 0}`,
+      detail: `缺失 scope ${snapshotStatus.missing_scopes?.length || 0} 项 · 追踪 ${trackedDays} 天`,
+      targetView: "account",
+      tone: "amber",
+    },
+  ]
+
+  const quickNav = VIEW_ORDER.map((view) => {
+    const meta = VIEW_META[view]
+    return {
+      view,
+      label: meta.label,
+      kicker: meta.kicker,
+      tone: meta.tone,
+      summary: buildViewSummary(view, { overview, snapshotStatus, statsByKey, bodyMetrics, lifestyleMetrics }),
+    }
+  })
+
+  const cacheLayers = buildCacheLayers()
+  const files = state.admin.authenticated ? dashboard?.files || {} : {}
+
+  return {
+    profile,
+    overview,
+    coverage,
+    snapshotStatus,
+    stats: normalizedStats,
+    statsByKey,
+    heroKpis,
+    coverageCards,
+    healthPillars,
+    quickNav,
+    highlights,
+    account: {
+      files,
+      cacheLayers,
+    },
+  }
+}
+
+function buildViewSummary(view, context) {
+  const { overview, snapshotStatus, statsByKey, bodyMetrics, lifestyleMetrics } = context
+  if (view === "overview") {
+    return `恢复 ${overview.recovery_score ?? "--"} · 重点信号和综合趋势`
+  }
+  if (view === "sleep") {
+    return `${formatMetricValue("sleep_score", statsByKey.sleep_score?.latest, statsByKey.sleep_score?.unit)} · ${formatMetricValue("sleep_hours", statsByKey.sleep_hours?.latest, statsByKey.sleep_hours?.unit)}`
+  }
+  if (view === "activity") {
+    return `${formatMetricValue("steps", statsByKey.steps?.latest, statsByKey.steps?.unit)} · ${formatMetricValue("active_minutes", statsByKey.active_minutes?.latest, statsByKey.active_minutes?.unit)}`
+  }
+  if (view === "recovery") {
+    return `${formatMetricValue("hrv", statsByKey.hrv?.latest, statsByKey.hrv?.unit)} · ${formatMetricValue("rhr", statsByKey.rhr?.latest, statsByKey.rhr?.unit)}`
+  }
+  if (view === "body") {
+    const first = bodyMetrics[0]
+    const second = bodyMetrics[1]
+    return `${first?.label || "体征摘要"} ${formatDetailValue(first?.value)}${first?.unit || ""} · ${second?.label || "BMI"}`
+  }
+  if (view === "lifestyle") {
+    const intake = lifestyleMetrics.find((item) => item.label === "今日摄入")
+    const water = lifestyleMetrics.find((item) => item.label === "今日饮水")
+    return `${intake?.label || "饮食"} ${formatDetailValue(intake?.value)}${intake?.unit || ""} · ${water?.label || "饮水"} ${formatDetailValue(water?.value)}${water?.unit || ""}`
+  }
+  if (view === "account") {
+    return `设备 ${context.overview.device_count || 0} 台 · 缺失 scope ${snapshotStatus.missing_scopes?.length || 0} 项`
+  }
+  if (view === "family") {
+    return `档案 ${state.profileSummaries.length || state.profiles.length || 0} 个 · 统一切换和对比`
+  }
+  return VIEW_META[view]?.summary || ""
+}
+
+function buildActiveViewSummary(view) {
+  const meta = VIEW_META[view] || VIEW_META.overview
+  const { overview, snapshotStatus, statsByKey } = state.viewModel
+  const rangeText = `最近 ${sanitizeRange(refs.rangeSelect?.value)} 天`
+  const latestSync = formatDateTime(snapshotStatus.saved_at || overview.latest_sync_at)
+  const foodsCount = Array.isArray(state.dashboard?.tables?.foods) ? state.dashboard.tables.foods.length : 0
+  const devicesCount = Array.isArray(state.dashboard?.tables?.devices) ? state.dashboard.tables.devices.length : 0
+  const bodyMetrics = state.dashboard?.sections?.body?.metrics || []
+  const vitalsMetrics = state.dashboard?.sections?.vitals?.metrics || []
+  const lifestyleMetrics = state.dashboard?.sections?.lifestyle?.metrics || []
+  const activeProfile = state.viewModel.profile?.display_name || state.selectedProfile || "当前档案"
+
+  const summary = {
+    kicker: meta.kicker,
+    label: meta.label,
+    tone: meta.tone,
+    state: `${activeProfile} · ${rangeText}`,
+    description: meta.summary,
+    chips: [
+      { label: "档案", value: activeProfile },
+      { label: "范围", value: rangeText },
+      { label: "最近同步", value: latestSync },
+    ],
+  }
+
+  if (view === "overview") {
+    summary.description = "先看整体趋势、信号判断和补充快照，再决定深入哪一页。"
+    summary.chips = [
+      { label: "恢复指数", value: overview.recovery_score ?? "--" },
+      { label: "最近记录", value: overview.latest_date || "暂无" },
+      { label: "快照完成", value: `${overview.snapshot_ok_count || 0}/${overview.snapshot_total_count || 0}` },
+    ]
+    return summary
+  }
+
+  if (view === "sleep") {
+    summary.description = "睡眠页优先看得分、时长和阶段结构，判断恢复底盘是否稳定。"
+    summary.chips = [
+      { label: "睡眠得分", value: formatMetricValue("sleep_score", statsByKey.sleep_score?.latest, statsByKey.sleep_score?.unit) },
+      { label: "睡眠时长", value: formatMetricValue("sleep_hours", statsByKey.sleep_hours?.latest, statsByKey.sleep_hours?.unit) },
+      { label: "睡眠目标", value: goalText(statsByKey.sleep_hours || {}) },
+    ]
+    return summary
+  }
+
+  if (view === "activity") {
+    summary.description = "活动页把步数、活跃分钟、燃脂区分钟和热量放到同一个判断框架里。"
+    summary.chips = [
+      { label: "步数", value: formatMetricValue("steps", statsByKey.steps?.latest, statsByKey.steps?.unit) },
+      { label: "活跃分钟", value: formatMetricValue("active_minutes", statsByKey.active_minutes?.latest, statsByKey.active_minutes?.unit) },
+      { label: "热量", value: formatMetricValue("calories_out", statsByKey.calories_out?.latest, statsByKey.calories_out?.unit) },
+    ]
+    return summary
+  }
+
+  if (view === "recovery") {
+    summary.description = "恢复页主看 HRV 和静息心率，再结合睡眠得分判断近期波动是否异常。"
+    summary.chips = [
+      { label: "HRV", value: formatMetricValue("hrv", statsByKey.hrv?.latest, statsByKey.hrv?.unit) },
+      { label: "静息心率", value: formatMetricValue("rhr", statsByKey.rhr?.latest, statsByKey.rhr?.unit) },
+      { label: "当前判断", value: overview.recovery_label || "等待恢复判断" },
+    ]
+    return summary
+  }
+
+  if (view === "body") {
+    summary.description = "体征页把体重目标、BMI、体脂和 vitals 数据合并成一个更整洁的身体状态视图。"
+    summary.chips = [
+      { label: bodyMetrics[0]?.label || "体重", value: `${formatDetailValue(bodyMetrics[0]?.value)}${bodyMetrics[0]?.unit ? ` ${bodyMetrics[0].unit}` : ""}`.trim() },
+      { label: bodyMetrics[1]?.label || "BMI", value: `${formatDetailValue(bodyMetrics[1]?.value)}${bodyMetrics[1]?.unit ? ` ${bodyMetrics[1].unit}` : ""}`.trim() },
+      { label: "补充体征", value: vitalsMetrics.length ? `${vitalsMetrics.length} 项` : "暂无" },
+    ]
+    return summary
+  }
+
+  if (view === "lifestyle") {
+    summary.description = "生活页集中展示饮食和饮水，不让 nutrition 数据散在账户或表格深处。"
+    summary.chips = [
+      { label: lifestyleMetrics[0]?.label || "今日摄入", value: `${formatDetailValue(lifestyleMetrics[0]?.value)}${lifestyleMetrics[0]?.unit ? ` ${lifestyleMetrics[0].unit}` : ""}`.trim() },
+      { label: lifestyleMetrics[1]?.label || "饮水目标", value: `${formatDetailValue(lifestyleMetrics[1]?.value)}${lifestyleMetrics[1]?.unit ? ` ${lifestyleMetrics[1].unit}` : ""}`.trim() },
+      { label: "近期食物", value: foodsCount ? `${foodsCount} 条` : "暂无" },
+    ]
+    return summary
+  }
+
+  if (view === "account") {
+    summary.description = "账户页聚合设备、权限和缓存状态，公开态看结构，管理员态再看具体路径。"
+    summary.chips = [
+      { label: "设备", value: devicesCount ? `${devicesCount} 台` : "暂无" },
+      { label: "缺失 Scope", value: `${snapshotStatus.missing_scopes?.length || 0} 项` },
+      { label: "缓存层", value: `${state.viewModel.account.cacheLayers.length} 层` },
+    ]
+    return summary
+  }
+
+  if (view === "family") {
+    summary.description = "多档案页只保留一个横向对比入口，切换档案不再依赖旧式 spousal 页面。"
+    summary.chips = [
+      { label: "档案数", value: `${state.profileSummaries.length || state.profiles.length || 0} 个` },
+      { label: "当前档案", value: activeProfile },
+      { label: "最近同步", value: latestSync },
+    ]
+    return summary
+  }
+
+  return summary
+}
+
+function buildCacheLayers() {
+  const layers = [
+    { key: "dashboard_cache", label: "统一 dashboard 缓存", detail: "页面主入口，聚合 overview / stats / charts / tables。", tone: "blue" },
+    { key: "profile_snapshot", label: "Fitbit 快照缓存", detail: "补充 profile、goals、vitals、devices 和 nutrition 元数据。", tone: "teal" },
+    { key: "activity_csv", label: "活动历史缓存", detail: "原始活动序列，支撑活动页和趋势图。", tone: "green" },
+    { key: "sleep_csv", label: "睡眠历史缓存", detail: "原始睡眠记录，支撑睡眠页和恢复估算。", tone: "amber" },
+    { key: "hrv_csv", label: "HRV 历史缓存", detail: "恢复趋势与散点相关性分析来源。", tone: "blue" },
+    { key: "rhr_csv", label: "静息心率缓存", detail: "恢复视图的第二核心指标。", tone: "red" },
+  ]
+  if (state.admin.authenticated) {
+    layers.push(
+      { key: "tokens", label: "授权 token 文件", detail: "仅管理员可见，用于 Fitbit OAuth 刷新。", tone: "red" },
+      { key: "client", label: "Client 凭据文件", detail: "仅管理员可见，用于管理档案授权。", tone: "red" },
+    )
+  }
+  return layers
+}
+
+function getRouteState() {
+  const params = new URLSearchParams(window.location.search)
+  return {
+    profile: params.get("profile"),
+    view: params.get("view"),
+    range: params.get("range"),
+  }
+}
+
+function syncRoute(values, { mode = "replace" } = {}) {
+  const params = new URLSearchParams(window.location.search)
+  Object.entries(values).forEach(([key, value]) => {
+    if (value == null || value === "") {
+      params.delete(key)
+    } else {
+      params.set(key, value)
+    }
+  })
+  const next = `${window.location.pathname}?${params.toString()}`
+  const url = next.endsWith("?") ? window.location.pathname : next
+  if (mode === "push") {
+    window.history.pushState({}, "", url)
+    return
+  }
+  window.history.replaceState({}, "", url)
+}
+
+function sanitizeView(viewName) {
+  return VIEW_ORDER.includes(viewName) ? viewName : "overview"
+}
+
+function sanitizeRange(value) {
+  return VALID_RANGES.has(String(value || "")) ? String(value) : DEFAULT_RANGE
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false
 }
 
 async function apiRequest(path, options = {}) {
@@ -1642,19 +2184,33 @@ function trendText(card, trend) {
   if (!trend || trend.delta == null) return "趋势待定"
   if (trend.direction === "flat") return "基本持平"
   const sign = trend.delta > 0 ? "+" : ""
-  const delta = formatNumber(trend.delta, 1)
+  const delta = formatNumber(trend.delta, metricValueDigits(card.key))
   const percent = trend.percent == null ? "" : ` (${sign}${formatNumber(trend.percent, 1)}%)`
-  return `${sign}${delta}${card.unit || ""}${percent}`
+  return `${sign}${delta}${metricUnitSuffix(card.key, card.unit)}${percent}`
 }
 
 function formatMetricValue(key, value, unit) {
   if (value == null) return "--"
-  if (key === "sleep_hours") return `${formatNumber(value, 1)} 小时`
-  if (key === "sleep_score") return `${formatNumber(value, 1)} 分`
-  if (key === "hrv") return `${formatNumber(value, 1)} ms`
-  if (key === "rhr") return `${formatNumber(value)} bpm`
-  if (key === "calories_out") return `${formatNumber(value)} kcal`
-  return `${formatNumber(value)} ${unit || ""}`.trim()
+  return `${formatNumber(value, metricValueDigits(key))}${metricUnitSuffix(key, unit)}`
+}
+
+function metricValueDigits(key) {
+  return ["sleep_hours", "sleep_score", "hrv"].includes(key) ? 1 : 0
+}
+
+function metricUnitSuffix(key, unit) {
+  const map = {
+    sleep_hours: " 小时",
+    sleep_score: " 分",
+    hrv: " ms",
+    rhr: " bpm",
+    calories_out: " kcal",
+    steps: " 步",
+    active_minutes: " 分钟",
+    active_zone_minutes: " 分钟",
+  }
+  if (map[key]) return map[key]
+  return unit ? ` ${unit}` : ""
 }
 
 function formatDetailValue(value) {
@@ -1768,22 +2324,4 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;")
-}
-
-function getQueryParam(name) {
-  const params = new URLSearchParams(window.location.search)
-  return params.get(name)
-}
-
-function syncQuery(values) {
-  const params = new URLSearchParams(window.location.search)
-  Object.entries(values).forEach(([key, value]) => {
-    if (value == null || value === "") {
-      params.delete(key)
-    } else {
-      params.set(key, value)
-    }
-  })
-  const next = `${window.location.pathname}?${params.toString()}`
-  window.history.replaceState({}, "", next.endsWith("?") ? window.location.pathname : next)
 }

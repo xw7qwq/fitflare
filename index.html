@@ -10,11 +10,12 @@
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
-  <script src="version.js?v=20260326-5"></script>
+  <script src="version.js?v=20260326-8"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="style.css?v=20260326-5">
+  <link rel="stylesheet" href="style.css?v=20260326-8">
 </head>
 <body>
+  <a class="skip-link" href="#mainContent">跳到主内容</a>
   <div class="page-glow page-glow-one"></div>
   <div class="page-glow page-glow-two"></div>
 
@@ -74,12 +75,13 @@
       </div>
     </section>
 
-    <main class="dashboard-layout">
+    <main class="dashboard-layout" id="mainContent">
       <section class="surface hero-panel">
         <div class="hero-copy">
           <div class="eyebrow">Unified Dashboard</div>
           <h2 id="heroTitle">准备载入 Fitbit 数据</h2>
           <p id="heroSubtitle" class="hero-subtitle">页面会优先读取本地缓存，如果缓存不存在就按档案自动重建。</p>
+          <div class="hero-kpis" id="heroKpis"></div>
           <div class="hero-meta" id="heroMeta"></div>
         </div>
 
@@ -91,24 +93,39 @@
         </div>
       </section>
 
+      <section class="surface nav-panel">
+        <div class="section-head compact">
+          <div>
+            <div class="section-kicker">Navigation</div>
+            <h3>健康导航</h3>
+          </div>
+          <p>按主题切页，保留稳定 URL、范围和档案状态，浏览器前进后退也会跟着同步。</p>
+        </div>
+        <div class="quick-nav-grid" id="quickNavGrid"></div>
+      </section>
+
+      <section class="signal-grid" id="healthDigestGrid"></section>
+
       <section class="coverage-grid" id="coverageGrid"></section>
 
       <section class="stats-grid" id="statsGrid"></section>
 
       <section class="surface tab-strip">
         <div class="tab-buttons" role="tablist" aria-label="仪表盘视图">
-          <button class="tab-button active" data-view="overview" type="button">总览</button>
-          <button class="tab-button" data-view="sleep" type="button">睡眠</button>
-          <button class="tab-button" data-view="activity" type="button">活动</button>
-          <button class="tab-button" data-view="recovery" type="button">恢复</button>
-          <button class="tab-button" data-view="body" type="button">体征</button>
-          <button class="tab-button" data-view="lifestyle" type="button">生活</button>
-          <button class="tab-button" data-view="account" type="button">账户</button>
-          <button class="tab-button" data-view="family" type="button">家庭</button>
+          <button class="tab-button active" id="tab-overview" role="tab" aria-selected="true" aria-controls="panel-overview" tabindex="0" data-view="overview" type="button">总览</button>
+          <button class="tab-button" id="tab-sleep" role="tab" aria-selected="false" aria-controls="panel-sleep" tabindex="-1" data-view="sleep" type="button">睡眠</button>
+          <button class="tab-button" id="tab-activity" role="tab" aria-selected="false" aria-controls="panel-activity" tabindex="-1" data-view="activity" type="button">活动</button>
+          <button class="tab-button" id="tab-recovery" role="tab" aria-selected="false" aria-controls="panel-recovery" tabindex="-1" data-view="recovery" type="button">恢复</button>
+          <button class="tab-button" id="tab-body" role="tab" aria-selected="false" aria-controls="panel-body" tabindex="-1" data-view="body" type="button">体征</button>
+          <button class="tab-button" id="tab-lifestyle" role="tab" aria-selected="false" aria-controls="panel-lifestyle" tabindex="-1" data-view="lifestyle" type="button">生活</button>
+          <button class="tab-button" id="tab-account" role="tab" aria-selected="false" aria-controls="panel-account" tabindex="-1" data-view="account" type="button">账户</button>
+          <button class="tab-button" id="tab-family" role="tab" aria-selected="false" aria-controls="panel-family" tabindex="-1" data-view="family" type="button">家庭</button>
         </div>
       </section>
 
-      <section class="view-panel active" data-view-panel="overview">
+      <section class="surface view-summary-card" id="activeViewSummary" aria-live="polite"></section>
+
+      <section class="view-panel active" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="-1" data-view-panel="overview">
         <div class="panel-grid panel-grid-two">
           <article class="surface chart-card">
             <div class="section-head">
@@ -160,7 +177,7 @@
         </article>
       </section>
 
-      <section class="view-panel" data-view-panel="sleep">
+      <section class="view-panel" id="panel-sleep" role="tabpanel" aria-labelledby="tab-sleep" tabindex="-1" data-view-panel="sleep">
         <div class="panel-grid panel-grid-two">
           <article class="surface chart-card">
             <div class="section-head">
@@ -201,7 +218,7 @@
         </article>
       </section>
 
-      <section class="view-panel" data-view-panel="activity">
+      <section class="view-panel" id="panel-activity" role="tabpanel" aria-labelledby="tab-activity" tabindex="-1" data-view-panel="activity">
         <div class="panel-grid panel-grid-two">
           <article class="surface chart-card">
             <div class="section-head">
@@ -242,7 +259,7 @@
         </article>
       </section>
 
-      <section class="view-panel" data-view-panel="recovery">
+      <section class="view-panel" id="panel-recovery" role="tabpanel" aria-labelledby="tab-recovery" tabindex="-1" data-view-panel="recovery">
         <div class="panel-grid panel-grid-two">
           <article class="surface chart-card">
             <div class="section-head">
@@ -283,7 +300,7 @@
         </article>
       </section>
 
-      <section class="view-panel" data-view-panel="body">
+      <section class="view-panel" id="panel-body" role="tabpanel" aria-labelledby="tab-body" tabindex="-1" data-view-panel="body">
         <div class="panel-grid panel-grid-two">
           <article class="surface narrative-card">
             <div class="section-head">
@@ -333,7 +350,7 @@
         </div>
       </section>
 
-      <section class="view-panel" data-view-panel="lifestyle">
+      <section class="view-panel" id="panel-lifestyle" role="tabpanel" aria-labelledby="tab-lifestyle" tabindex="-1" data-view-panel="lifestyle">
         <div class="panel-grid panel-grid-two">
           <article class="surface narrative-card">
             <div class="section-head">
@@ -359,7 +376,7 @@
         </div>
       </section>
 
-      <section class="view-panel" data-view-panel="account">
+      <section class="view-panel" id="panel-account" role="tabpanel" aria-labelledby="tab-account" tabindex="-1" data-view-panel="account">
         <div class="panel-grid panel-grid-two">
           <article class="surface narrative-card">
             <div class="section-head">
@@ -436,15 +453,15 @@
           <div class="section-head">
             <div>
               <div class="section-kicker">Cache</div>
-              <h3>本地缓存文件</h3>
+              <h3>本地缓存结构</h3>
             </div>
-            <p>页面不再直接拼 CSV，而是优先读这些本地缓存与统一 dashboard.json。</p>
+            <p>页面统一消费标准化缓存层。公开访客只看结构摘要，管理员模式会额外显示具体文件路径。</p>
           </div>
           <div class="file-list" id="fileList"></div>
         </article>
       </section>
 
-      <section class="view-panel" data-view-panel="family">
+      <section class="view-panel" id="panel-family" role="tabpanel" aria-labelledby="tab-family" tabindex="-1" data-view-panel="family">
         <article class="surface family-card">
           <div class="section-head">
             <div>
@@ -575,6 +592,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20260326-5"></script>
+  <script src="app.js?v=20260326-8"></script>
 </body>
 </html>
