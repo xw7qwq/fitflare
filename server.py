@@ -359,9 +359,14 @@ def _public_profile_links(base_url: str, profile_id: str) -> dict[str, str]:
 
 def _public_api_docs_html(base_url: str) -> str:
     sample_profile = next(iter(list_profile_ids()), "YOUR_PROFILE")
+    api_root = f"{base_url}{PUBLIC_API_BASE_PATH}"
     sample_root = f"{base_url}{PUBLIC_API_BASE_PATH}/profiles/{sample_profile}"
     docs_md = f"{base_url}{PUBLIC_API_BASE_PATH}/docs.md"
     openapi_json = f"{base_url}{PUBLIC_API_BASE_PATH}/openapi.json"
+    profiles_url = f"{api_root}/profiles"
+    sample_dashboard = f"{sample_root}/dashboard"
+    sample_series = f"{sample_root}/series/daily?metrics=sleep_score,steps,hrv&limit=30"
+    sample_chart = f"{sample_root}/charts/series.svg?granularity=daily&metrics=sleep_score,hrv,rhr&limit=30"
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -370,40 +375,60 @@ def _public_api_docs_html(base_url: str) -> str:
   <title>FitBaus Public API</title>
   <style>
     :root {{
-      --bg: #f6f9fe;
-      --surface: rgba(255, 255, 255, 0.92);
+      --bg: #f7faff;
+      --surface: rgba(255, 255, 255, 0.94);
+      --surface-soft: rgba(248, 251, 255, 0.9);
       --text: #16253d;
       --muted: #66748c;
       --blue: #1a73e8;
-      --border: rgba(26, 115, 232, 0.12);
+      --green: #188038;
+      --amber: #f9ab00;
+      --border: rgba(26, 115, 232, 0.11);
+      --border-strong: rgba(26, 115, 232, 0.18);
       --shadow: 0 18px 46px rgba(31, 53, 96, 0.12);
-      --radius: 24px;
+      --shadow-soft: 0 12px 28px rgba(31, 53, 96, 0.08);
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
     }}
     * {{ box-sizing: border-box; }}
+    html {{ scroll-behavior: smooth; }}
     body {{
       margin: 0;
       font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
       color: var(--text);
       background:
-        radial-gradient(circle at 10% 10%, rgba(26, 115, 232, 0.08), transparent 28%),
-        linear-gradient(180deg, #f7faff 0%, #eef4fb 100%);
+        radial-gradient(circle at 12% 12%, rgba(26, 115, 232, 0.09), transparent 24%),
+        radial-gradient(circle at 88% 8%, rgba(249, 171, 0, 0.12), transparent 22%),
+        linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
     }}
+    a {{ color: inherit; }}
     .shell {{
-      max-width: 1120px;
+      max-width: 1240px;
       margin: 0 auto;
-      padding: 32px 20px 56px;
+      padding: 28px 20px 64px;
     }}
-    .hero, .card {{
+    .hero,
+    .card,
+    .section-card,
+    .toc,
+    .metric-pill {{
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
+      border-radius: var(--radius-xl);
       box-shadow: var(--shadow);
       backdrop-filter: blur(14px);
     }}
     .hero {{
       padding: 30px;
       display: grid;
-      gap: 16px;
+      grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.9fr);
+      gap: 20px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 255, 0.93)),
+        radial-gradient(circle at top right, rgba(26, 115, 232, 0.08), transparent 30%);
     }}
     .eyebrow {{
       color: var(--blue);
@@ -412,43 +437,127 @@ def _public_api_docs_html(base_url: str) -> str:
       letter-spacing: 0.12em;
       text-transform: uppercase;
     }}
-    h1, h2, p, pre {{ margin: 0; }}
+    h1, h2, h3, p, pre {{ margin: 0; }}
+    h1 {{
+      font-size: clamp(34px, 5vw, 56px);
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+    }}
+    h2 {{
+      font-size: 26px;
+      letter-spacing: -0.03em;
+    }}
+    h3 {{
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }}
     .subtitle {{
       color: var(--muted);
       max-width: 70ch;
       line-height: 1.7;
+      margin-top: 12px;
     }}
     .actions {{
       display: flex;
       flex-wrap: wrap;
       gap: 12px;
+      margin-top: 20px;
     }}
     .button {{
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      gap: 8px;
       border-radius: 999px;
       padding: 12px 18px;
       font-weight: 700;
       text-decoration: none;
       color: white;
       background: linear-gradient(135deg, #1a73e8, #4d8ff0);
+      box-shadow: 0 10px 24px rgba(26, 115, 232, 0.2);
     }}
     .button.alt {{
       color: var(--text);
       background: white;
       border: 1px solid var(--border);
+      box-shadow: none;
     }}
-    .grid {{
+    .hero-pills,
+    .metric-grid,
+    .feature-grid,
+    .link-grid,
+    .endpoint-grid,
+    .example-grid,
+    .toc-grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 18px;
+      gap: 14px;
+    }}
+    .hero-pills {{
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       margin-top: 18px;
     }}
-    .card {{
+    .metric-grid {{
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }}
+    .feature-grid {{
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }}
+    .link-grid,
+    .example-grid {{
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }}
+    .endpoint-grid {{
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }}
+    .toc-grid {{
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }}
+    .card,
+    .section-card {{
       padding: 24px;
       display: grid;
       gap: 12px;
+    }}
+    .card {{
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-soft);
+    }}
+    .hero-copy {{
+      display: grid;
+      gap: 6px;
+    }}
+    .hero-aside {{
+      border-radius: calc(var(--radius-xl) - 4px);
+      padding: 24px;
+      background:
+        linear-gradient(160deg, #1a73e8, #0f9d58);
+      color: white;
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }}
+    .hero-aside .eyebrow,
+    .hero-aside .muted {{
+      color: rgba(255, 255, 255, 0.78);
+    }}
+    .hero-aside .value {{
+      font-size: clamp(38px, 5vw, 56px);
+      line-height: 0.96;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }}
+    .hero-aside .metric-pill {{
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow: none;
+      border-radius: var(--radius-md);
+      padding: 16px;
+    }}
+    .hero-aside .metric-pill strong {{
+      display: block;
+      margin-top: 6px;
+      font-size: 20px;
+      line-height: 1.3;
     }}
     .label {{
       font-size: 12px;
@@ -456,12 +565,24 @@ def _public_api_docs_html(base_url: str) -> str:
       text-transform: uppercase;
       letter-spacing: 0.08em;
     }}
-    code, pre {{
+    .path-box,
+    code,
+    pre {{
       font-family: ui-monospace, "SFMono-Regular", "Cascadia Code", "Liberation Mono", monospace;
       background: rgba(26, 115, 232, 0.05);
       border-radius: 16px;
     }}
     code {{ padding: 3px 7px; }}
+    .path-box {{
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      max-width: 100%;
+      padding: 10px 14px;
+      margin-top: 18px;
+      color: #22314f;
+      word-break: break-all;
+    }}
     pre {{
       padding: 16px;
       overflow: auto;
@@ -475,63 +596,455 @@ def _public_api_docs_html(base_url: str) -> str:
       color: var(--muted);
       line-height: 1.7;
     }}
+    .toc {{
+      margin-top: 18px;
+      padding: 18px;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-soft);
+    }}
+    .toc a {{
+      display: block;
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      background: var(--surface-soft);
+      border: 1px solid rgba(26, 115, 232, 0.08);
+      text-decoration: none;
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    }}
+    .toc a:hover {{
+      transform: translateY(-1px);
+      border-color: var(--border-strong);
+      box-shadow: var(--shadow-soft);
+    }}
+    .toc a strong {{
+      display: block;
+      font-size: 16px;
+      margin-top: 6px;
+    }}
+    .stack {{
+      display: grid;
+      gap: 18px;
+      margin-top: 18px;
+    }}
+    .section-card {{
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 255, 0.93));
+    }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }}
+    .section-head p {{
+      max-width: 50ch;
+      color: var(--muted);
+      line-height: 1.7;
+    }}
+    .feature-card,
+    .endpoint-card {{
+      padding: 20px;
+      border-radius: var(--radius-lg);
+      background: var(--surface-soft);
+      border: 1px solid rgba(26, 115, 232, 0.08);
+      box-shadow: var(--shadow-soft);
+    }}
+    .feature-card p,
+    .endpoint-card p,
+    .hint,
+    .muted {{
+      color: var(--muted);
+      line-height: 1.7;
+    }}
+    .status-row {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }}
+    .status-chip {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(26, 115, 232, 0.08);
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 700;
+    }}
+    .status-chip.safe {{
+      background: rgba(24, 128, 56, 0.1);
+      color: var(--green);
+    }}
+    .status-chip.light {{
+      background: rgba(249, 171, 0, 0.12);
+      color: #9b6600;
+    }}
+    .endpoint-list {{
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 12px;
+    }}
+    .endpoint-list li {{
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      background: white;
+      border: 1px solid rgba(26, 115, 232, 0.08);
+    }}
+    .endpoint-list code {{
+      display: inline-block;
+      margin-bottom: 6px;
+      padding: 0;
+      background: transparent;
+      color: #21304d;
+      font-size: 13px;
+    }}
+    .endpoint-list span {{
+      display: block;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }}
+    .param-list {{
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 10px;
+    }}
+    .param-list li {{
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      background: white;
+      border: 1px solid rgba(26, 115, 232, 0.08);
+      color: var(--muted);
+      line-height: 1.65;
+    }}
+    .param-list strong {{
+      color: var(--text);
+    }}
+    .footer-note {{
+      margin-top: 18px;
+      padding: 18px 20px;
+      border-radius: var(--radius-lg);
+      background: rgba(26, 115, 232, 0.05);
+      border: 1px solid rgba(26, 115, 232, 0.09);
+      color: var(--muted);
+      line-height: 1.7;
+    }}
+    .footer-note strong {{
+      color: var(--text);
+    }}
+    .section-anchor {{
+      scroll-margin-top: 18px;
+    }}
+    @media (max-width: 1080px) {{
+      .hero,
+      .feature-grid,
+      .toc-grid,
+      .link-grid,
+      .endpoint-grid,
+      .example-grid {{
+        grid-template-columns: 1fr;
+      }}
+      .hero-pills,
+      .metric-grid {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }}
+      .section-head {{
+        flex-direction: column;
+      }}
+    }}
+    @media (max-width: 720px) {{
+      .shell {{
+        padding: 18px 14px 36px;
+      }}
+      .hero,
+      .card,
+      .section-card,
+      .toc {{
+        border-radius: 24px;
+      }}
+      .hero,
+      .section-card {{
+        padding: 22px;
+      }}
+      .hero-pills,
+      .metric-grid {{
+        grid-template-columns: 1fr;
+      }}
+      .actions {{
+        flex-direction: column;
+      }}
+      .button {{
+        width: 100%;
+      }}
+    }}
   </style>
 </head>
 <body>
   <div class="shell">
     <section class="hero">
-      <div class="eyebrow">FitBaus Public API</div>
-      <h1>公开只读健康数据 API</h1>
-      <p class="subtitle">面向其他项目复用 Fitbit 本地缓存数据。接口按版本化路径输出，支持按数据集读取、按时间序列读取，以及直接返回轻量 SVG 趋势图。</p>
-      <div class="actions">
-        <a class="button" href="{openapi_json}">OpenAPI JSON</a>
-        <a class="button alt" href="{docs_md}">Markdown 文档</a>
+      <div class="hero-copy">
+        <div class="eyebrow">FitBaus Public API</div>
+        <h1>公开只读健康数据 API</h1>
+        <p class="subtitle">面向其他项目复用 Fitbit 本地缓存数据。接口按版本路径输出，分成完整缓存数据集、轻量趋势序列、公开仪表盘摘要和可直接嵌入的 SVG 图表，不开放创建、授权、删除等管理操作。</p>
+        <div class="path-box">{api_root}</div>
+        <div class="hero-pills">
+          <article class="card">
+            <div class="label">版本</div>
+            <h3>当前公开版本</h3>
+            <p class="muted">路径固定在 <code>{PUBLIC_API_BASE_PATH}</code>，方便其他项目稳定集成。</p>
+          </article>
+          <article class="card">
+            <div class="label">示例档案</div>
+            <h3>{sample_profile}</h3>
+            <p class="muted">所有示例链接都基于当前可公开访问的首个档案生成。</p>
+          </article>
+          <article class="card">
+            <div class="label">输出类型</div>
+            <h3>JSON + SVG</h3>
+            <p class="muted">既可以拿结构化数据，也可以直接嵌入趋势图资源。</p>
+          </article>
+        </div>
+        <div class="actions">
+          <a class="button" href="{openapi_json}">OpenAPI JSON</a>
+          <a class="button alt" href="{docs_md}">Markdown 文档</a>
+        </div>
       </div>
+
+      <aside class="hero-aside">
+        <div class="eyebrow">Quick Snapshot</div>
+        <div class="value">6 类</div>
+        <p class="muted">覆盖仪表盘、完整 datasets、趋势序列、sections、tables、snapshot 和 SVG 图表接口。</p>
+        <div class="metric-grid">
+          <div class="metric-pill">
+            <div class="label">读取模式</div>
+            <strong>公开只读</strong>
+          </div>
+          <div class="metric-pill">
+            <div class="label">适合场景</div>
+            <strong>服务集成 / 图表复用</strong>
+          </div>
+          <div class="metric-pill">
+            <div class="label">默认入口</div>
+            <strong>/profiles / dashboard</strong>
+          </div>
+          <div class="metric-pill">
+            <div class="label">图表格式</div>
+            <strong>image/svg+xml</strong>
+          </div>
+        </div>
+      </aside>
     </section>
 
-    <div class="grid">
-      <section class="card">
-        <div class="label">入口</div>
-        <h2>推荐从这里开始</h2>
-        <ul>
-          <li><code>{PUBLIC_API_BASE_PATH}</code> 返回 API 索引</li>
-          <li><code>{PUBLIC_API_BASE_PATH}/profiles</code> 返回公开档案列表</li>
-          <li><code>{sample_root}/dashboard</code> 返回完整公开仪表盘数据</li>
-        </ul>
+    <nav class="toc">
+      <div class="label">导航</div>
+      <div class="toc-grid">
+        <a href="#quickstart">
+          <span class="label">Start</span>
+          <strong>快速开始</strong>
+        </a>
+        <a href="#resources">
+          <span class="label">Resources</span>
+          <strong>资源分层</strong>
+        </a>
+        <a href="#endpoints">
+          <span class="label">Endpoints</span>
+          <strong>端点分组</strong>
+        </a>
+        <a href="#examples">
+          <span class="label">Examples</span>
+          <strong>调用示例</strong>
+        </a>
+      </div>
+    </nav>
+
+    <div class="stack">
+      <section class="section-card section-anchor" id="quickstart">
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">Quick Start</div>
+            <h2>推荐从这里开始</h2>
+          </div>
+          <p>如果你是第一次接入，先拿公开档案列表，再读某个档案的 dashboard 或 series。这样能最快确认你的项目需要走“完整数据集”还是“轻量趋势图”。</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <div class="label">Step 1</div>
+            <h3>列出公开档案</h3>
+            <p>先拿所有可公开读取的 profile，再决定用哪个档案做集成。</p>
+            <pre>GET {profiles_url}</pre>
+          </article>
+          <article class="feature-card">
+            <div class="label">Step 2</div>
+            <h3>读取完整仪表盘</h3>
+            <p>需要直接复用现成健康页面结构时，优先使用 dashboard。</p>
+            <pre>GET {sample_dashboard}</pre>
+          </article>
+          <article class="feature-card">
+            <div class="label">Step 3</div>
+            <h3>切到轻量趋势接口</h3>
+            <p>前端图表或其他服务只需要少量时间序列时，改用 series 或 SVG。</p>
+            <pre>GET {sample_series}</pre>
+          </article>
+        </div>
       </section>
 
-      <section class="card">
-        <div class="label">数据层</div>
-        <h2>两类读取方式</h2>
-        <ul>
-          <li><code>/datasets/&lt;dataset&gt;</code> 取完整缓存数据，适合服务间集成</li>
-          <li><code>/series/&lt;granularity&gt;</code> 取轻量趋势序列，适合图表</li>
-          <li><code>/snapshot</code> 取 Fitbit 快照缓存，已去掉敏感 token 元数据</li>
-        </ul>
+      <section class="section-card section-anchor" id="resources">
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">Resource Layers</div>
+            <h2>资源分层</h2>
+          </div>
+          <p>接口按“完整缓存、轻量趋势、摘要卡片、表格、快照、图表”分层。这样其他项目可以按体积和场景选择，不需要反复解析整个 dashboard。</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <div class="label">Dashboard</div>
+            <h3>完整公开仪表盘</h3>
+            <p>适合复用 FitBaus 中文健康页的数据结构，包含 overview、coverage、stats、charts、tables。</p>
+          </article>
+          <article class="feature-card">
+            <div class="label">Datasets / Series</div>
+            <h3>缓存与趋势双模式</h3>
+            <p><code>/datasets</code> 取结构化缓存，<code>/series</code> 取轻量时间序列，两者职责明确。</p>
+          </article>
+          <article class="feature-card">
+            <div class="label">Snapshot / SVG</div>
+            <h3>快照和图形资源</h3>
+            <p><code>/snapshot</code> 用来复用 Fitbit 元数据，<code>/charts/*.svg</code> 适合直接嵌入页面或报告。</p>
+          </article>
+        </div>
+        <div class="status-row">
+          <span class="status-chip safe">只读公开接口</span>
+          <span class="status-chip">JSON 统一版本化路径</span>
+          <span class="status-chip light">快照已净化，不含 token 元数据</span>
+        </div>
       </section>
 
-      <section class="card">
-        <div class="label">图表层</div>
-        <h2>直接取 SVG</h2>
-        <pre>GET {sample_root}/charts/overview-trend.svg
-GET {sample_root}/charts/weekly-trend.svg
-GET {sample_root}/charts/series.svg?granularity=daily&amp;metrics=sleep_score,hrv,rhr&amp;limit=30</pre>
-      </section>
-    </div>
+      <section class="section-card section-anchor" id="endpoints">
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">Endpoint Groups</div>
+            <h2>端点分组</h2>
+          </div>
+          <p>布局按最常用的调用路径重新整理，不再只靠几块示例卡片展示。每组给出主入口和用途，方便你快速定位到正确层级。</p>
+        </div>
+        <div class="endpoint-grid">
+          <article class="endpoint-card">
+            <div class="label">Profiles & Dashboard</div>
+            <h3>档案与公开仪表盘</h3>
+            <ul class="endpoint-list">
+              <li><code>GET {api_root}</code><span>返回 API 索引和公开文档链接。</span></li>
+              <li><code>GET {profiles_url}</code><span>返回公开档案列表和快捷链接。</span></li>
+              <li><code>GET {sample_root}</code><span>返回单个公开档案的概要信息、覆盖范围和可调用链接。</span></li>
+              <li><code>GET {sample_dashboard}</code><span>返回完整公开 dashboard 数据，适合页面复用。</span></li>
+            </ul>
+          </article>
 
-    <div class="grid">
-      <section class="card">
-        <div class="label">示例</div>
-        <h2>JSON 趋势数据</h2>
-        <pre>curl "{sample_root}/series/daily?metrics=sleep_score,steps,hrv&amp;limit=30"</pre>
+          <article class="endpoint-card">
+            <div class="label">Datasets</div>
+            <h3>完整缓存数据集</h3>
+            <ul class="endpoint-list">
+              <li><code>GET {sample_root}/datasets</code><span>列出所有可用 dataset。</span></li>
+              <li><code>GET {sample_root}/datasets/activity?limit=120</code><span>读取活动历史缓存。</span></li>
+              <li><code>GET {sample_root}/datasets/sleep?limit=120</code><span>读取睡眠历史缓存。</span></li>
+              <li><code>GET {sample_root}/datasets/daily?limit=90</code><span>读取服务端聚合后的日趋势数据。</span></li>
+            </ul>
+          </article>
+
+          <article class="endpoint-card">
+            <div class="label">Series & Sections</div>
+            <h3>轻量趋势与摘要结构</h3>
+            <ul class="endpoint-list">
+              <li><code>GET {sample_root}/series/daily?metrics=sleep_score,steps,hrv&amp;limit=30</code><span>返回轻量级日趋势序列。</span></li>
+              <li><code>GET {sample_root}/sections</code><span>返回 body、vitals、lifestyle、account 摘要卡片。</span></li>
+              <li><code>GET {sample_root}/tables</code><span>返回 sleep、activity、devices 等表格结构。</span></li>
+              <li><code>GET {sample_root}/metrics</code><span>返回页面指标卡和趋势信息。</span></li>
+            </ul>
+          </article>
+
+          <article class="endpoint-card">
+            <div class="label">Snapshot & Charts</div>
+            <h3>快照缓存与 SVG 图表</h3>
+            <ul class="endpoint-list">
+              <li><code>GET {sample_root}/snapshot</code><span>返回净化后的 Fitbit 快照缓存。</span></li>
+              <li><code>GET {sample_root}/snapshot/endpoints/profile</code><span>读取某个 Fitbit 快照端点。</span></li>
+              <li><code>GET {sample_root}/charts/overview-trend.svg</code><span>直接返回预置趋势图 SVG。</span></li>
+              <li><code>GET {sample_chart}</code><span>按粒度和指标自定义轻量 SVG 走势。</span></li>
+            </ul>
+          </article>
+        </div>
       </section>
 
-      <section class="card">
-        <div class="label">示例</div>
-        <h2>完整缓存数据集</h2>
-        <pre>curl "{sample_root}/datasets/activity?limit=120"
-curl "{sample_root}/datasets/sleep?limit=120"
+      <section class="section-card">
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">Parameters</div>
+            <h2>常用参数</h2>
+          </div>
+          <p>趋势、数据集和 SVG 图都支持轻量参数控制。这里单独列出来，避免你在文档正文里来回找。</p>
+        </div>
+        <div class="link-grid">
+          <article class="endpoint-card">
+            <div class="label">Series / Datasets</div>
+            <ul class="param-list">
+              <li><strong>limit</strong>：取最后 N 条记录，适合前端图表按窗口加载。</li>
+              <li><strong>offset</strong>：分页读取完整 dataset 或 tables。</li>
+              <li><strong>metrics</strong>：逗号分隔的指标列表，只返回需要的时间序列列。</li>
+              <li><strong>granularity</strong>：支持 <code>daily</code>、<code>weekly</code>、<code>monthly</code>。</li>
+            </ul>
+          </article>
+          <article class="endpoint-card">
+            <div class="label">SVG Charts</div>
+            <ul class="param-list">
+              <li><strong>width / height</strong>：控制 SVG 尺寸，适合嵌入不同容器。</li>
+              <li><strong>theme</strong>：支持 <code>light</code> 与 <code>transparent</code>。</li>
+              <li><strong>metrics</strong>：多指标会单独归一化，用来比较趋势形状而不是绝对值。</li>
+              <li><strong>limit</strong>：建议前端图表默认取 14 / 30 / 90 等固定窗口。</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-card section-anchor" id="examples">
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">Examples</div>
+            <h2>调用示例</h2>
+          </div>
+          <p>给其他前端项目或服务端脚本接入时，最常用的通常就是这几类：公开档案、完整 dashboard、轻量 series、完整 dataset 和 SVG 图表。</p>
+        </div>
+        <div class="example-grid">
+          <article class="endpoint-card">
+            <div class="label">Profiles / Dashboard</div>
+            <pre>curl "{profiles_url}"
+
+curl "{sample_dashboard}"</pre>
+          </article>
+          <article class="endpoint-card">
+            <div class="label">Series / Datasets / Snapshot</div>
+            <pre>curl "{sample_series}"
+
+curl "{sample_root}/datasets/activity?limit=120"
 curl "{sample_root}/snapshot/endpoints/profile"</pre>
+          </article>
+          <article class="endpoint-card">
+            <div class="label">SVG Charts</div>
+            <pre>curl "{sample_root}/charts/overview-trend.svg"
+
+curl "{sample_chart}"</pre>
+          </article>
+          <article class="endpoint-card">
+            <div class="label">Docs</div>
+            <pre>GET {openapi_json}
+GET {docs_md}</pre>
+          </article>
+        </div>
+        <div class="footer-note"><strong>说明：</strong>如果你的目标是“尽快把数据接到别的项目里”，优先从 <code>/profiles</code> → <code>/dashboard</code> 或 <code>/series</code> 开始；如果你需要完全可控的数据结构，再切到 <code>/datasets</code> 和 <code>/tables</code>。</div>
       </section>
     </div>
   </div>
