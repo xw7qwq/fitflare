@@ -12,6 +12,9 @@ const state = {
 
 const charts = {}
 const refs = {}
+const CHART_EMPTY_TEXT = "当前范围没有可绘制的图表数据"
+const CHART_LIBRARY_ERROR_TEXT = "图表组件未加载，当前网络可能屏蔽了外部图表库。"
+const CHART_FONT_FAMILY = '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif'
 
 document.addEventListener("DOMContentLoaded", () => {
   captureRefs()
@@ -1238,14 +1241,20 @@ function getDailySeries() {
 
 function upsertChart(canvasId, config) {
   const canvas = document.getElementById(canvasId)
-  if (!canvas || typeof Chart === "undefined") return
+  if (!canvas) return
   if (charts[canvasId]) {
     charts[canvasId].destroy()
     delete charts[canvasId]
   }
 
+  if (typeof Chart === "undefined") {
+    toggleChartEmptyState(canvas, "library")
+    clearCanvas(canvas)
+    return
+  }
+
   const hasData = chartHasData(config.data)
-  toggleChartEmptyState(canvas, !hasData)
+  toggleChartEmptyState(canvas, hasData ? null : "data")
   if (!hasData) {
     clearCanvas(canvas)
     return
@@ -1291,7 +1300,7 @@ function upsertChart(canvasId, config) {
           padding: 16,
           color: "#4f5d75",
           font: {
-            family: "Noto Sans SC",
+            family: CHART_FONT_FAMILY,
             size: 12,
             weight: "600",
           },
@@ -1306,11 +1315,11 @@ function upsertChart(canvasId, config) {
         titleColor: "#f8fbff",
         bodyColor: "#e8eef8",
         titleFont: {
-          family: "Noto Sans SC",
+          family: CHART_FONT_FAMILY,
           weight: "700",
         },
         bodyFont: {
-          family: "Noto Sans SC",
+          family: CHART_FONT_FAMILY,
         },
       },
       ...(config.options?.plugins || {}),
@@ -1334,7 +1343,7 @@ function upsertChart(canvasId, config) {
             title: {
               color: "#66748c",
               font: {
-                family: "Noto Sans SC",
+                family: CHART_FONT_FAMILY,
                 size: 12,
                 weight: "600",
               },
@@ -1362,18 +1371,18 @@ function chartHasData(data) {
   })
 }
 
-function toggleChartEmptyState(canvas, isEmpty) {
+function toggleChartEmptyState(canvas, reason) {
   const card = canvas.closest(".chart-card")
   if (!card) return
   let overlay = card.querySelector(".chart-empty")
   if (!overlay) {
     overlay = document.createElement("div")
     overlay.className = "chart-empty hidden"
-    overlay.textContent = "当前范围没有可绘制的图表数据"
     card.appendChild(overlay)
   }
-  overlay.classList.toggle("hidden", !isEmpty)
-  canvas.classList.toggle("chart-hidden", isEmpty)
+  overlay.textContent = reason === "library" ? CHART_LIBRARY_ERROR_TEXT : CHART_EMPTY_TEXT
+  overlay.classList.toggle("hidden", !reason)
+  canvas.classList.toggle("chart-hidden", Boolean(reason))
 }
 
 function clearCanvas(canvas) {

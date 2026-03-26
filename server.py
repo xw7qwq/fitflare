@@ -20,6 +20,28 @@ from common.fitbit_scopes import FITBIT_DASHBOARD_SCOPE_TEXT
 app = Flask(__name__)
 CORS(app)  # Enable CORS for API endpoints
 
+NO_STORE_PATHS = {
+    '/',
+    '/index.html',
+    '/app.js',
+    '/style.css',
+    '/version.js',
+    '/mobile.html',
+    '/spousal.html',
+    '/script.js',
+    '/ui-cn.js',
+}
+
+
+@app.after_request
+def apply_cache_headers(response):
+    """Keep HTML/CSS/JS fresh so deploys do not mix new markup with stale assets."""
+    if request.path in NO_STORE_PATHS:
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
+
 # Global state for tracking fetch operations
 class FetchJobsDict(dict):
     def __init__(self):
