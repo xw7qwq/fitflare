@@ -44,3 +44,23 @@ limit_request_field_size = 8190
 raw_env = [
     "PYTHONIOENCODING=utf-8",
 ]
+
+
+def when_ready(server):
+    try:
+        from server import start_auto_sync_scheduler
+
+        start_auto_sync_scheduler()
+        server.log.info("FitBaus auto-sync scheduler started")
+    except Exception:
+        server.log.exception("Failed to start FitBaus auto-sync scheduler")
+
+
+def on_exit(server):
+    try:
+        from server import stop_auto_sync_scheduler
+
+        stop_auto_sync_scheduler()
+        server.log.info("FitBaus auto-sync scheduler stopped")
+    except Exception:
+        server.log.exception("Failed to stop FitBaus auto-sync scheduler cleanly")

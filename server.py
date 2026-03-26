@@ -10,15 +10,42 @@ import subprocess
 import threading
 import json
 import time
+import fcntl
 from datetime import datetime, date
 from flask import Flask, send_from_directory, send_file, request, jsonify
 from flask_cors import CORS
 
 from common.dashboard_cache import build_dashboard_cache, build_profile_cards, load_dashboard_cache
 from common.fitbit_scopes import FITBIT_DASHBOARD_SCOPE_TEXT
+from common.profile_paths import list_profiles as list_profile_ids
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for API endpoints
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _env_int(name: str, default: int, minimum: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return max(minimum, int(raw))
+    except Exception:
+        return default
+
+
+AUTO_SYNC_ENABLED = _env_flag("FITBAUS_AUTO_SYNC_ENABLED", True)
+AUTO_SYNC_INTERVAL_SECONDS = _env_int("FITBAUS_AUTO_SYNC_INTERVAL_SECONDS", 6 * 60 * 60, 60)
+AUTO_SYNC_SCAN_INTERVAL_SECONDS = _env_int("FITBAUS_AUTO_SYNC_SCAN_INTERVAL_SECONDS", 5 * 60, 30)
+AUTO_SYNC_STARTUP_DELAY_SECONDS = _env_int("FITBAUS_AUTO_SYNC_STARTUP_DELAY_SECONDS", 45, 0)
+auto_sync_thread = None
+auto_sync_stop_event = threading.Event()
 
 NO_STORE_PATHS = {
     '/',
@@ -114,8 +141,347 @@ def _parse_date(s: str) -> date | None:
         return None
 
 
+def _now_iso() -> str:
+    return datetime.now().isoformat()
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        normalized = value.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(normalized)
+        if parsed.tzinfo is not None:
+            return parsed.astimezone().replace(tzinfo=None)
+        return parsed
+    except Exception:
+        return None
+
+
+def _auto_sync_log(message: str, level: str = "INFO"):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    print(f"[{timestamp}] [AUTO-SYNC] [{level}] {message}")
+
+
+def _profile_cache_dir(profile_id: str) -> str:
+    return os.path.join("profiles", profile_id, "cache")
+
+
+def _ensure_profile_cache_dir(profile_id: str):
+    os.makedirs(_profile_cache_dir(profile_id), exist_ok=True)
+
+
+def _profile_fetch_lock_path(profile_id: str) -> str:
+    return os.path.join(_profile_cache_dir(profile_id), ".fetch.lock")
+
+
+def _auto_sync_state_path(profile_id: str) -> str:
+    return os.path.join(_profile_cache_dir(profile_id), "auto_sync_state.json")
+
+
+def _dashboard_cache_path(profile_id: str) -> str:
+    return os.path.join(_profile_cache_dir(profile_id), "dashboard.json")
+
+
+def _load_json_file(path: str) -> dict:
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_json_file(path: str, payload: dict):
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(directory, exist_ok=True)
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, path)
+
+
+def _load_auto_sync_state(profile_id: str) -> dict:
+    return _load_json_file(_auto_sync_state_path(profile_id))
+
+
+def _save_auto_sync_state(profile_id: str, **updates):
+    state = _load_auto_sync_state(profile_id)
+    state.update(updates)
+    state["profile"] = profile_id
+    state["updated_at"] = _now_iso()
+    _write_json_file(_auto_sync_state_path(profile_id), state)
+
+
+def _dashboard_generated_at(profile_id: str) -> datetime | None:
+    payload = _load_json_file(_dashboard_cache_path(profile_id))
+    generated_at = payload.get("generated_at")
+    parsed = _parse_iso_datetime(generated_at if isinstance(generated_at, str) else None)
+    if parsed:
+        return parsed
+    try:
+        cache_path = _dashboard_cache_path(profile_id)
+        if os.path.exists(cache_path):
+            return datetime.fromtimestamp(os.path.getmtime(cache_path))
+    except Exception:
+        return None
+    return None
+
+
+def _last_auto_sync_reference(profile_id: str) -> datetime | None:
+    state = _load_auto_sync_state(profile_id)
+    candidates = [
+        _parse_iso_datetime(state.get("last_attempt_at") if isinstance(state.get("last_attempt_at"), str) else None),
+        _dashboard_generated_at(profile_id),
+    ]
+    valid = [candidate for candidate in candidates if candidate is not None]
+    return max(valid) if valid else None
+
+
+def _profile_has_refresh_token(profile_id: str) -> bool:
+    tokens_path = os.path.join("profiles", profile_id, "auth", "tokens.json")
+    payload = _load_json_file(tokens_path)
+    return bool(payload.get("refresh_token"))
+
+
+def _discover_syncable_profiles() -> list[str]:
+    return [profile_id for profile_id in list_profile_ids() if _profile_has_refresh_token(profile_id)]
+
+
+def _profile_due_for_auto_sync(profile_id: str, now_dt: datetime | None = None) -> bool:
+    now_dt = now_dt or datetime.now()
+    reference = _last_auto_sync_reference(profile_id)
+    if reference is None:
+        return True
+    return (now_dt - reference).total_seconds() >= AUTO_SYNC_INTERVAL_SECONDS
+
+
+def _prepare_fetch_env(profile_id: str) -> dict:
+    env = os.environ.copy()
+    env["FITBIT_PROFILE"] = profile_id
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUNBUFFERED"] = "1"
+    return env
+
+
+def _acquire_profile_fetch_lock(profile_id: str, owner: str):
+    _ensure_profile_cache_dir(profile_id)
+    lock_path = _profile_fetch_lock_path(profile_id)
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(fd)
+        return None
+
+    payload = {
+        "profile": profile_id,
+        "owner": owner,
+        "pid": os.getpid(),
+        "acquired_at": _now_iso(),
+    }
+    os.ftruncate(fd, 0)
+    os.write(fd, json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+    os.fsync(fd)
+    return fd
+
+
+def _release_profile_fetch_lock(lock_fd):
+    if lock_fd is None:
+        return
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+    except Exception:
+        pass
+    try:
+        os.close(lock_fd)
+    except Exception:
+        pass
+
+
+def _refresh_profile_tokens(profile_id: str, log_prefix: str) -> tuple[bool, str | None]:
+    tokens_file = os.path.join("profiles", profile_id, "auth", "tokens.json")
+    print(f"[{log_prefix}] Checking tokens file: {tokens_file}")
+    if not os.path.exists(tokens_file):
+        return False, f'Profile {profile_id} not found. Go to Profile Management -> New Profile'
+
+    try:
+        with open(tokens_file, "r", encoding="utf-8") as handle:
+            tokens = json.load(handle)
+    except Exception as exc:
+        return False, f"Error checking tokens: {exc}"
+
+    if not tokens or "refresh_token" not in tokens or not tokens.get("refresh_token"):
+        return False, f'Profile {profile_id} needs authorization. Go to Profile Management -> Existing Profiles -> Auth'
+
+    refresh_result = subprocess.run(
+        ["python", "auth/refresh_token.py"],
+        cwd=os.getcwd(),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=_prepare_fetch_env(profile_id),
+        timeout=30,
+    )
+    print(f"[{log_prefix}] Token refresh completed. Return code: {refresh_result.returncode}")
+
+    if refresh_result.returncode == 0:
+        if refresh_result.stdout:
+            print(f"[{log_prefix}] {refresh_result.stdout.strip()}")
+        return True, None
+
+    error_msg = (refresh_result.stderr or refresh_result.stdout or "Token refresh failed").strip()
+    if "[fitbit] Error:" in error_msg:
+        error_msg = error_msg.split("[fitbit] Error:")[-1].strip()
+    if "Token file not found:" in error_msg:
+        error_msg = "Token file not found"
+    if "Refresh token is invalid or expired" in error_msg:
+        error_msg = "Refresh token is invalid or expired"
+    return False, f"Token refresh failed: {error_msg}. Go to Profile Management -> Existing Profiles -> Auth"
+
+
+def _run_auto_sync_for_profile(profile_id: str):
+    lock_fd = _acquire_profile_fetch_lock(profile_id, "auto-sync")
+    if lock_fd is None:
+        _auto_sync_log(f"Skip {profile_id}: another sync is already running", "WARN")
+        return
+
+    started_at = _now_iso()
+    _save_auto_sync_state(
+        profile_id,
+        last_attempt_at=started_at,
+        last_status="running",
+        last_error=None,
+        last_trigger="auto",
+    )
+    try:
+        _auto_sync_log(f"Starting scheduled sync for {profile_id}")
+        ok, error_message = _refresh_profile_tokens(profile_id, f"AUTO-{profile_id}")
+        if not ok:
+            _save_auto_sync_state(
+                profile_id,
+                last_status="failed",
+                last_finished_at=_now_iso(),
+                last_error=error_message,
+            )
+            _auto_sync_log(f"{profile_id} token refresh failed: {error_message}", "ERROR")
+            return
+
+        proc = subprocess.Popen(
+            ["python", "fetch/fetch_all.py", "--profile", profile_id],
+            cwd=os.getcwd(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=0,
+            universal_newlines=True,
+            encoding="utf-8",
+            errors="replace",
+            env=_prepare_fetch_env(profile_id),
+        )
+        output_lines = []
+        assert proc.stdout is not None
+        for raw_line in proc.stdout:
+            line = raw_line.rstrip("\n")
+            output_lines.append(line)
+            print(f"[AUTO-{profile_id}] {line}")
+
+        return_code = proc.wait()
+        finished_at = _now_iso()
+        if return_code == 0:
+            _save_auto_sync_state(
+                profile_id,
+                last_status="completed",
+                last_finished_at=finished_at,
+                last_success_at=finished_at,
+                last_error=None,
+            )
+            _auto_sync_log(f"Completed scheduled sync for {profile_id}")
+            return
+
+        error_preview = "\n".join(output_lines[-20:]).strip() or f"fetch_all.py exited with code {return_code}"
+        _save_auto_sync_state(
+            profile_id,
+            last_status="failed",
+            last_finished_at=finished_at,
+            last_error=error_preview,
+        )
+        _auto_sync_log(f"Scheduled sync failed for {profile_id} with code {return_code}", "ERROR")
+    except Exception as exc:
+        _save_auto_sync_state(
+            profile_id,
+            last_status="error",
+            last_finished_at=_now_iso(),
+            last_error=str(exc),
+        )
+        _auto_sync_log(f"Scheduled sync crashed for {profile_id}: {exc}", "ERROR")
+    finally:
+        _release_profile_fetch_lock(lock_fd)
+
+
+def run_auto_sync_cycle():
+    if not AUTO_SYNC_ENABLED:
+        return
+
+    profiles = _discover_syncable_profiles()
+    if not profiles:
+        _auto_sync_log("No authorized profiles available for automatic sync")
+        return
+
+    now_dt = datetime.now()
+    for profile_id in profiles:
+        if auto_sync_stop_event.is_set():
+            return
+        if not _profile_due_for_auto_sync(profile_id, now_dt):
+            continue
+        _run_auto_sync_for_profile(profile_id)
+
+
+def _auto_sync_loop():
+    if AUTO_SYNC_STARTUP_DELAY_SECONDS > 0:
+        if auto_sync_stop_event.wait(AUTO_SYNC_STARTUP_DELAY_SECONDS):
+            return
+
+    while not auto_sync_stop_event.is_set():
+        run_auto_sync_cycle()
+        if auto_sync_stop_event.wait(AUTO_SYNC_SCAN_INTERVAL_SECONDS):
+            return
+
+
+def start_auto_sync_scheduler():
+    global auto_sync_thread
+    if not AUTO_SYNC_ENABLED:
+        _auto_sync_log("Automatic sync disabled by FITBAUS_AUTO_SYNC_ENABLED", "WARN")
+        return
+    if auto_sync_thread and auto_sync_thread.is_alive():
+        _auto_sync_log("Automatic sync scheduler already running")
+        return
+
+    auto_sync_stop_event.clear()
+    auto_sync_thread = threading.Thread(
+        target=_auto_sync_loop,
+        name="fitbaus-auto-sync",
+        daemon=True,
+    )
+    auto_sync_thread.start()
+    _auto_sync_log(
+        f"Automatic sync scheduler started: every {AUTO_SYNC_INTERVAL_SECONDS // 3600}h, scan every {AUTO_SYNC_SCAN_INTERVAL_SECONDS}s"
+    )
+
+
+def stop_auto_sync_scheduler():
+    auto_sync_stop_event.set()
+    if auto_sync_thread and auto_sync_thread.is_alive():
+        auto_sync_thread.join(timeout=5)
+    _auto_sync_log("Automatic sync scheduler stopped")
+
+
 def run_fetch_script(profile_id, job_id):
     """Run fetch_all.py script in background thread with live status updates"""
+    lock_fd = None
     try:
         print(f"[DEBUG] Thread started for job {job_id}")
         print(f"[DEBUG] Current fetch_jobs keys at thread start: {list(fetch_jobs.keys())}")
@@ -123,6 +489,13 @@ def run_fetch_script(profile_id, job_id):
         # Check if job exists at thread start
         if job_id not in fetch_jobs:
             print(f"[DEBUG] ERROR: Job {job_id} not found at thread start!")
+            return
+
+        lock_fd = _acquire_profile_fetch_lock(profile_id, f"manual-job-{job_id}")
+        if lock_fd is None:
+            fetch_jobs[job_id]['status'] = 'failed'
+            fetch_jobs[job_id]['end_time'] = _now_iso()
+            fetch_jobs[job_id]['error'] = '当前档案已有同步任务在运行。'
             return
         
         _log_fetch(job_id, f"Starting fetch operation for profile: {profile_id}")
@@ -153,84 +526,13 @@ def run_fetch_script(profile_id, job_id):
         _log_fetch(job_id, "Job state initialized - status: running")
         
         # Check if profile needs re-authorization first
-        tokens_file = f'profiles/{profile_id}/auth/tokens.json'
-        print(f"[FETCH-{job_id}] Checking tokens file: {tokens_file}")
-        if not os.path.exists(tokens_file):
-            print(f"[FETCH-{job_id}] ERROR: Profile {profile_id} not found. Go to Profile Management -> New Profile")
-            fetch_jobs[job_id]['status'] = 'failed'
-            fetch_jobs[job_id]['end_time'] = datetime.now().isoformat()
-            fetch_jobs[job_id]['error'] = f'Profile {profile_id} not found. Go to Profile Management -> New Profile'
-            return
-        print(f"[FETCH-{job_id}] Tokens file found, proceeding with validation")
-        
-        # Check if profile has valid tokens before attempting refresh
-        
         try:
-            import json
-            print(f"[FETCH-{job_id}] Loading tokens from file...")
-            with open(tokens_file, 'r') as f:
-                tokens = json.load(f)
-            
-            print(f"[FETCH-{job_id}] Tokens loaded successfully. Keys: {list(tokens.keys()) if tokens else 'empty'}")
-            
-            # Check if tokens file is empty or missing refresh token
-            if not tokens or 'refresh_token' not in tokens or not tokens.get('refresh_token'):
-                print(f"[FETCH-{job_id}] ERROR: Profile {profile_id} needs authorization. Tokens: {tokens}")
+            ok, error_message = _refresh_profile_tokens(profile_id, f"FETCH-{job_id}")
+            if not ok:
                 fetch_jobs[job_id]['status'] = 'failed'
                 fetch_jobs[job_id]['end_time'] = datetime.now().isoformat()
-                fetch_jobs[job_id]['error'] = f'Profile {profile_id} needs authorization. Go to Profile Management -> Existing Profiles -> Auth'
+                fetch_jobs[job_id]['error'] = error_message
                 return
-            print(f"[FETCH-{job_id}] Tokens validation passed, refresh_token present")
-            
-            # Try to refresh the token first
-            print(f"[FETCH-{job_id}] Attempting to refresh token for profile {profile_id}...")
-            
-            # Set environment variable for profile
-            env = os.environ.copy()
-            env['FITBIT_PROFILE'] = profile_id
-            env['PYTHONIOENCODING'] = 'utf-8'
-            env['PYTHONUNBUFFERED'] = '1'
-            
-            print(f"[FETCH-{job_id}] Running token refresh subprocess...")
-            refresh_result = subprocess.run(
-                ['python', 'auth/refresh_token.py'],
-                cwd=os.getcwd(),
-                capture_output=True,
-                text=True,
-                encoding='utf-8',
-                errors='replace',
-                env=env,
-                timeout=30
-            )
-            print(f"[FETCH-{job_id}] Token refresh completed. Return code: {refresh_result.returncode}")
-            
-            if refresh_result.returncode != 0:
-                print(f"Token refresh failed for profile {profile_id}. Re-authorization needed.")
-                print(f"Refresh error: {refresh_result.stderr}")
-                
-                # Extract the specific error message from stderr, clean it up
-                error_msg = refresh_result.stderr.strip()
-                if not error_msg:
-                    error_msg = refresh_result.stdout.strip()
-                if not error_msg:
-                    error_msg = "Token refresh failed"
-                
-                # Clean up the error message to remove file paths and verbose details
-                if "[fitbit] Error:" in error_msg:
-                    error_msg = error_msg.split("[fitbit] Error:")[-1].strip()
-                if "Token file not found:" in error_msg:
-                    error_msg = "Token file not found"
-                if "Refresh token is invalid or expired" in error_msg:
-                    error_msg = "Refresh token is invalid or expired"
-                
-                fetch_jobs[job_id]['status'] = 'failed'
-                fetch_jobs[job_id]['end_time'] = datetime.now().isoformat()
-                fetch_jobs[job_id]['error'] = f'Token refresh failed: {error_msg}. Go to Profile Management -> Existing Profiles -> Auth'
-                return
-            else:
-                print(f"Token refresh successful for profile {profile_id}")
-                print(f"Refresh output: {refresh_result.stdout}")
-                
         except Exception as e:
             print(f"Error checking/refreshing tokens for profile {profile_id}: {e}")
             fetch_jobs[job_id]['status'] = 'failed'
@@ -248,9 +550,7 @@ def run_fetch_script(profile_id, job_id):
         print(f"Profile ID: {profile_id}")
         
         # Set environment variables for proper Unicode handling
-        env = os.environ.copy()
-        env['PYTHONIOENCODING'] = 'utf-8'
-        env['PYTHONUNBUFFERED'] = '1'
+        env = _prepare_fetch_env(profile_id)
         
         print("=" * 60)
         print("FETCH SCRIPT OUTPUT:")
@@ -573,6 +873,7 @@ def run_fetch_script(profile_id, job_id):
                 threading.Thread(target=cleanup_job, daemon=True).start()
         except Exception:
             pass
+        _release_profile_fetch_lock(lock_fd)
 
 # Static file serving (maintains existing behavior)
 @app.route('/')
@@ -1023,7 +1324,10 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
-        'active_jobs': len([j for j in fetch_jobs.values() if j['status'] == 'running'])
+        'active_jobs': len([j for j in fetch_jobs.values() if j['status'] == 'running']),
+        'auto_sync_enabled': AUTO_SYNC_ENABLED,
+        'auto_sync_interval_seconds': AUTO_SYNC_INTERVAL_SECONDS,
+        'auto_sync_scan_interval_seconds': AUTO_SYNC_SCAN_INTERVAL_SECONDS,
     })
 
 def run_authorize_script(profile_id, job_id):
@@ -1242,6 +1546,7 @@ if __name__ == '__main__':
 
     print(f"Server will be available at: http://localhost:{port}")
     print(f"API endpoints available at: http://localhost:{port}/api/")
+    start_auto_sync_scheduler()
 
     # Run the Flask app
     app.run(host='0.0.0.0', port=port, debug=False)
