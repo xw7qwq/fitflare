@@ -10,9 +10,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
-  <script src="version.js?v=20260326-4"></script>
+  <script src="version.js?v=20260326-5"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="style.css?v=20260326-4">
+  <link rel="stylesheet" href="style.css?v=20260326-5">
 </head>
 <body>
   <div class="page-glow page-glow-one"></div>
@@ -36,6 +36,7 @@
       <div class="topbar-actions">
         <div class="version-chip" id="versionChip">本地缓存模式</div>
         <div class="version-chip mode-chip" id="adminModeChip" data-mode="public">公开只读模式</div>
+        <a class="button button-secondary" href="/api/public/v1/docs" target="_blank" rel="noreferrer">公共 API</a>
         <button class="button button-secondary" id="adminLoginBtn" type="button">管理员登录</button>
         <button class="button button-light hidden" id="adminLogoutBtn" type="button">退出管理</button>
         <button class="button button-secondary hidden" id="openManagerBtn" type="button">档案管理</button>
@@ -574,6 +575,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20260326-4"></script>
+  <script src="app.js?v=20260326-5"></script>
 </body>
 </html>

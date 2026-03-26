@@ -1127,6 +1127,62 @@ def load_dashboard_cache(profile_id: str | None, rebuild_if_missing: bool = True
     return {}
 
 
+def load_profile_snapshot(profile_id: str | None) -> dict[str, Any]:
+    return _read_json(cache_path_for(profile_id, SNAPSHOT_FILENAME))
+
+
+def load_dataset_rows(profile_id: str | None, dataset: str) -> list[dict[str, Any]]:
+    key = str(dataset or "").strip().lower()
+
+    if key == "activity":
+        return _parse_activity_rows(_read_csv_rows(csv_path_for(profile_id, DATASET_FILES["activity"])))
+
+    if key == "sleep":
+        rows, nap_counts = _select_sleep_rows(_read_csv_rows(csv_path_for(profile_id, DATASET_FILES["sleep"])))
+        enriched: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["nap_count"] = nap_counts.get(row.get("date") or "", 0)
+            minutes_asleep = item.get("minutes_asleep")
+            if minutes_asleep is not None:
+                item["sleep_hours"] = _round(minutes_asleep / 60.0, 1)
+            deep = item.get("minutes_deep")
+            rem = item.get("minutes_rem")
+            total = item.get("minutes_asleep")
+            if total:
+                if deep is not None:
+                    item["deep_pct"] = _round((deep / total) * 100.0, 1)
+                if rem is not None:
+                    item["rem_pct"] = _round((rem / total) * 100.0, 1)
+            enriched.append(item)
+        return enriched
+
+    if key == "hrv":
+        return _parse_hrv_rows(_read_csv_rows(csv_path_for(profile_id, DATASET_FILES["hrv"])))
+
+    if key == "rhr":
+        return _parse_rhr_rows(_read_csv_rows(csv_path_for(profile_id, DATASET_FILES["rhr"])))
+
+    if key in {"daily", "weekly", "monthly"}:
+        activity_rows = load_dataset_rows(profile_id, "activity")
+        sleep_rows = load_dataset_rows(profile_id, "sleep")
+        hrv_rows = load_dataset_rows(profile_id, "hrv")
+        rhr_rows = load_dataset_rows(profile_id, "rhr")
+        nap_counts = {
+            str(row.get("date")): int(row.get("nap_count") or 0)
+            for row in sleep_rows
+            if row.get("date")
+        }
+        daily_rows = _merge_daily_rows(activity_rows, sleep_rows, hrv_rows, rhr_rows, nap_counts)
+        if key == "daily":
+            return daily_rows
+        if key == "weekly":
+            return _aggregate_rows(daily_rows, period="week")
+        return _aggregate_rows(daily_rows, period="month")
+
+    return []
+
+
 def build_profile_cards(profile_ids: list[str] | None = None) -> list[dict[str, Any]]:
     cards: list[dict[str, Any]] = []
     for profile_id in profile_ids or list_profiles():

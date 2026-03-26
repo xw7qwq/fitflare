@@ -23,6 +23,22 @@ FitBaus is web-based dashboard for analyzing your Fitbit health and fitness data
 - **Multi-Profile Support**: Manage multiple Abit accounts
 - **Beautiful UI**: Modern, responsive design with dark theme
 
+## Public API
+
+FitBaus now exposes a versioned public read-only API for other projects.
+
+- Human docs: [`API.md`](API.md)
+- Browser docs: `/api/public/v1/docs`
+- OpenAPI JSON: `/api/public/v1/openapi.json`
+
+Key endpoints:
+
+- `/api/public/v1/profiles`
+- `/api/public/v1/profiles/<profile_id>/dashboard`
+- `/api/public/v1/profiles/<profile_id>/datasets/<dataset>`
+- `/api/public/v1/profiles/<profile_id>/series/<granularity>`
+- `/api/public/v1/profiles/<profile_id>/charts/overview-trend.svg`
+
 ## 📋 Prerequisites
 
 Before you begin, ensure you have:
