@@ -32,6 +32,7 @@ DATASET_LABELS = {
 }
 
 SECTION_LABELS = {
+    "activity": "活动补充摘要",
     "body": "体征摘要",
     "vitals": "生命体征摘要",
     "lifestyle": "生活方式摘要",
@@ -41,6 +42,7 @@ SECTION_LABELS = {
 TABLE_LABELS = {
     "sleep": "睡眠表",
     "activity": "活动表",
+    "activity_logs": "Fitbit 活动日志表",
     "recovery": "恢复表",
     "body": "体征表",
     "vitals": "生命体征表",

@@ -94,6 +94,8 @@ function captureRefs() {
     "correlationCards",
     "overviewHighlightGrid",
     "sleepTableWrap",
+    "activityContextGrid",
+    "activityLogTableWrap",
     "activityTableWrap",
     "recoveryTableWrap",
     "bodyMetricGrid",
@@ -475,7 +477,7 @@ function scheduleActiveViewRender() {
 
 function renderEmptyState() {
   refs.heroTitle.textContent = "先创建并授权一个 Fitbit 档案"
-  refs.heroSubtitle.textContent = "页面已重构为统一单页。创建并授权档案后，会自动同步 Fitbit 核心数据、本地快照以及补充体征接口。"
+  refs.heroSubtitle.textContent = "页面会先读取本地缓存，再把 Fitbit 数据整理成统一视图。创建并授权档案后会自动同步。"
   if (refs.heroKpis) refs.heroKpis.innerHTML = ""
   refs.heroRecoveryScore.textContent = "--"
   refs.heroRecoveryLabel.textContent = "等待数据"
@@ -493,6 +495,8 @@ function renderEmptyState() {
     "overviewHighlightGrid",
     "correlationCards",
     "sleepTableWrap",
+    "activityContextGrid",
+    "activityLogTableWrap",
     "activityTableWrap",
     "recoveryTableWrap",
     "bodyMetricGrid",
@@ -523,7 +527,7 @@ function renderHero() {
 
   refs.heroTitle.textContent = `${profile.display_name || state.selectedProfile} 的 Fitbit 中文健康视图`
   refs.heroSubtitle.textContent =
-    `统一页面优先读取本地缓存，并把 Fitbit 数据整理成更稳定的健康视图。最近记录日期：${overview.latest_date || "暂无"}，总追踪天数：${overview.tracked_days || 0}。`
+    `统一页面先读本地缓存，再把 Fitbit 数据整理成稳定视图。最近记录日期：${overview.latest_date || "暂无"}，已追踪 ${overview.tracked_days || 0} 天。`
 
   refs.heroKpis.innerHTML = heroKpis
     .map((item) => `
@@ -537,13 +541,13 @@ function renderHero() {
 
   const meta = [
     ["档案", profile.id || state.selectedProfile],
-    ["会员起始", profile.member_since || "未知"],
+    ["快照状态", `${overview.snapshot_ok_count || 0}/${overview.snapshot_total_count || 0}`],
+    ["活动覆盖", coverage.activity?.count ? `${coverage.activity.count} 天` : "暂无"],
     ["设备数", profile.device_count || 0],
-    ["徽章数", profile.badge_count || 0],
     ["睡眠目标", profile.sleep_goal_minutes ? `${profile.sleep_goal_minutes} 分钟` : "未缓存"],
     ["步数目标", profile.daily_steps_goal ? `${formatNumber(profile.daily_steps_goal)} 步` : "未缓存"],
-    ["活动覆盖", coverage.activity?.count ? `${coverage.activity.count} 天` : "暂无"],
-    ["快照状态", `${overview.snapshot_ok_count || 0}/${overview.snapshot_total_count || 0}`],
+    ["会员起始", profile.member_since || "未知"],
+    ["徽章数", profile.badge_count || 0],
   ]
 
   refs.heroMeta.innerHTML = meta
@@ -553,7 +557,7 @@ function renderHero() {
   refs.heroRecoveryScore.textContent = overview.recovery_score ?? "--"
   refs.heroRecoveryLabel.textContent = overview.recovery_label || "等待数据"
   refs.heroRecoveryFootnote.textContent =
-    `最近快照：${formatDateTime(snapshotStatus.saved_at || overview.latest_sync_at)}。缺失 scope：${missingScopes.length ? missingScopes.join(" / ") : "无" }。`
+    `最近快照：${formatDateTime(snapshotStatus.saved_at || overview.latest_sync_at)}。scope：${missingScopes.length ? `${missingScopes.length} 项缺口` : "已覆盖"}。`
   refs.lastSyncText.textContent = formatDateTime(snapshotStatus.saved_at || overview.latest_sync_at)
 }
 
@@ -572,14 +576,15 @@ function renderQuickNav() {
           <span class="nav-card-state">${item.view === state.activeView ? "当前" : "进入"}</span>
         </div>
         <strong>${escapeHtml(item.label)}</strong>
-        <p>${escapeHtml(item.summary)}</p>
+        <div class="nav-card-status">${escapeHtml(item.summary)}</div>
+        <p>${escapeHtml(item.detail)}</p>
       </button>
     `)
     .join("")
 }
 
 function renderHealthDigest() {
-  refs.healthDigestGrid.innerHTML = state.viewModel.healthPillars
+  refs.healthDigestGrid.innerHTML = state.viewModel.guideCards
     .map((item) => `
       <button
         class="surface digest-card ${item.targetView === state.activeView ? "active" : ""}"
@@ -628,16 +633,13 @@ function renderActiveViewSummary() {
 }
 
 function renderCoverage() {
-  refs.coverageGrid.innerHTML = state.viewModel.coverageCards
-    .map(({ label, tone, count, startDate, endDate }) => {
+  refs.coverageGrid.innerHTML = state.viewModel.foundationCards
+    .map(({ label, tone, value, detail }) => {
       return `
         <article class="coverage-card" data-tone="${tone}">
           <div class="coverage-label">${escapeHtml(label)}</div>
-          <div class="coverage-value">${formatNumber(count || 0)}</div>
-          <div class="coverage-meta">
-            起始：${escapeHtml(startDate || "暂无")}<br>
-            截止：${escapeHtml(endDate || "暂无")}
-          </div>
+          <div class="coverage-value">${escapeHtml(String(value ?? "--"))}</div>
+          <div class="coverage-meta">${escapeHtml(detail || "暂无说明")}</div>
         </article>
       `
     })
@@ -939,6 +941,21 @@ function renderActivityView() {
     }),
   })
 
+  renderDetailGrid(refs.activityContextGrid, state.dashboard.sections?.activity?.metrics || [])
+
+  renderTable(refs.activityLogTableWrap, [
+    { key: "date", label: "日期" },
+    { key: "name", label: "活动" },
+    { key: "duration", label: "时长" },
+    { key: "calories", label: "热量" },
+    { key: "distance", label: "距离" },
+    { key: "detail", label: "说明" },
+  ], state.dashboard.tables?.activity_logs || [], {
+    duration: formatMinutes,
+    calories: (value) => value == null ? "--" : `${formatNumber(value)} kcal`,
+    distance: (value) => value == null ? "--" : `${formatNumber(value, 1)} km`,
+  })
+
   renderTable(refs.activityTableWrap, [
     { key: "date", label: "日期" },
     { key: "steps", label: "步数" },
@@ -1056,8 +1073,10 @@ function renderLifestyleView() {
     { key: "brand", label: "品牌" },
     { key: "calories", label: "热量" },
     { key: "amount", label: "份量" },
+    { key: "last_eaten", label: "最近食用" },
   ], state.dashboard.tables?.foods || [], {
     calories: (value) => value == null ? "--" : `${formatNumber(value)} kcal`,
+    last_eaten: (value) => formatDate(value),
   })
 }
 
@@ -1785,12 +1804,17 @@ function normalizeDashboard(dashboard) {
   const sections = dashboard?.sections || {}
   const stats = Array.isArray(dashboard?.stats) ? dashboard.stats : []
   const statsByKey = Object.fromEntries(stats.map((card) => [card.key, card]))
+  const activityMetrics = sections.activity?.metrics || []
   const bodyMetrics = sections.body?.metrics || []
   const vitalsMetrics = sections.vitals?.metrics || []
   const lifestyleMetrics = sections.lifestyle?.metrics || []
   const accountMetrics = sections.account?.metrics || []
   const selectedRange = sanitizeRange(refs.rangeSelect?.value)
   const trackedDays = Number(overview.tracked_days || coverage.daily?.count || 0)
+  const missingScopes = snapshotStatus.missing_scopes || []
+  const activityLogsCount = Array.isArray(dashboard?.tables?.activity_logs) ? dashboard.tables.activity_logs.length : 0
+  const foodsCount = Array.isArray(dashboard?.tables?.foods) ? dashboard.tables.foods.length : 0
+  const vitalsCount = vitalsMetrics.filter((item) => item?.value != null).length
 
   const normalizedStats = stats.map((card) => ({
     ...card,
@@ -1824,61 +1848,78 @@ function normalizeDashboard(dashboard) {
   ]
 
   const coverageCards = [
-    { key: "activity", label: "活动数据", tone: "green" },
-    { key: "sleep", label: "睡眠数据", tone: "amber" },
-    { key: "hrv", label: "HRV 数据", tone: "blue" },
-    { key: "rhr", label: "静息心率", tone: "red" },
-    { key: "daily", label: "合并视图", tone: "teal" },
-    { key: "snapshot", label: "快照接口", tone: "blue" },
-  ].map((item) => ({
-    ...item,
-    count: coverage[item.key]?.count || 0,
-    startDate: coverage[item.key]?.start_date || null,
-    endDate: coverage[item.key]?.end_date || null,
-  }))
+    {
+      label: "活动历史",
+      tone: "green",
+      value: `${coverage.activity?.count || 0} 天`,
+      detail: `${coverage.activity?.start_date || "暂无"} 至 ${coverage.activity?.end_date || "暂无"}`,
+    },
+    {
+      label: "睡眠历史",
+      tone: "amber",
+      value: `${coverage.sleep?.count || 0} 天`,
+      detail: `${coverage.sleep?.start_date || "暂无"} 至 ${coverage.sleep?.end_date || "暂无"}`,
+    },
+    {
+      label: "恢复历史",
+      tone: "teal",
+      value: `${coverage.daily?.count || 0} 天`,
+      detail: `HRV ${coverage.hrv?.count || 0} 天 · RHR ${coverage.rhr?.count || 0} 天`,
+    },
+    {
+      label: "Fitbit 快照",
+      tone: "blue",
+      value: `${overview.snapshot_ok_count || 0}/${overview.snapshot_total_count || 0}`,
+      detail: `最近同步 ${formatDateTime(snapshotStatus.saved_at || overview.latest_sync_at)}`,
+    },
+    {
+      label: "活动补充",
+      tone: "amber",
+      value: `${activityLogsCount} 条`,
+      detail: "今日摘要、活动日志和 lifetime stats 已并入缓存。",
+    },
+    {
+      label: "权限缺口",
+      tone: "red",
+      value: `${missingScopes.length} 项`,
+      detail: missingScopes.length ? missingScopes.join(" / ") : "当前页面所需 scope 已覆盖。",
+    },
+  ]
 
   const highlights = [
+    ...(activityMetrics || []).slice(0, 2),
     ...(bodyMetrics || []).slice(0, 2),
-    ...(vitalsMetrics || []).slice(0, 2),
+    ...(vitalsMetrics || []).slice(0, 1),
     ...(lifestyleMetrics || []).slice(0, 1),
     ...(accountMetrics || []).slice(0, 1),
   ]
 
-  const healthPillars = [
+  const guideCards = [
     {
-      kicker: "Sleep",
-      label: "睡眠",
-      badge: "质量",
-      value: formatMetricValue("sleep_score", statsByKey.sleep_score?.latest, statsByKey.sleep_score?.unit),
-      detail: `时长 ${formatMetricValue("sleep_hours", statsByKey.sleep_hours?.latest, statsByKey.sleep_hours?.unit)} · 目标 ${goalText(statsByKey.sleep_hours || {})}`,
-      targetView: "sleep",
+      kicker: "Step 1",
+      label: "先确认整体状态",
+      badge: "总览",
+      value: `恢复 ${overview.recovery_score ?? "--"}`,
+      detail: `${overview.recovery_label || "等待恢复判断"} · 快照 ${overview.snapshot_ok_count || 0}/${overview.snapshot_total_count || 0}`,
+      targetView: "overview",
       tone: "blue",
     },
     {
-      kicker: "Activity",
-      label: "活动",
-      badge: "运动量",
-      value: formatMetricValue("steps", statsByKey.steps?.latest, statsByKey.steps?.unit),
-      detail: `活跃 ${formatMetricValue("active_minutes", statsByKey.active_minutes?.latest, statsByKey.active_minutes?.unit)} · 燃脂区 ${formatMetricValue("active_zone_minutes", statsByKey.active_zone_minutes?.latest, statsByKey.active_zone_minutes?.unit)}`,
-      targetView: "activity",
+      kicker: "Step 2",
+      label: "再看三条主线",
+      badge: "睡眠 / 活动 / 恢复",
+      value: `${formatMetricValue("sleep_score", statsByKey.sleep_score?.latest, statsByKey.sleep_score?.unit)} · ${formatMetricValue("steps", statsByKey.steps?.latest, statsByKey.steps?.unit)} · ${formatMetricValue("hrv", statsByKey.hrv?.latest, statsByKey.hrv?.unit)}`,
+      detail: "用睡眠、活动、恢复三条主线解释当天状态。",
+      targetView: "sleep",
       tone: "green",
     },
     {
-      kicker: "Recovery",
-      label: "恢复",
-      badge: "核心",
-      value: formatMetricValue("hrv", statsByKey.hrv?.latest, statsByKey.hrv?.unit),
-      detail: `静息心率 ${formatMetricValue("rhr", statsByKey.rhr?.latest, statsByKey.rhr?.unit)} · ${overview.recovery_label || "等待恢复判断"}`,
-      targetView: "recovery",
-      tone: "teal",
-    },
-    {
-      kicker: "Coverage",
-      label: "缓存",
-      badge: "完整度",
-      value: `${overview.snapshot_ok_count || 0}/${overview.snapshot_total_count || 0}`,
-      detail: `缺失 scope ${snapshotStatus.missing_scopes?.length || 0} 项 · 追踪 ${trackedDays} 天`,
-      targetView: "account",
+      kicker: "Step 3",
+      label: "最后补充背景",
+      badge: "体征 / 生活 / 账户",
+      value: `${vitalsCount} 项体征 · ${foodsCount} 条食物`,
+      detail: `把体重、饮水、设备和权限状态放到最后补充，避免一开始过载。`,
+      targetView: "body",
       tone: "amber",
     },
   ]
@@ -1890,7 +1931,8 @@ function normalizeDashboard(dashboard) {
       label: meta.label,
       kicker: meta.kicker,
       tone: meta.tone,
-      summary: buildViewSummary(view, { overview, snapshotStatus, statsByKey, bodyMetrics, lifestyleMetrics }),
+      summary: buildViewSummary(view, { overview, snapshotStatus, statsByKey, activityMetrics, bodyMetrics, lifestyleMetrics }),
+      detail: buildViewDetail(view, { overview, snapshotStatus, activityMetrics, bodyMetrics, vitalsMetrics, lifestyleMetrics }),
     }
   })
 
@@ -1905,8 +1947,8 @@ function normalizeDashboard(dashboard) {
     stats: normalizedStats,
     statsByKey,
     heroKpis,
-    coverageCards,
-    healthPillars,
+    foundationCards: coverageCards,
+    guideCards,
     quickNav,
     highlights,
     account: {
@@ -1917,15 +1959,15 @@ function normalizeDashboard(dashboard) {
 }
 
 function buildViewSummary(view, context) {
-  const { overview, snapshotStatus, statsByKey, bodyMetrics, lifestyleMetrics } = context
+  const { overview, snapshotStatus, statsByKey, bodyMetrics, lifestyleMetrics, activityMetrics } = context
   if (view === "overview") {
-    return `恢复 ${overview.recovery_score ?? "--"} · 重点信号和综合趋势`
+    return `恢复 ${overview.recovery_score ?? "--"} · 快照 ${overview.snapshot_ok_count || 0}/${overview.snapshot_total_count || 0}`
   }
   if (view === "sleep") {
     return `${formatMetricValue("sleep_score", statsByKey.sleep_score?.latest, statsByKey.sleep_score?.unit)} · ${formatMetricValue("sleep_hours", statsByKey.sleep_hours?.latest, statsByKey.sleep_hours?.unit)}`
   }
   if (view === "activity") {
-    return `${formatMetricValue("steps", statsByKey.steps?.latest, statsByKey.steps?.unit)} · ${formatMetricValue("active_minutes", statsByKey.active_minutes?.latest, statsByKey.active_minutes?.unit)}`
+    return `${formatMetricValue("steps", statsByKey.steps?.latest, statsByKey.steps?.unit)} · ${activityMetrics[3]?.label || "活动日志"} ${formatDetailValue(activityMetrics[3]?.value)}${activityMetrics[3]?.unit ? ` ${activityMetrics[3].unit}` : ""}`
   }
   if (view === "recovery") {
     return `${formatMetricValue("hrv", statsByKey.hrv?.latest, statsByKey.hrv?.unit)} · ${formatMetricValue("rhr", statsByKey.rhr?.latest, statsByKey.rhr?.unit)}`
@@ -1949,13 +1991,28 @@ function buildViewSummary(view, context) {
   return VIEW_META[view]?.summary || ""
 }
 
+function buildViewDetail(view, context) {
+  const { activityMetrics, bodyMetrics, vitalsMetrics, lifestyleMetrics } = context
+  if (view === "overview") return "先看恢复、覆盖和补充数据，再决定深入哪一页。"
+  if (view === "sleep") return "主看睡眠得分、时长和阶段结构。"
+  if (view === "activity") return `除了步数和活跃分钟，还缓存了 ${activityMetrics[3]?.value ?? 0}${activityMetrics[3]?.unit ? ` ${activityMetrics[3].unit}` : ""} Fitbit 活动日志。`
+  if (view === "recovery") return "主看 HRV、静息心率，以及它们和睡眠的联动。"
+  if (view === "body") return `${bodyMetrics[0]?.label || "体重"}、${bodyMetrics[1]?.label || "BMI"} 和 ${vitalsMetrics.length || 0} 项体征放在一起看。`
+  if (view === "lifestyle") return `饮食、饮水和 ${lifestyleMetrics.slice(4).length} 类 nutrition 缓存集中查看。`
+  if (view === "account") return "设备、scope、缓存层和接口状态集中收口。"
+  if (view === "family") return "所有档案只保留一个统一对比入口。"
+  return VIEW_META[view]?.summary || ""
+}
+
 function buildActiveViewSummary(view) {
   const meta = VIEW_META[view] || VIEW_META.overview
   const { overview, snapshotStatus, statsByKey } = state.viewModel
   const rangeText = `最近 ${sanitizeRange(refs.rangeSelect?.value)} 天`
   const latestSync = formatDateTime(snapshotStatus.saved_at || overview.latest_sync_at)
   const foodsCount = Array.isArray(state.dashboard?.tables?.foods) ? state.dashboard.tables.foods.length : 0
+  const activityLogsCount = Array.isArray(state.dashboard?.tables?.activity_logs) ? state.dashboard.tables.activity_logs.length : 0
   const devicesCount = Array.isArray(state.dashboard?.tables?.devices) ? state.dashboard.tables.devices.length : 0
+  const activityMetrics = state.dashboard?.sections?.activity?.metrics || []
   const bodyMetrics = state.dashboard?.sections?.body?.metrics || []
   const vitalsMetrics = state.dashboard?.sections?.vitals?.metrics || []
   const lifestyleMetrics = state.dashboard?.sections?.lifestyle?.metrics || []
@@ -1995,11 +2052,11 @@ function buildActiveViewSummary(view) {
   }
 
   if (view === "activity") {
-    summary.description = "活动页把步数、活跃分钟、燃脂区分钟和热量放到同一个判断框架里。"
+    summary.description = "活动页先看日趋势，再看 Fitbit 原始活动日志和补充活动摘要。"
     summary.chips = [
       { label: "步数", value: formatMetricValue("steps", statsByKey.steps?.latest, statsByKey.steps?.unit) },
       { label: "活跃分钟", value: formatMetricValue("active_minutes", statsByKey.active_minutes?.latest, statsByKey.active_minutes?.unit) },
-      { label: "热量", value: formatMetricValue("calories_out", statsByKey.calories_out?.latest, statsByKey.calories_out?.unit) },
+      { label: activityMetrics[3]?.label || "活动日志", value: `${formatDetailValue(activityMetrics[3]?.value)}${activityMetrics[3]?.unit ? ` ${activityMetrics[3].unit}` : ""}`.trim() || `${activityLogsCount} 条` },
     ]
     return summary
   }

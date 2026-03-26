@@ -22,6 +22,7 @@ from common.rate_limit import wait_seconds_with_countdown, wait_until_next_hour_
 
 
 RECENT_INTERVAL_DAYS = 30
+ACTIVITY_LOG_LIMIT = 20
 
 parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument("--profile", default=None)
@@ -205,6 +206,41 @@ def _build_endpoint_specs(today: str, recent_start: str) -> list[dict[str, str]]
             "url": f"https://api.fitbit.com/1/user/-/activities/date/{today}.json",
         },
         {
+            "key": "lifetime_stats",
+            "label": "终身活动统计",
+            "group": "activity",
+            "scope": "activity",
+            "url": "https://api.fitbit.com/1/user/-/activities.json",
+        },
+        {
+            "key": "activity_log_list",
+            "label": "活动日志列表",
+            "group": "activity",
+            "scope": "activity",
+            "url": f"https://api.fitbit.com/1/user/-/activities/list.json?beforeDate={today}&sort=desc&offset=0&limit={ACTIVITY_LOG_LIMIT}",
+        },
+        {
+            "key": "recent_activity_types",
+            "label": "近期活动类型",
+            "group": "activity",
+            "scope": "activity",
+            "url": "https://api.fitbit.com/1/user/-/activities/recent.json",
+        },
+        {
+            "key": "frequent_activity_types",
+            "label": "常做活动类型",
+            "group": "activity",
+            "scope": "activity",
+            "url": "https://api.fitbit.com/1/user/-/activities/frequent.json",
+        },
+        {
+            "key": "favorite_activity_types",
+            "label": "收藏活动类型",
+            "group": "activity",
+            "scope": "activity",
+            "url": "https://api.fitbit.com/1/user/-/activities/favorite.json",
+        },
+        {
             "key": "weight_goal",
             "label": "体重目标",
             "group": "body",
@@ -252,6 +288,27 @@ def _build_endpoint_specs(today: str, recent_start: str) -> list[dict[str, str]]
             "group": "nutrition",
             "scope": "nutrition",
             "url": "https://api.fitbit.com/1/user/-/foods/log/recent.json",
+        },
+        {
+            "key": "frequent_foods",
+            "label": "常吃食物",
+            "group": "nutrition",
+            "scope": "nutrition",
+            "url": "https://api.fitbit.com/1/user/-/foods/log/frequent.json",
+        },
+        {
+            "key": "favorite_foods",
+            "label": "收藏食物",
+            "group": "nutrition",
+            "scope": "nutrition",
+            "url": "https://api.fitbit.com/1/user/-/foods/log/favorite.json",
+        },
+        {
+            "key": "meals",
+            "label": "餐食模板",
+            "group": "nutrition",
+            "scope": "nutrition",
+            "url": "https://api.fitbit.com/1/user/-/meals.json",
         },
         {
             "key": "water_goal",
@@ -476,6 +533,7 @@ def main() -> None:
             "today": today,
             "recent_start": recent_start,
             "recent_days": RECENT_INTERVAL_DAYS,
+            "activity_log_limit": ACTIVITY_LOG_LIMIT,
         },
         "fetch_summary": _build_fetch_summary(endpoints),
         "endpoints": endpoints,

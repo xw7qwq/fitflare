@@ -538,6 +538,55 @@ def _pick_numeric_leaf(payload: Any, preferred_paths: tuple[str, ...]) -> tuple[
     return leaves[0]
 
 
+def _deep_get(payload: Any, *path: str) -> Any:
+    current = payload
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _join_non_empty(parts: list[str | None], separator: str = " · ") -> str:
+    clean = [str(part).strip() for part in parts if str(part or "").strip()]
+    return separator.join(clean)
+
+
+def _distance_value(entries: Any, activity_name: str = "total") -> float | None:
+    if not isinstance(entries, list):
+        return None
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("activity") or "").strip().lower() != activity_name.lower():
+            continue
+        value = _to_float(entry.get("distance"))
+        if value is not None:
+            return value
+    return None
+
+
+def _duration_minutes(value: Any) -> int | None:
+    number = _to_float(value)
+    if number is None:
+        return None
+    if number > 1000:
+        return int(round(number / 60000.0))
+    return int(round(number))
+
+
+def _lifetime_total_value(payload: Any, key: str) -> float | None:
+    total = _deep_get(payload, "lifetime", "total")
+    if not isinstance(total, dict):
+        return None
+    if key == "distance":
+        direct = _to_float(total.get("distance"))
+        if direct is not None:
+            return direct
+        return _distance_value(total.get("distance"), "total")
+    return _to_float(total.get(key))
+
+
 def _latest_record_summary(
     payload: Any,
     preferred_keys: tuple[str, ...],
@@ -694,6 +743,123 @@ def _build_body_tables(profile: dict[str, Any], snapshot: dict[str, Any]) -> tup
     return {"metrics": metrics}, rows[:12]
 
 
+def _activity_log_date(record: dict[str, Any]) -> str | None:
+    return (
+        _date_only(record.get("startTime"))
+        or _date_only(record.get("originalStartTime"))
+        or _record_date(record)
+    )
+
+
+def _build_activity_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    today_payload = _endpoint_data(snapshot, "today_activity_summary") or {}
+    summary = today_payload.get("summary") or {}
+    goals = today_payload.get("goals") or {}
+    lifetime_payload = _endpoint_data(snapshot, "lifetime_stats") or {}
+    activity_logs = _collect_records(_endpoint_data(snapshot, "activity_log_list"), ("activities",))
+    recent_types = _collect_records(_endpoint_data(snapshot, "recent_activity_types"), ("recentActivities", "activities"))
+    frequent_types = _collect_records(_endpoint_data(snapshot, "frequent_activity_types"), ("activities",))
+    favorite_types = _collect_records(_endpoint_data(snapshot, "favorite_activity_types"), ("activities",))
+
+    activity_logs.sort(
+        key=lambda record: (
+            _activity_log_date(record) or "",
+            str(record.get("startTime") or record.get("originalStartTime") or ""),
+        )
+    )
+
+    steps = _to_int(summary.get("steps"))
+    steps_goal = _to_int(goals.get("steps"))
+    steps_progress = None
+    if steps is not None and steps_goal not in (None, 0):
+        steps_progress = int(round((float(steps) / float(steps_goal)) * 100.0))
+
+    latest_log = activity_logs[-1] if activity_logs else {}
+    latest_name = latest_log.get("activityName") or latest_log.get("name")
+    latest_date = _activity_log_date(latest_log)
+    lifetime_steps = _to_int(_lifetime_total_value(lifetime_payload, "steps"))
+    lifetime_distance = _round(_lifetime_total_value(lifetime_payload, "distance"), 1)
+    total_distance = _round(_distance_value(summary.get("distances"), "total"), 1)
+    calories_out = _to_int(summary.get("caloriesOut"))
+    activity_calories = _to_int(summary.get("activityCalories"))
+    resting_hr = _to_int(summary.get("restingHeartRate"))
+
+    metrics = [
+        _value_card(
+            "今日步数达成",
+            steps_progress,
+            "%",
+            f"{steps or 0} / {steps_goal or 0} 步",
+            "green",
+            "优先读取 Fitbit 今日活动摘要和目标设置。",
+        ),
+        _value_card(
+            "今日距离",
+            total_distance,
+            "km",
+            f"静息心率 {resting_hr if resting_hr is not None else '--'} bpm",
+            "blue",
+            "来自今日活动摘要 summary.distances.total。",
+        ),
+        _value_card(
+            "活动热量",
+            activity_calories,
+            "kcal",
+            f"今日总消耗 {calories_out if calories_out is not None else '--'} kcal",
+            "amber",
+            "把运动热量和总消耗分开缓存。",
+        ),
+        _value_card(
+            "活动日志",
+            len(activity_logs),
+            "条",
+            f"最近：{latest_name or '暂无'} · {latest_date or '暂无'}",
+            "teal",
+            f"最近 / 常做 / 收藏：{len(recent_types)} / {len(frequent_types)} / {len(favorite_types)}",
+        ),
+        _value_card(
+            "终身步数",
+            lifetime_steps,
+            "步",
+            f"终身距离 {lifetime_distance if lifetime_distance is not None else '--'} km",
+            "red",
+            "来自 Fitbit lifetime stats。",
+        ),
+    ]
+
+    rows: list[dict[str, Any]] = []
+    for record in sorted(
+        activity_logs,
+        key=lambda row: (
+            _activity_log_date(row) or "",
+            str(row.get("startTime") or row.get("originalStartTime") or ""),
+        ),
+        reverse=True,
+    )[:12]:
+        duration = _duration_minutes(record.get("duration") or record.get("originalDuration"))
+        distance = _round(_to_float(record.get("distance")), 1)
+        calories = _to_int(record.get("calories"))
+        detail = _join_non_empty(
+            [
+                f"热量 {calories} kcal" if calories is not None else None,
+                f"步数 {_to_int(record.get('steps'))}" if _to_int(record.get("steps")) is not None else None,
+                "手动记录" if _to_bool(record.get("manualValuesSpecified")) else None,
+                str(record.get("logType") or "").strip() or None,
+            ]
+        )
+        rows.append(
+            {
+                "date": _activity_log_date(record),
+                "name": record.get("activityName") or record.get("name") or record.get("description"),
+                "duration": duration,
+                "calories": calories,
+                "distance": distance,
+                "detail": detail or "Fitbit activity log",
+            }
+        )
+    return {"metrics": metrics}, rows
+
+
 def _build_vitals_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     specs = [
         ("spo2_recent", "血氧", "%", "blue", ("spo2", "avg", "value.avg")),
@@ -733,6 +899,9 @@ def _build_lifestyle_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], l
     food_goal_payload = _endpoint_data(snapshot, "food_goal") or {}
     food_log_payload = _endpoint_data(snapshot, "food_log_today") or {}
     recent_foods = _collect_records(_endpoint_data(snapshot, "recent_foods"), ("foods",))
+    frequent_foods = _collect_records(_endpoint_data(snapshot, "frequent_foods"), ("foods",))
+    favorite_foods = _collect_records(_endpoint_data(snapshot, "favorite_foods"), ("foods",))
+    meals = _collect_records(_endpoint_data(snapshot, "meals"), ("meals",))
     water_goal_payload = _endpoint_data(snapshot, "water_goal") or {}
     water_log_payload = _endpoint_data(snapshot, "water_log_today") or {}
 
@@ -746,6 +915,9 @@ def _build_lifestyle_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], l
         _value_card("今日摄入", _round(calorie_summary, 0), "kcal", "来自今日饮食日志摘要。", "red"),
         _value_card("饮水目标", _round(water_goal, 0), "ml", "读取 Fitbit 饮水目标。", "blue"),
         _value_card("今日饮水", _round(water_value, 0), "ml", f"近期食物 {len(recent_foods)} 条。", "teal"),
+        _value_card("常吃食物", len(frequent_foods), "项", "Fitbit frequent foods 缓存。", "green"),
+        _value_card("收藏食物", len(favorite_foods), "项", "Fitbit favorite foods 缓存。", "blue"),
+        _value_card("餐食模板", len(meals), "个", "Fitbit meals 缓存。", "teal"),
     ]
 
     rows = [
@@ -753,7 +925,11 @@ def _build_lifestyle_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], l
             "name": row.get("name") or row.get("foodName") or row.get("description"),
             "brand": row.get("brand") or row.get("brandName"),
             "calories": _round(_to_float(row.get("calories")), 0),
-            "amount": row.get("amount") or row.get("amountUnit"),
+            "amount": _join_non_empty([
+                str(row.get("amount")) if row.get("amount") is not None else None,
+                (row.get("unit") or {}).get("name") if isinstance(row.get("unit"), dict) else row.get("amountUnit"),
+            ], " "),
+            "last_eaten": row.get("dateLastEaten"),
         }
         for row in recent_foods[:12]
     ]
@@ -767,7 +943,11 @@ def _build_account_tables(
     devices = _endpoint_data(snapshot, "devices")
     device_rows = [row for row in (devices or []) if isinstance(row, dict)]
     badges_payload = _endpoint_data(snapshot, "badges")
-    badges = [row for row in (badges_payload or []) if isinstance(row, dict)]
+    badges = _collect_records(badges_payload, ("badges",))
+    if not badges:
+        profile_payload = _endpoint_data(snapshot, "profile") or {}
+        user = profile_payload.get("user") or {}
+        badges = [row for row in (user.get("topBadges") or []) if isinstance(row, dict)]
     alarm_groups = _endpoint_data(snapshot, "device_alarms")
     alarm_groups = [row for row in (alarm_groups or []) if isinstance(row, dict)]
 
@@ -861,7 +1041,9 @@ def _profile_from_snapshot(profile_id: str | None, snapshot: dict[str, Any]) -> 
     sleep_goal_payload = _endpoint_data(snapshot, "sleep_goal") or {}
     activity_daily_goal = _endpoint_data(snapshot, "activity_goals_daily") or {}
     activity_weekly_goal = _endpoint_data(snapshot, "activity_goals_weekly") or {}
-    badges = _endpoint_data(snapshot, "badges") or []
+    badges = _collect_records(_endpoint_data(snapshot, "badges"), ("badges",))
+    if not badges:
+        badges = [row for row in (user.get("topBadges") or []) if isinstance(row, dict)]
     devices = _endpoint_data(snapshot, "devices") or []
     token_meta = _token_metadata(profile_id)
 
@@ -891,7 +1073,7 @@ def _profile_from_snapshot(profile_id: str | None, snapshot: dict[str, Any]) -> 
         "daily_calories_goal": _to_int(activity_goals.get("caloriesOut")) if isinstance(activity_goals, dict) else None,
         "weekly_steps_goal": _to_int(weekly_goals.get("steps")) if isinstance(weekly_goals, dict) else None,
         "device_count": len(devices) if isinstance(devices, list) else 0,
-        "badge_count": len(badges) if isinstance(badges, list) else 0,
+        "badge_count": len(badges),
         "scopes": scopes,
         "requested_scopes": snapshot.get("requested_scopes") or FITBIT_DASHBOARD_SCOPES,
         "user_id": snapshot.get("token_user_id") or token_meta.get("user_id"),
@@ -1027,6 +1209,7 @@ def build_dashboard_cache(profile_id: str | None) -> dict[str, Any]:
     profile = _profile_from_snapshot(profile_id, snapshot)
     recovery = _recovery_score(daily_rows, profile.get("sleep_goal_minutes"))
     metric_cards = _metric_cards(daily_rows, profile)
+    activity_section, activity_log_rows = _build_activity_tables(snapshot)
     body_section, body_rows = _build_body_tables(profile, snapshot)
     vitals_section, vitals_rows = _build_vitals_tables(snapshot)
     lifestyle_section, food_rows = _build_lifestyle_tables(snapshot)
@@ -1082,6 +1265,7 @@ def build_dashboard_cache(profile_id: str | None) -> dict[str, Any]:
             "monthly": monthly_rows,
         },
         "sections": {
+            "activity": activity_section,
             "body": body_section,
             "vitals": vitals_section,
             "lifestyle": lifestyle_section,
@@ -1089,6 +1273,7 @@ def build_dashboard_cache(profile_id: str | None) -> dict[str, Any]:
         },
         "tables": {
             **_recent_tables(activity_rows, sleep_rows, daily_rows),
+            "activity_logs": activity_log_rows,
             "body": body_rows,
             "vitals": vitals_rows,
             "foods": food_rows,
