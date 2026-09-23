@@ -11,10 +11,10 @@ RUN apt-get update && apt-get install -y \
 
 # Copy requirements first for better caching
 RUN useradd -m -u 10001 app
-COPY --chown=10001:10001 requirements.txt .
+COPY --chown=10001:10001 requirements.txt requirements.lock ./
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.lock
 
 # Copy the application code
 COPY --chown=10001:10001 . .

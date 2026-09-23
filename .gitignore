@@ -1,4 +1,13 @@
 .env
+.env.*
+!.env.production.example
+profiles/
+secrets/
+*.pem
+*.key
+*.p12
+Caddyfile.system
+*.log
 __pycache__/
 *.py[cod]
 .venv/
@@ -13,3 +22,7 @@ profiles/*/auth/tokens.json
 profiles/*/auth/tokens.json.bak
 profiles/*/csv/
 profiles/*/cache/
+
+node_modules/
+test-results/
+playwright-report/

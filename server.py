@@ -93,27 +93,17 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
 )
 
-NO_STORE_PATHS = {
-    '/',
-    '/index.html',
-    '/app.js',
-    '/style.css',
-    '/version.js',
-    '/mobile.html',
-    '/spousal.html',
-    '/script.js',
-    '/ui-cn.js',
-}
-
 PUBLIC_STATIC_FILES = {
     'index.html',
     'app.js',
     'style.css',
-    'version.js',
     'mobile.html',
     'spousal.html',
-    'script.js',
-    'ui-cn.js',
+    'js/format.js',
+    'js/data.js',
+    'js/charts.js',
+    'js/views.js',
+    'vendor/chart.umd-4.4.1.min.js',
 }
 
 PUBLIC_STATIC_PREFIXES = (
@@ -123,11 +113,13 @@ PUBLIC_STATIC_PREFIXES = (
 
 @app.after_request
 def apply_cache_headers(response):
-    """Keep HTML/CSS/JS fresh so deploys do not mix new markup with stale assets."""
-    if request.path in NO_STORE_PATHS:
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
+    """Revalidate app assets; never cache authenticated responses or session state."""
+    if request.path.startswith('/api/admin/') or session.get('is_admin'):
+        response.headers['Cache-Control'] = 'private, no-store'
+    elif request.path == '/vendor/chart.umd-4.4.1.min.js':
+        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    elif request.path == '/' or request.path.lstrip('/') in PUBLIC_STATIC_FILES:
+        response.headers['Cache-Control'] = 'no-cache'
     return response
 
 # Global state for tracking fetch operations
@@ -342,6 +334,7 @@ def _public_profile_links(base_url: str, profile_id: str) -> dict[str, str]:
     return {
         "self": root,
         "dashboard": f"{root}/dashboard",
+        "catalog": f"{root}/catalog",
         "overview": f"{root}/overview",
         "coverage": f"{root}/coverage",
         "metrics": f"{root}/metrics",
@@ -365,6 +358,7 @@ def _public_api_docs_html(base_url: str) -> str:
     openapi_json = f"{base_url}{PUBLIC_API_BASE_PATH}/openapi.json"
     profiles_url = f"{api_root}/profiles"
     sample_dashboard = f"{sample_root}/dashboard"
+    sample_catalog = f"{sample_root}/catalog"
     sample_series = f"{sample_root}/series/daily?metrics=sleep_score,steps,hrv&limit=30"
     sample_chart = f"{sample_root}/charts/series.svg?granularity=daily&metrics=sleep_score,hrv,rhr&limit=30"
     return f"""<!doctype html>
@@ -817,8 +811,8 @@ def _public_api_docs_html(base_url: str) -> str:
 
       <aside class="hero-aside">
         <div class="eyebrow">Quick Snapshot</div>
-        <div class="value">6 类</div>
-        <p class="muted">覆盖仪表盘、完整 datasets、趋势序列、sections、tables、snapshot 和 SVG 图表接口。</p>
+        <div class="value">7 类</div>
+        <p class="muted">覆盖仪表盘、数据 catalog、完整 datasets、趋势序列、sections、tables、snapshot 和 SVG 图表接口。</p>
         <div class="metric-grid">
           <div class="metric-pill">
             <div class="label">读取模式</div>
@@ -830,7 +824,7 @@ def _public_api_docs_html(base_url: str) -> str:
           </div>
           <div class="metric-pill">
             <div class="label">默认入口</div>
-            <strong>/profiles / dashboard</strong>
+            <strong>/profiles / catalog</strong>
           </div>
           <div class="metric-pill">
             <div class="label">图表格式</div>
@@ -869,7 +863,7 @@ def _public_api_docs_html(base_url: str) -> str:
             <div class="eyebrow">Quick Start</div>
             <h2>推荐从这里开始</h2>
           </div>
-          <p>如果你是第一次接入，先拿公开档案列表，再读某个档案的 dashboard 或 series。这样能最快确认你的项目需要走“完整数据集”还是“轻量趋势图”。</p>
+          <p>如果你是第一次接入，先拿公开档案列表，再读某个档案的 catalog 或 dashboard。这样能最快确认你的项目需要哪个数据域，再决定是否读取完整数据集或轻量趋势。</p>
         </div>
         <div class="feature-grid">
           <article class="feature-card">
@@ -880,9 +874,9 @@ def _public_api_docs_html(base_url: str) -> str:
           </article>
           <article class="feature-card">
             <div class="label">Step 2</div>
-            <h3>读取完整仪表盘</h3>
-            <p>需要直接复用现成健康页面结构时，优先使用 dashboard。</p>
-            <pre>GET {sample_dashboard}</pre>
+            <h3>读取结构化数据地图</h3>
+            <p>先用 catalog 看睡眠、活动、恢复、体征、生活和账户各自的数据状态。</p>
+            <pre>GET {sample_catalog}</pre>
           </article>
           <article class="feature-card">
             <div class="label">Step 3</div>
@@ -899,13 +893,18 @@ def _public_api_docs_html(base_url: str) -> str:
             <div class="eyebrow">Resource Layers</div>
             <h2>资源分层</h2>
           </div>
-          <p>接口按“完整缓存、轻量趋势、摘要卡片、表格、快照、图表”分层。这样其他项目可以按体积和场景选择，不需要反复解析整个 dashboard。</p>
+          <p>接口按“数据地图、完整缓存、轻量趋势、摘要卡片、表格、快照、图表”分层。这样其他项目可以先确认数据域状态，再按体积和场景选择。</p>
         </div>
         <div class="feature-grid">
           <article class="feature-card">
             <div class="label">Dashboard</div>
             <h3>完整公开仪表盘</h3>
             <p>适合复用 FitBaus 中文健康页的数据结构，包含 overview、coverage、stats、charts、tables。</p>
+          </article>
+          <article class="feature-card">
+            <div class="label">Catalog</div>
+            <h3>结构化数据地图</h3>
+            <p><code>/catalog</code> 按健康数据域返回状态、覆盖、核心指标和来源，适合先做接入判断。</p>
           </article>
           <article class="feature-card">
             <div class="label">Datasets / Series</div>
@@ -941,6 +940,7 @@ def _public_api_docs_html(base_url: str) -> str:
               <li><code>GET {api_root}</code><span>返回 API 索引和公开文档链接。</span></li>
               <li><code>GET {profiles_url}</code><span>返回公开档案列表和快捷链接。</span></li>
               <li><code>GET {sample_root}</code><span>返回单个公开档案的概要信息、覆盖范围和可调用链接。</span></li>
+              <li><code>GET {sample_catalog}</code><span>返回按数据域整理的 catalog，适合先看结构和质量。</span></li>
               <li><code>GET {sample_dashboard}</code><span>返回完整公开 dashboard 数据，适合页面复用。</span></li>
             </ul>
           </article>
@@ -2340,6 +2340,7 @@ def public_profile_summary(profile_id):
         'profile': dashboard_payload.get('profile') or {},
         'overview': dashboard_payload.get('overview') or {},
         'coverage': dashboard_payload.get('coverage') or {},
+        'data_catalog': dashboard_payload.get('data_catalog') or {},
         'snapshot_status': dashboard_payload.get('snapshot_status') or {},
         'links': _public_profile_links(base_url, profile_id),
     }
@@ -2364,6 +2365,24 @@ def public_profile_dashboard(profile_id):
             data=public_dashboard_payload(dashboard_payload),
             profile_id=profile_id,
             generated_at=dashboard_payload.get('generated_at'),
+        )
+    )
+
+
+@app.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/catalog')
+def public_profile_catalog(profile_id):
+    dashboard_payload = _load_public_dashboard(profile_id)
+    if dashboard_payload is None:
+        return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
+    catalog_payload = dashboard_payload.get('data_catalog') or {}
+    domains = catalog_payload.get('domains') if isinstance(catalog_payload, dict) else []
+    return _public_json_response(
+        build_envelope(
+            resource='catalog',
+            data=catalog_payload,
+            profile_id=profile_id,
+            generated_at=dashboard_payload.get('generated_at'),
+            meta={'count': len(domains or [])},
         )
     )
 

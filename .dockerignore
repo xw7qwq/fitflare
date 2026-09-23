@@ -5,6 +5,7 @@
 # Documentation
 README.md
 *.md
+!API.md
 
 # Python
 __pycache__
@@ -55,3 +56,14 @@ docker-compose.yml
 .env.development
 .env.test
 .env.production
+
+# Runtime data and credentials are mounted, never baked into an image.
+profiles/
+**/client.json
+**/tokens*.json
+**/tokens*.json.bak
+.env.*
+node_modules/
+tests/
+test-results/
+playwright-report/

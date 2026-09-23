@@ -15,6 +15,7 @@ PUBLIC_DASHBOARD_KEYS = (
     "coverage",
     "stats",
     "correlations",
+    "data_catalog",
     "charts",
     "sections",
     "tables",
@@ -616,6 +617,15 @@ def build_openapi_spec(base_url: str) -> dict[str, Any]:
                         {"name": "profile_id", "in": "path", "required": True, "schema": {"type": "string"}}
                     ],
                     "responses": {"200": {"description": "Dashboard payload"}},
+                }
+            },
+            f"{PUBLIC_API_BASE_PATH}/profiles/{{profile_id}}/catalog": {
+                "get": {
+                    "summary": "Get structured data catalog",
+                    "parameters": [
+                        {"name": "profile_id", "in": "path", "required": True, "schema": {"type": "string"}}
+                    ],
+                    "responses": {"200": {"description": "Domain-level data catalog"}},
                 }
             },
             f"{PUBLIC_API_BASE_PATH}/profiles/{{profile_id}}/datasets/{{dataset}}": {

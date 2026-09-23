@@ -1113,6 +1113,216 @@ def _metric_cards(rows: list[dict[str, Any]], profile: dict[str, Any]) -> list[d
     return cards
 
 
+def _catalog_metric_entries(metric_cards: list[dict[str, Any]], keys: list[str]) -> list[dict[str, Any]]:
+    metrics_by_key = {str(card.get("key") or ""): card for card in metric_cards if isinstance(card, dict)}
+    entries: list[dict[str, Any]] = []
+    for key in keys:
+        card = metrics_by_key.get(key)
+        if not card:
+            continue
+        entries.append(
+            {
+                "key": key,
+                "label": card.get("label") or key,
+                "unit": card.get("unit"),
+                "tone": card.get("tone") or "blue",
+                "latest": card.get("latest"),
+                "latest_date": card.get("latest_date"),
+                "avg7": card.get("avg7"),
+                "avg30": card.get("avg30"),
+                "trend": card.get("trend") or {},
+            }
+        )
+    return entries
+
+
+def _section_catalog_metrics(section: dict[str, Any], limit: int = 4) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for item in section.get("metrics") or []:
+        if not isinstance(item, dict):
+            continue
+        label = item.get("label")
+        if not label:
+            continue
+        entries.append(
+            {
+                "key": str(label).strip().lower().replace(" ", "_"),
+                "label": label,
+                "unit": item.get("unit"),
+                "tone": item.get("tone") or "blue",
+                "latest": item.get("value"),
+                "latest_date": item.get("date"),
+                "detail": item.get("detail") or item.get("hint"),
+            }
+        )
+        if len(entries) >= limit:
+            break
+    return entries
+
+
+def _catalog_status(primary_count: int, metric_count: int = 0, issue_count: int = 0) -> dict[str, Any]:
+    if primary_count <= 0 and metric_count <= 0:
+        return {"key": "empty", "label": "等待数据", "severity": 2}
+    if issue_count > 0:
+        return {"key": "partial", "label": "有缺口", "severity": 1}
+    return {"key": "ready", "label": "已结构化", "severity": 0}
+
+
+def _source_entry(kind: str, key: str, label: str, count: int | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "kind": kind,
+        "key": key,
+        "label": label,
+    }
+    if count is not None:
+        payload["count"] = count
+    return payload
+
+
+def _build_data_catalog(
+    overview: dict[str, Any],
+    coverage: dict[str, Any],
+    metric_cards: list[dict[str, Any]],
+    sections: dict[str, dict[str, Any]],
+    snapshot_status: dict[str, Any],
+    tables: dict[str, list[dict[str, Any]]],
+) -> dict[str, Any]:
+    missing_scopes = snapshot_status.get("missing_scopes") or []
+    endpoint_count = len(tables.get("endpoints") or [])
+    snapshot_ok = overview.get("snapshot_ok_count") or 0
+    snapshot_total = overview.get("snapshot_total_count") or 0
+
+    domain_specs = [
+        {
+            "key": "sleep",
+            "label": "睡眠",
+            "view": "sleep",
+            "tone": "blue",
+            "summary": "睡眠得分、时长、阶段结构和小睡记录。",
+            "coverage": coverage.get("sleep") or {},
+            "metrics": _catalog_metric_entries(metric_cards, ["sleep_score", "sleep_hours"]),
+            "sources": [
+                _source_entry("dataset", "sleep", "睡眠 CSV", (coverage.get("sleep") or {}).get("count")),
+                _source_entry("dataset", "daily", "按日聚合", (coverage.get("daily") or {}).get("count")),
+                _source_entry("table", "sleep", "最近睡眠表", len(tables.get("sleep") or [])),
+            ],
+        },
+        {
+            "key": "activity",
+            "label": "活动",
+            "view": "activity",
+            "tone": "green",
+            "summary": "步数、活跃分钟、燃脂区、热量和 Fitbit 活动日志。",
+            "coverage": coverage.get("activity") or {},
+            "metrics": _catalog_metric_entries(metric_cards, ["steps", "active_minutes", "active_zone_minutes", "calories_out"]),
+            "sources": [
+                _source_entry("dataset", "activity", "活动 CSV", (coverage.get("activity") or {}).get("count")),
+                _source_entry("table", "activity", "按日活动表", len(tables.get("activity") or [])),
+                _source_entry("table", "activity_logs", "Fitbit 活动日志", len(tables.get("activity_logs") or [])),
+            ],
+        },
+        {
+            "key": "recovery",
+            "label": "恢复",
+            "view": "recovery",
+            "tone": "teal",
+            "summary": "HRV、深睡 RMSSD、静息心率和睡眠恢复联动。",
+            "coverage": coverage.get("daily") or {},
+            "metrics": _catalog_metric_entries(metric_cards, ["hrv", "rhr"]),
+            "sources": [
+                _source_entry("dataset", "hrv", "HRV CSV", (coverage.get("hrv") or {}).get("count")),
+                _source_entry("dataset", "rhr", "静息心率 CSV", (coverage.get("rhr") or {}).get("count")),
+                _source_entry("table", "recovery", "恢复表", len(tables.get("recovery") or [])),
+            ],
+        },
+        {
+            "key": "body",
+            "label": "体征",
+            "view": "body",
+            "tone": "amber",
+            "summary": "体重、BMI、体脂、血氧、呼吸率和皮温。",
+            "coverage": {"count": len(tables.get("body") or []) + len(tables.get("vitals") or []), "start_date": None, "end_date": snapshot_status.get("saved_at")},
+            "metrics": [
+                *_section_catalog_metrics(sections.get("body") or {}, limit=3),
+                *_section_catalog_metrics(sections.get("vitals") or {}, limit=3),
+            ][:4],
+            "sources": [
+                _source_entry("section", "body", "身体摘要", len((sections.get("body") or {}).get("metrics") or [])),
+                _source_entry("section", "vitals", "补充体征", len((sections.get("vitals") or {}).get("metrics") or [])),
+                _source_entry("table", "vitals", "体征表", len(tables.get("vitals") or [])),
+            ],
+        },
+        {
+            "key": "lifestyle",
+            "label": "生活",
+            "view": "lifestyle",
+            "tone": "amber",
+            "summary": "饮食、饮水、热量目标和食物缓存。",
+            "coverage": {"count": len(tables.get("foods") or []), "start_date": None, "end_date": snapshot_status.get("saved_at")},
+            "metrics": _section_catalog_metrics(sections.get("lifestyle") or {}, limit=4),
+            "sources": [
+                _source_entry("section", "lifestyle", "生活摘要", len((sections.get("lifestyle") or {}).get("metrics") or [])),
+                _source_entry("table", "foods", "食物表", len(tables.get("foods") or [])),
+            ],
+        },
+        {
+            "key": "account",
+            "label": "账户",
+            "view": "account",
+            "tone": "red",
+            "summary": "设备、徽章、scope、快照端点和本地缓存层。",
+            "coverage": {"count": snapshot_ok, "start_date": (coverage.get("snapshot") or {}).get("start_date"), "end_date": snapshot_status.get("saved_at")},
+            "metrics": _section_catalog_metrics(sections.get("account") or {}, limit=4),
+            "sources": [
+                _source_entry("snapshot", "profile_snapshot", "Fitbit 快照", snapshot_ok),
+                _source_entry("table", "devices", "设备表", len(tables.get("devices") or [])),
+                _source_entry("table", "endpoints", "端点状态", endpoint_count),
+            ],
+            "issues": len(missing_scopes),
+            "issue_label": "缺失 scope" if missing_scopes else None,
+        },
+    ]
+
+    domains: list[dict[str, Any]] = []
+    for index, spec in enumerate(domain_specs, 1):
+        metric_count = sum(1 for metric in spec.get("metrics") or [] if metric.get("latest") is not None)
+        coverage_count = int((spec.get("coverage") or {}).get("count") or 0)
+        issue_count = int(spec.get("issues") or 0)
+        status = _catalog_status(coverage_count, metric_count, issue_count)
+        domains.append(
+            {
+                "key": spec["key"],
+                "label": spec["label"],
+                "view": spec["view"],
+                "tone": spec["tone"],
+                "priority": index,
+                "summary": spec["summary"],
+                "status": status,
+                "coverage": spec.get("coverage") or {},
+                "metrics": spec.get("metrics") or [],
+                "sources": spec.get("sources") or [],
+                "issue_count": issue_count,
+                "issue_label": spec.get("issue_label"),
+            }
+        )
+
+    status_counts: dict[str, int] = {}
+    for domain in domains:
+        key = (domain.get("status") or {}).get("key") or "unknown"
+        status_counts[key] = status_counts.get(key, 0) + 1
+
+    return {
+        "generated_at": _now_iso(),
+        "status_counts": status_counts,
+        "snapshot_completion": {
+            "ok": snapshot_ok,
+            "total": snapshot_total,
+            "missing_scopes": missing_scopes,
+        },
+        "domains": domains,
+    }
+
+
 def _recovery_table(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     table = []
     for row in reversed(rows[-10:]):
@@ -1238,60 +1448,73 @@ def build_dashboard_cache(profile_id: str | None) -> dict[str, Any]:
         _build_correlation(daily_rows, "sleep_score", "rhr", "睡眠得分 vs 静息心率"),
     ]
 
+    overview_payload = {
+        "recovery_score": recovery.get("score"),
+        "recovery_label": recovery.get("label"),
+        "latest_date": latest_row.get("date"),
+        "latest_sync_at": profile.get("last_snapshot_at"),
+        "tracked_days": len(daily_rows),
+        "sleep_goal_minutes": profile.get("sleep_goal_minutes"),
+        "daily_steps_goal": profile.get("daily_steps_goal"),
+        "device_count": profile.get("device_count"),
+        "badge_count": profile.get("badge_count"),
+        "missing_scopes_count": len(missing_scopes),
+        "snapshot_ok_count": fetch_summary.get("ok"),
+        "snapshot_total_count": fetch_summary.get("total"),
+        "nap_count_today": latest_row.get("nap_count"),
+    }
+    tables_payload = {
+        **_recent_tables(activity_rows, sleep_rows, daily_rows),
+        "activity_logs": activity_log_rows,
+        "body": body_rows,
+        "vitals": vitals_rows,
+        "foods": food_rows,
+        "devices": device_rows,
+        "badges": badge_rows,
+        "alarms": alarm_rows,
+        "endpoints": endpoint_rows,
+    }
+    sections_payload = {
+        "activity": activity_section,
+        "body": body_section,
+        "vitals": vitals_section,
+        "lifestyle": lifestyle_section,
+        "account": account_section,
+    }
+    snapshot_status_payload = {
+        "has_snapshot": bool(snapshot),
+        "saved_at": snapshot.get("saved_at"),
+        "has_profile": bool(_endpoint_entry(snapshot, "profile").get("ok")),
+        "has_sleep_goal": bool(_endpoint_entry(snapshot, "sleep_goal").get("ok")),
+        "scopes": profile.get("scopes") or [],
+        "requested_scopes": profile.get("requested_scopes") or [],
+        "missing_scopes": missing_scopes,
+        "fetch_summary": fetch_summary,
+    }
+
     payload = {
         "generated_at": _now_iso(),
         "profile": profile,
-        "overview": {
-            "recovery_score": recovery.get("score"),
-            "recovery_label": recovery.get("label"),
-            "latest_date": latest_row.get("date"),
-            "latest_sync_at": profile.get("last_snapshot_at"),
-            "tracked_days": len(daily_rows),
-            "sleep_goal_minutes": profile.get("sleep_goal_minutes"),
-            "daily_steps_goal": profile.get("daily_steps_goal"),
-            "device_count": profile.get("device_count"),
-            "badge_count": profile.get("badge_count"),
-            "missing_scopes_count": len(missing_scopes),
-            "snapshot_ok_count": fetch_summary.get("ok"),
-            "snapshot_total_count": fetch_summary.get("total"),
-            "nap_count_today": latest_row.get("nap_count"),
-        },
+        "overview": overview_payload,
         "coverage": coverage,
         "stats": metric_cards,
         "correlations": correlations,
+        "data_catalog": _build_data_catalog(
+            overview=overview_payload,
+            coverage=coverage,
+            metric_cards=metric_cards,
+            sections=sections_payload,
+            snapshot_status=snapshot_status_payload,
+            tables=tables_payload,
+        ),
         "charts": {
             "daily": daily_rows[-90:],
             "weekly": weekly_rows,
             "monthly": monthly_rows,
         },
-        "sections": {
-            "activity": activity_section,
-            "body": body_section,
-            "vitals": vitals_section,
-            "lifestyle": lifestyle_section,
-            "account": account_section,
-        },
-        "tables": {
-            **_recent_tables(activity_rows, sleep_rows, daily_rows),
-            "activity_logs": activity_log_rows,
-            "body": body_rows,
-            "vitals": vitals_rows,
-            "foods": food_rows,
-            "devices": device_rows,
-            "badges": badge_rows,
-            "alarms": alarm_rows,
-            "endpoints": endpoint_rows,
-        },
-        "snapshot_status": {
-            "has_snapshot": bool(snapshot),
-            "saved_at": snapshot.get("saved_at"),
-            "has_profile": bool(_endpoint_entry(snapshot, "profile").get("ok")),
-            "has_sleep_goal": bool(_endpoint_entry(snapshot, "sleep_goal").get("ok")),
-            "scopes": profile.get("scopes") or [],
-            "requested_scopes": profile.get("requested_scopes") or [],
-            "missing_scopes": missing_scopes,
-            "fetch_summary": fetch_summary,
-        },
+        "sections": sections_payload,
+        "tables": tables_payload,
+        "snapshot_status": snapshot_status_payload,
         "files": _source_files(profile_id),
     }
 

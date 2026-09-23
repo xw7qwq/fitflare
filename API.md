@@ -55,7 +55,10 @@ JSON 响应统一包含这些字段：
   返回单个档案的概要信息、覆盖范围和可调用链接。
 
 - `GET /api/public/v1/profiles/<profile_id>/dashboard`
-  返回完整公开仪表盘缓存。
+  返回完整公开仪表盘缓存，包含 `data_catalog`。
+
+- `GET /api/public/v1/profiles/<profile_id>/catalog`
+  返回按健康数据域整理的结构化数据地图。每个 domain 包含状态、覆盖范围、核心指标、来源层和对应页面入口。
 
 - `GET /api/public/v1/profiles/<profile_id>/overview`
 - `GET /api/public/v1/profiles/<profile_id>/coverage`

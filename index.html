@@ -3,652 +3,249 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FitBaus 健康仪表盘</title>
-  <meta name="description" content="用中文查看 Fitbit 睡眠、活动、恢复和本地缓存数据。">
-  <link rel="icon" href="assets/favicon.ico" sizes="any">
-  <link rel="shortcut icon" href="assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
-  <script src="version.js?v=20260326-12"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="style.css?v=20260326-12">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="简洁的 Fitbit 中文仪表盘：查看睡眠、活动、恢复和本地缓存记录。">
+  <title>FitBaus · 健康记录</title>
+  <link rel="icon" href="/assets/favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="/style.css?v=20260923-1">
+  <script defer src="/vendor/chart.umd-4.4.1.min.js"></script>
+  <script type="module" src="/app.js?v=20260923-1"></script>
 </head>
 <body>
   <a class="skip-link" href="#mainContent">跳到主内容</a>
-  <div class="page-glow page-glow-one"></div>
-  <div class="page-glow page-glow-two"></div>
-
   <div class="app-shell">
-    <div class="workspace-shell">
-      <aside class="sidebar-column">
-        <header class="surface topbar sidebar-brand">
-          <div class="brand-stack">
-            <a class="brandmark" href="./" aria-label="FitBaus 首页">
-              <img src="assets/fitbauslogo.png" alt="">
-            </a>
-            <div class="brand-copy">
-              <div class="eyebrow">FitBaus Health Console</div>
-              <h1>Fitbit 中文健康仪表盘</h1>
-              <p class="subtitle">
-                左侧负责导航和状态，右侧负责解释数据。桌面端不再把所有内容堆成一条。
-              </p>
-            </div>
-          </div>
-
-          <div class="topbar-actions">
-            <div class="version-chip" id="versionChip">本地缓存模式</div>
-            <div class="version-chip mode-chip" id="adminModeChip" data-mode="public">公开只读模式</div>
-            <a class="button button-secondary" href="/api/public/v1/docs" target="_blank" rel="noreferrer">公共 API</a>
-            <button class="button button-secondary" id="adminLoginBtn" type="button">管理员登录</button>
-            <button class="button button-light hidden" id="adminLogoutBtn" type="button">退出管理</button>
-            <button class="button button-secondary hidden" id="openManagerBtn" type="button">档案管理</button>
-            <button class="button button-primary hidden" id="syncBtn" type="button">同步 Fitbit</button>
-          </div>
-        </header>
-
-        <section class="surface control-rail sidebar-controls">
-          <label class="field field-wide">
-            <span class="field-label">当前档案</span>
-            <div class="field-row">
-              <select id="profileSelect" aria-label="选择档案"></select>
-              <button class="button button-light hidden" id="reloadBtn" type="button">重建缓存</button>
-            </div>
-          </label>
-
-          <label class="field">
-            <span class="field-label">展示范围</span>
-            <select id="rangeSelect" aria-label="选择展示范围">
-              <option value="14">最近 14 天</option>
-              <option value="30" selected>最近 30 天</option>
-              <option value="90">最近 90 天</option>
-            </select>
-          </label>
-
-          <div class="status-strip">
-            <div class="status-pill">
-              <span>最近同步</span>
-              <strong id="lastSyncText">等待数据</strong>
-            </div>
-            <div class="status-pill">
-              <span>当前状态</span>
-              <strong id="statusText">正在加载</strong>
-            </div>
-          </div>
-        </section>
-
-        <section class="surface nav-panel sidebar-nav">
-          <div class="section-head compact">
-            <div>
-              <div class="section-kicker">Navigation</div>
-              <h3>结构导航</h3>
-            </div>
-            <p>先选章节，再读右侧内容。当前项会一直固定在左侧。</p>
-          </div>
-          <div class="quick-nav-grid" id="quickNavGrid"></div>
-        </section>
-      </aside>
-
-      <main class="dashboard-layout" id="mainContent">
-      <section class="surface hero-panel">
-        <div class="hero-copy">
-          <div class="eyebrow">Unified Dashboard</div>
-          <h2 id="heroTitle">准备载入 Fitbit 数据</h2>
-          <p id="heroSubtitle" class="hero-subtitle">页面会优先读取本地缓存，如果缓存不存在就按档案自动重建。</p>
-          <div class="hero-kpis" id="heroKpis"></div>
-          <div class="hero-meta" id="heroMeta"></div>
-        </div>
-
-        <div class="hero-score-card">
-          <div class="hero-score-label">恢复指数</div>
-          <div class="hero-score-value" id="heroRecoveryScore">--</div>
-          <div class="hero-score-caption" id="heroRecoveryLabel">等待数据</div>
-          <div class="hero-score-footnote" id="heroRecoveryFootnote">由睡眠、HRV、静息心率和目标完成度综合估算。</div>
-        </div>
-      </section>
-
-      <div class="overview-bento">
-        <section class="surface digest-panel">
-          <div class="section-head compact">
-            <div>
-              <div class="section-kicker">Reading Order</div>
-              <h3>阅读顺序</h3>
-            </div>
-            <p>先总览，再看睡眠、活动、恢复，最后补充体征、生活和账户。</p>
-          </div>
-          <div class="signal-grid" id="healthDigestGrid"></div>
-        </section>
-
-        <section class="surface coverage-panel">
-          <div class="section-head compact">
-            <div>
-              <div class="section-kicker">Foundation</div>
-              <h3>数据基础</h3>
-            </div>
-            <p>这里只放底盘：历史覆盖、快照完成度、活动日志和权限缺口。</p>
-          </div>
-          <div class="coverage-grid" id="coverageGrid"></div>
-        </section>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="FitBaus 首页"><span class="brand-icon" aria-hidden="true">F</span><strong>FitBaus</strong><span class="brand-caption">健康记录</span></a>
+      <div class="topbar-actions">
+        <span class="mode-chip" id="adminModeChip">公开只读模式</span>
+        <a class="button button-light" href="/api/public/v1/docs" target="_blank" rel="noreferrer">API 文档</a>
+        <button class="button" id="adminLoginBtn" type="button">管理员登录</button>
+        <button class="button hidden" id="openManagerBtn" type="button">档案管理</button>
+        <button class="button hidden" id="reloadBtn" type="button">重建缓存</button>
+        <button class="button button-primary hidden" id="syncBtn" type="button">同步 Fitbit</button>
+        <button class="button button-light hidden" id="adminLogoutBtn" type="button">退出管理</button>
       </div>
-
-      <section class="surface metrics-panel">
-        <div class="section-head compact">
-          <div>
-            <div class="section-kicker">Core Metrics</div>
-            <h3>关键指标</h3>
-          </div>
-          <p>先扫核心数字，再进入对应主题页看图表和明细。</p>
-        </div>
+    </header>
+    <section class="toolbar" aria-label="档案与范围">
+      <div class="toolbar-fields">
+        <label class="field"><span class="field-label">当前档案</span><select id="profileSelect" aria-label="选择档案"><option>正在加载</option></select></label>
+        <label class="field"><span class="field-label">趋势范围</span><select id="rangeSelect" aria-label="选择趋势范围"><option value="14">最近 14 天</option><option value="30" selected>最近 30 天</option><option value="90">最近 90 天</option></select></label>
+      </div>
+      <div class="sync-meta"><span>最近记录 <strong id="latestRecordText">暂无</strong></span><span>缓存更新 <strong id="lastSyncText">暂无</strong></span></div>
+    </section>
+    <nav class="tab-strip" aria-label="健康视图"><div class="tab-buttons" role="tablist" aria-label="仪表盘视图"><button class="tab-button" id="tab-overview" role="tab" aria-selected="true" aria-controls="panel-overview" tabindex="0" data-view="overview" type="button">总览</button>
+<button class="tab-button" id="tab-sleep" role="tab" aria-selected="false" aria-controls="panel-sleep" tabindex="-1" data-view="sleep" type="button">睡眠</button>
+<button class="tab-button" id="tab-activity" role="tab" aria-selected="false" aria-controls="panel-activity" tabindex="-1" data-view="activity" type="button">活动</button>
+<button class="tab-button" id="tab-recovery" role="tab" aria-selected="false" aria-controls="panel-recovery" tabindex="-1" data-view="recovery" type="button">恢复</button>
+<button class="tab-button" id="tab-body" role="tab" aria-selected="false" aria-controls="panel-body" tabindex="-1" data-view="body" type="button">体征</button>
+<button class="tab-button" id="tab-lifestyle" role="tab" aria-selected="false" aria-controls="panel-lifestyle" tabindex="-1" data-view="lifestyle" type="button">生活</button>
+<button class="tab-button" id="tab-account" role="tab" aria-selected="false" aria-controls="panel-account" tabindex="-1" data-view="account" type="button">账户</button>
+<button class="tab-button" id="tab-family" role="tab" aria-selected="false" aria-controls="panel-family" tabindex="-1" data-view="family" type="button">档案</button></div></nav>
+    <main id="mainContent" tabindex="-1" aria-busy="true">
+      <header class="page-heading"><div><h1 id="pageTitle">总览</h1><p id="pageDescription">睡眠、活动与恢复趋势。</p></div><span id="statusText" class="status-text" role="status">正在加载</span></header>
+      <section class="surface empty-state" id="dashboardNotice"><p id="dashboardNoticeText">正在读取本地缓存…</p><button class="button" id="retryBtn" type="button" hidden>重试</button></section>
+      <section id="overviewMetrics" aria-label="核心指标" hidden>
         <div class="stats-grid" id="statsGrid"></div>
+        <details class="more-metrics" id="moreMetrics"><summary>更多指标</summary><div class="stats-grid" id="moreStatsGrid"></div></details>
       </section>
-
-      <section class="surface tab-strip">
-        <div class="tab-buttons" role="tablist" aria-label="仪表盘视图">
-          <button class="tab-button active" id="tab-overview" role="tab" aria-selected="true" aria-controls="panel-overview" tabindex="0" data-view="overview" type="button">总览</button>
-          <button class="tab-button" id="tab-sleep" role="tab" aria-selected="false" aria-controls="panel-sleep" tabindex="-1" data-view="sleep" type="button">睡眠</button>
-          <button class="tab-button" id="tab-activity" role="tab" aria-selected="false" aria-controls="panel-activity" tabindex="-1" data-view="activity" type="button">活动</button>
-          <button class="tab-button" id="tab-recovery" role="tab" aria-selected="false" aria-controls="panel-recovery" tabindex="-1" data-view="recovery" type="button">恢复</button>
-          <button class="tab-button" id="tab-body" role="tab" aria-selected="false" aria-controls="panel-body" tabindex="-1" data-view="body" type="button">体征</button>
-          <button class="tab-button" id="tab-lifestyle" role="tab" aria-selected="false" aria-controls="panel-lifestyle" tabindex="-1" data-view="lifestyle" type="button">生活</button>
-          <button class="tab-button" id="tab-account" role="tab" aria-selected="false" aria-controls="panel-account" tabindex="-1" data-view="account" type="button">账户</button>
-          <button class="tab-button" id="tab-family" role="tab" aria-selected="false" aria-controls="panel-family" tabindex="-1" data-view="family" type="button">家庭</button>
-        </div>
-      </section>
-
-      <section class="surface view-summary-card" id="activeViewSummary" aria-live="polite"></section>
-
-      <section class="view-panel active" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="-1" data-view-panel="overview">
+<section class="view-panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="-1" data-view-panel="overview" hidden>
+<div class="panel-grid panel-grid-two">
+<article class="surface chart-card"><div class="section-head"><h3>日常趋势</h3><p>步数与睡眠得分，分别对应左右轴。</p></div><div class="chart-frame"><canvas id="overviewTrendChart" role="img" aria-label="日常趋势"></canvas></div></article>
+<article class="surface chart-card"><div class="section-head"><h3>周平均变化</h3><p>所选范围内的睡眠时长与 HRV 周均值。</p></div><div class="chart-frame"><canvas id="weeklyTrendChart" role="img" aria-label="周平均变化"></canvas></div></article>
+</div>
+<details class="surface"><summary>相关性 · 补充参考</summary><p class="muted">基于完整缓存计算，相关性不代表因果关系。</p><div class="narrative-grid" id="correlationCards"></div></details>
+</section>
+<section class="view-panel" id="panel-sleep" role="tabpanel" aria-labelledby="tab-sleep" tabindex="-1" data-view-panel="sleep" hidden>
         <div class="panel-grid panel-grid-two">
           <article class="surface chart-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Overview</div>
-                <h3>综合趋势</h3>
-              </div>
-              <p>把睡眠得分、步数和恢复核心指标放在同一个视图里。</p>
-            </div>
+            <div class="section-head"><h3>睡眠得分与时长</h3><p>主睡眠记录会自动去重，小睡单独计数。</p></div>
             <div class="chart-frame">
-              <canvas id="overviewTrendChart" height="120"></canvas>
+              <canvas id="sleepTrendChart" role="img" aria-label="睡眠趋势图"></canvas>
             </div>
           </article>
 
           <article class="surface chart-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Rolling Mean</div>
-                <h3>周平均变化</h3>
-              </div>
-              <p>看每周平均值，而不是被单日波动干扰。</p>
-            </div>
+            <div class="section-head"><h3>深睡 / REM / 浅睡</h3><p>最近两周的睡眠结构，直接看质量变化。</p></div>
             <div class="chart-frame">
-              <canvas id="weeklyTrendChart" height="120"></canvas>
-            </div>
-          </article>
-        </div>
-
-        <article class="surface narrative-card">
-          <div class="section-head">
-            <div>
-              <div class="section-kicker">Signals</div>
-              <h3>相关性和当前判断</h3>
-            </div>
-            <p>这里给出本地缓存算出来的简单相关性，用来快速定位身体状态变化。</p>
-          </div>
-          <div class="narrative-grid" id="correlationCards"></div>
-        </article>
-
-        <article class="surface narrative-card">
-          <div class="section-head">
-            <div>
-              <div class="section-kicker">Highlights</div>
-              <h3>补充 Fitbit 数据摘要</h3>
-            </div>
-            <p>把体征、生活和账户快照收在首页，先看有没有新增可用数据。</p>
-          </div>
-          <div class="detail-grid" id="overviewHighlightGrid"></div>
-        </article>
-      </section>
-
-      <section class="view-panel" id="panel-sleep" role="tabpanel" aria-labelledby="tab-sleep" tabindex="-1" data-view-panel="sleep">
-        <div class="panel-grid panel-grid-two">
-          <article class="surface chart-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Sleep</div>
-                <h3>睡眠得分与时长</h3>
-              </div>
-              <p>主睡眠记录会自动去重，小睡单独计数。</p>
-            </div>
-            <div class="chart-frame">
-              <canvas id="sleepTrendChart" height="120"></canvas>
-            </div>
-          </article>
-
-          <article class="surface chart-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Stages</div>
-                <h3>深睡 / REM / 浅睡</h3>
-              </div>
-              <p>最近两周的睡眠结构，直接看质量变化。</p>
-            </div>
-            <div class="chart-frame">
-              <canvas id="sleepStageChart" height="120"></canvas>
+              <canvas id="sleepStageChart" role="img" aria-label="睡眠趋势图"></canvas>
             </div>
           </article>
         </div>
 
         <article class="surface table-card">
-          <div class="section-head">
-            <div>
-              <div class="section-kicker">Sleep Table</div>
-              <h3>最近睡眠记录</h3>
-            </div>
-            <p>这里只显示主睡眠，避免表格被小睡刷屏。</p>
-          </div>
+          <div class="section-head"><h3>最近睡眠记录</h3><p>这里只显示主睡眠，避免表格被小睡刷屏。</p></div>
           <div class="table-wrap" id="sleepTableWrap"></div>
         </article>
       </section>
-
-      <section class="view-panel" id="panel-activity" role="tabpanel" aria-labelledby="tab-activity" tabindex="-1" data-view-panel="activity">
+<section class="view-panel" id="panel-activity" role="tabpanel" aria-labelledby="tab-activity" tabindex="-1" data-view-panel="activity" hidden>
         <div class="panel-grid panel-grid-two">
           <article class="surface chart-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Activity</div>
-                <h3>步数与活跃分钟</h3>
-              </div>
-              <p>同时看步数规模和真正的活跃时间。</p>
-            </div>
+            <div class="section-head"><h3>步数与活跃分钟</h3><p>同时看步数规模和真正的活跃时间。</p></div>
             <div class="chart-frame">
-              <canvas id="activityTrendChart" height="120"></canvas>
+              <canvas id="activityTrendChart" role="img" aria-label="活动趋势图"></canvas>
             </div>
           </article>
 
           <article class="surface chart-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Burn</div>
-                <h3>燃脂区分钟与热量</h3>
-              </div>
-              <p>更接近训练强度，而不只是走了多少步。</p>
-            </div>
+            <div class="section-head"><h3>活跃区间分钟与热量</h3><p>更接近训练强度，而不只是走了多少步。</p></div>
             <div class="chart-frame">
-              <canvas id="activityBurnChart" height="120"></canvas>
+              <canvas id="activityBurnChart" role="img" aria-label="活动趋势图"></canvas>
             </div>
           </article>
         </div>
 
         <div class="panel-grid panel-grid-two">
           <article class="surface narrative-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Fitbit Activity</div>
-                <h3>补充活动摘要</h3>
-              </div>
-              <p>把今日活动摘要、活动日志和 lifetime stats 收到一起，避免只剩按日步数表。</p>
-            </div>
+            <div class="section-head"><h3>补充活动摘要</h3><p>把今日活动摘要、活动日志和 lifetime stats 收到一起，避免只剩按日步数表。</p></div>
             <div class="detail-grid" id="activityContextGrid"></div>
           </article>
 
           <article class="surface table-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Activity Logs</div>
-                <h3>近期活动日志</h3>
-              </div>
-              <p>如果 Fitbit 返回了训练或手动记录，这里会显示更接近原始行为的日志列表。</p>
-            </div>
+            <div class="section-head"><h3>近期活动日志</h3><p>如果 Fitbit 返回了训练或手动记录，这里会显示更接近原始行为的日志列表。</p></div>
             <div class="table-wrap" id="activityLogTableWrap"></div>
           </article>
         </div>
 
         <article class="surface table-card">
-          <div class="section-head">
-            <div>
-              <div class="section-kicker">Daily Activity Table</div>
-              <h3>按日活动记录</h3>
-            </div>
-            <p>日表保留稳定趋势视角，和上面的原始活动日志分开看更清楚。</p>
-          </div>
+          <div class="section-head"><h3>按日活动记录</h3><p>日表保留稳定趋势视角，和上面的原始活动日志分开看更清楚。</p></div>
           <div class="table-wrap" id="activityTableWrap"></div>
         </article>
       </section>
-
-      <section class="view-panel" id="panel-recovery" role="tabpanel" aria-labelledby="tab-recovery" tabindex="-1" data-view-panel="recovery">
-        <div class="panel-grid panel-grid-two">
-          <article class="surface chart-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Recovery</div>
-                <h3>HRV 与静息心率</h3>
-              </div>
-              <p>HRV 越高通常越好，静息心率越低通常越稳。</p>
-            </div>
-            <div class="chart-frame">
-              <canvas id="recoveryTrendChart" height="120"></canvas>
-            </div>
-          </article>
-
-          <article class="surface chart-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Scatter</div>
-                <h3>睡眠得分 vs HRV</h3>
-              </div>
-              <p>用散点看恢复和睡眠的联动强度。</p>
-            </div>
-            <div class="chart-frame">
-              <canvas id="recoveryScatterChart" height="120"></canvas>
-            </div>
-          </article>
-        </div>
-
-        <article class="surface table-card">
-          <div class="section-head">
-            <div>
-              <div class="section-kicker">Recovery Table</div>
-              <h3>最近恢复记录</h3>
-            </div>
-            <p>把 HRV、深睡 HRV 和静息心率放在一张表里。</p>
-          </div>
-          <div class="table-wrap" id="recoveryTableWrap"></div>
-        </article>
-      </section>
-
-      <section class="view-panel" id="panel-body" role="tabpanel" aria-labelledby="tab-body" tabindex="-1" data-view-panel="body">
+<section class="view-panel" id="panel-recovery" role="tabpanel" aria-labelledby="tab-recovery" tabindex="-1" data-view-panel="recovery" hidden>
+<div class="detail-grid recovery-metrics" id="recoverySummary"></div>
+<p class="muted" id="recoveryEstimate"></p>
+<div class="panel-grid panel-grid-two">
+<article class="surface chart-card"><div class="section-head"><h3>HRV 与静息心率</h3><p>展示当前范围内的原始波动。</p></div><div class="chart-frame"><canvas id="recoveryTrendChart" role="img" aria-label="HRV 与静息心率"></canvas></div></article>
+<article class="surface chart-card"><div class="section-head"><h3>睡眠得分与 HRV</h3><p>每个点对应一条同时包含两项指标的记录。</p></div><div class="chart-frame"><canvas id="recoveryScatterChart" role="img" aria-label="睡眠得分与 HRV"></canvas></div></article>
+</div>
+<details class="surface"><summary>最近恢复记录</summary><div class="table-wrap" id="recoveryTableWrap"></div></details>
+</section>
+<section class="view-panel" id="panel-body" role="tabpanel" aria-labelledby="tab-body" tabindex="-1" data-view-panel="body" hidden>
         <div class="panel-grid panel-grid-two">
           <article class="surface narrative-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Body</div>
-                <h3>体重、BMI 与体脂</h3>
-              </div>
-              <p>优先读取 Fitbit 体重目标和近期体重 / 体脂日志，没有就退回 profile 快照。</p>
-            </div>
+            <div class="section-head"><h3>体重、BMI 与体脂</h3><p>优先读取 Fitbit 体重目标和近期体重 / 体脂日志，没有就退回 profile 快照。</p></div>
             <div class="detail-grid" id="bodyMetricGrid"></div>
           </article>
 
           <article class="surface narrative-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Vitals</div>
-                <h3>血氧、呼吸率与皮温</h3>
-              </div>
-              <p>这些指标来自 Fitbit 的补充 vitals 接口，支持时会自动缓存并展示。</p>
-            </div>
+            <div class="section-head"><h3>血氧、呼吸率与皮温</h3><p>这些指标来自 Fitbit 的补充 vitals 接口，支持时会自动缓存并展示。</p></div>
             <div class="detail-grid" id="vitalMetricGrid"></div>
           </article>
         </div>
 
         <div class="panel-grid panel-grid-two">
           <article class="surface table-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Body Table</div>
-                <h3>近期体重 / 体脂记录</h3>
-              </div>
-              <p>如果 profile 中有体重但没有日志，会显示为空，等下一次同步补齐。</p>
-            </div>
+            <div class="section-head"><h3>近期体重 / 体脂记录</h3><p>如果 profile 中有体重但没有日志，会显示为空，等下一次同步补齐。</p></div>
             <div class="table-wrap" id="bodyTableWrap"></div>
           </article>
 
           <article class="surface table-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Vitals Table</div>
-                <h3>近期 vitals 摘要</h3>
-              </div>
-              <p>展示每类额外体征的最新可解析数值，便于快速确认 Fitbit 是否返回了数据。</p>
-            </div>
+            <div class="section-head"><h3>近期 vitals 摘要</h3><p>展示每类额外体征的最新可解析数值，便于快速确认 Fitbit 是否返回了数据。</p></div>
             <div class="table-wrap" id="vitalTableWrap"></div>
           </article>
         </div>
       </section>
-
-      <section class="view-panel" id="panel-lifestyle" role="tabpanel" aria-labelledby="tab-lifestyle" tabindex="-1" data-view-panel="lifestyle">
+<section class="view-panel" id="panel-lifestyle" role="tabpanel" aria-labelledby="tab-lifestyle" tabindex="-1" data-view-panel="lifestyle" hidden>
         <div class="panel-grid panel-grid-two">
           <article class="surface narrative-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Lifestyle</div>
-                <h3>营养与饮水</h3>
-              </div>
-              <p>把热量目标、今日摄入、饮水目标和今日饮水统一到一个中文视图。</p>
-            </div>
+            <div class="section-head"><h3>营养与饮水</h3><p>把热量目标、今日摄入、饮水目标和今日饮水统一到一个中文视图。</p></div>
             <div class="detail-grid" id="lifestyleMetricGrid"></div>
           </article>
 
           <article class="surface table-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Foods</div>
-                <h3>近期食物记录</h3>
-              </div>
-              <p>recent / frequent / favorite / meals 会统一缓存，表格默认先展示最近吃过的食物。</p>
-            </div>
+            <div class="section-head"><h3>近期食物记录</h3><p>recent / frequent / favorite / meals 会统一缓存，表格默认先展示最近吃过的食物。</p></div>
             <div class="table-wrap" id="foodTableWrap"></div>
           </article>
         </div>
       </section>
-
-      <section class="view-panel" id="panel-account" role="tabpanel" aria-labelledby="tab-account" tabindex="-1" data-view-panel="account">
+<section class="view-panel" id="panel-account" role="tabpanel" aria-labelledby="tab-account" tabindex="-1" data-view-panel="account" hidden>
         <div class="panel-grid panel-grid-two">
           <article class="surface narrative-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Account</div>
-                <h3>账户、设备与权限</h3>
-              </div>
-              <p>这里集中显示快照完成度、设备、徽章、闹钟和当前 token scope 缺口。</p>
-            </div>
+            <div class="section-head"><h3>账户、设备与权限</h3><p>这里集中显示快照完成度、设备、徽章、闹钟和当前 token scope 缺口。</p></div>
             <div class="detail-grid" id="accountMetricGrid"></div>
           </article>
 
           <article class="surface data-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Scopes</div>
-                <h3>授权范围与快照状态</h3>
-              </div>
-              <p>重新授权后，缺失 scope 的接口会在下一次同步自动补齐到本地缓存。</p>
-            </div>
+            <div class="section-head"><h3>授权范围与快照状态</h3><p>重新授权后，缺失 scope 的接口会在下一次同步自动补齐到本地缓存。</p></div>
             <div class="scope-list" id="scopeList"></div>
           </article>
         </div>
 
         <div class="panel-grid panel-grid-two">
           <article class="surface table-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Devices</div>
-                <h3>Fitbit 设备</h3>
-              </div>
-              <p>显示设备电量、同步时间和基础标识信息。</p>
-            </div>
+            <div class="section-head"><h3>Fitbit 设备</h3><p>显示设备电量、同步时间和基础标识信息。</p></div>
             <div class="table-wrap" id="deviceTableWrap"></div>
           </article>
 
           <article class="surface table-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Badges</div>
-                <h3>最近徽章</h3>
-              </div>
-              <p>如果 profile scope 已授权，会展示 Fitbit badges 的本地快照。</p>
-            </div>
+            <div class="section-head"><h3>最近徽章</h3><p>如果 profile scope 已授权，会展示 Fitbit badges 的本地快照。</p></div>
             <div class="table-wrap" id="badgeTableWrap"></div>
           </article>
         </div>
 
         <div class="panel-grid panel-grid-two">
           <article class="surface table-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Alarms</div>
-                <h3>设备闹钟</h3>
-              </div>
-              <p>有 tracker 且 settings scope 授权时，会额外读取闹钟列表。</p>
-            </div>
+            <div class="section-head"><h3>设备闹钟</h3><p>有 tracker 且 settings scope 授权时，会额外读取闹钟列表。</p></div>
             <div class="table-wrap" id="alarmTableWrap"></div>
           </article>
 
           <article class="surface table-card">
-            <div class="section-head">
-              <div>
-                <div class="section-kicker">Endpoints</div>
-                <h3>Fitbit 接口缓存状态</h3>
-              </div>
-              <p>用来确认哪些接口已缓存、哪些因为 scope 缺失被跳过。</p>
-            </div>
+            <div class="section-head"><h3>Fitbit 接口缓存状态</h3><p>用来确认哪些接口已缓存、哪些因为 scope 缺失被跳过。</p></div>
             <div class="table-wrap" id="endpointTableWrap"></div>
           </article>
         </div>
 
         <article class="surface data-card">
-          <div class="section-head">
-            <div>
-              <div class="section-kicker">Cache</div>
-              <h3>本地缓存结构</h3>
-            </div>
-            <p>页面统一消费标准化缓存层。公开访客只看结构摘要，管理员模式会额外显示具体文件路径。</p>
-          </div>
+          <div class="section-head"><h3>本地缓存结构</h3><p>页面统一消费标准化缓存层。公开访客只看结构摘要，管理员模式会额外显示具体文件路径。</p></div>
           <div class="file-list" id="fileList"></div>
         </article>
       </section>
-
-      <section class="view-panel" id="panel-family" role="tabpanel" aria-labelledby="tab-family" tabindex="-1" data-view-panel="family">
+<section class="view-panel" id="panel-family" role="tabpanel" aria-labelledby="tab-family" tabindex="-1" data-view-panel="family" hidden>
         <article class="surface family-card">
-          <div class="section-head">
-            <div>
-              <div class="section-kicker">Profiles</div>
-              <h3>多档案对比</h3>
-            </div>
-            <p>原来的 spousal 页面合并到了这里，只保留一个统一入口。</p>
-          </div>
+          <div class="section-head"><h3>多档案对比</h3><p>查看各档案的最近一次缓存记录。</p></div>
           <div class="family-grid" id="familyGrid"></div>
         </article>
       </section>
-      </main>
-    </div>
+    </main>
+    <footer class="footer"><span>FitBaus · 本地缓存视图</span><span>趋势范围以最近记录为终点；均值与补充快照保留各自标注的时间范围。</span></footer>
   </div>
-
-  <div class="toast hidden" id="toast"></div>
-
-  <div class="modal hidden" id="adminModal" aria-hidden="true">
-    <div class="modal-backdrop" data-close-modal="adminModal"></div>
-    <div class="modal-dialog modal-dialog-narrow">
-      <div class="modal-head">
-        <div>
-          <div class="section-kicker">Admin</div>
-          <h3>管理员登录</h3>
-        </div>
-        <button class="icon-button" data-close-modal="adminModal" type="button" aria-label="关闭">×</button>
-      </div>
-
-      <div class="modal-body">
-        <div class="auth-steps">
-          <p>公开访客只允许查看健康数据。</p>
-          <p>只有管理员登录后，才能创建档案、发起 Fitbit 授权、删除档案或手动同步。</p>
-        </div>
-
-        <form id="adminPasswordForm" class="form-stack">
-          <label class="field">
-            <span class="field-label">管理员口令</span>
-            <input id="adminPasswordInput" type="password" autocomplete="current-password" placeholder="输入管理员口令" required>
-          </label>
-          <button class="button button-primary button-block" id="adminLoginSubmit" type="submit">进入管理模式</button>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal hidden" id="profileModal" aria-hidden="true">
-    <div class="modal-backdrop" data-close-modal="profileModal"></div>
+  <noscript><p class="empty-state">此仪表盘需要 JavaScript。也可通过 <a href="/api/public/v1/docs">API 文档</a> 查看数据接口。</p></noscript>
+  <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+  <dialog class="modal modal-narrow" id="adminModal" aria-labelledby="adminModalTitle">
     <div class="modal-dialog">
-      <div class="modal-head">
-        <div>
-          <div class="section-kicker">Profiles</div>
-          <h3>档案管理</h3>
-        </div>
-        <button class="icon-button" data-close-modal="profileModal" type="button" aria-label="关闭">×</button>
-      </div>
-
-      <div class="modal-body modal-grid">
-        <section class="surface modal-panel">
-          <div class="section-head compact">
-            <div>
-              <div class="section-kicker">New Profile</div>
-              <h4>创建新档案</h4>
-            </div>
-            <p>填入 Fitbit 开发者应用的 Client ID 和 Client Secret。</p>
-          </div>
-
-          <form id="createProfileForm" class="form-stack">
-            <label class="field">
-              <span class="field-label">档案名</span>
-              <input id="newProfileName" type="text" placeholder="例如 Lucius7" required>
-            </label>
-            <label class="field">
-              <span class="field-label">Client ID</span>
-              <input id="newClientId" type="text" placeholder="Fitbit Client ID" required>
-            </label>
-            <label class="field">
-              <span class="field-label">Client Secret</span>
-              <input id="newClientSecret" type="text" placeholder="Fitbit Client Secret" required>
-            </label>
-            <button class="button button-primary button-block" id="createProfileSubmit" type="submit">创建档案</button>
-          </form>
-        </section>
-
-        <section class="surface modal-panel">
-          <div class="section-head compact">
-            <div>
-              <div class="section-kicker">Existing Profiles</div>
-              <h4>现有档案</h4>
-            </div>
-            <p>授权、删除和切换都在这里处理。</p>
-          </div>
-
-          <div class="existing-list" id="existingProfilesList"></div>
-        </section>
+      <div class="modal-head"><h2 id="adminModalTitle">管理员登录</h2><button class="icon-button" data-close-modal="adminModal" type="button" aria-label="关闭登录窗口">×</button></div>
+      <p class="muted">公开访客只读。管理模式可同步数据、管理档案和授权。</p>
+      <form id="adminPasswordForm" class="form-stack">
+        <label class="field"><span class="field-label">管理员口令</span><input id="adminPasswordInput" type="password" autocomplete="current-password" required autofocus></label>
+        <button class="button button-primary" id="adminLoginSubmit" type="submit">进入管理模式</button>
+      </form>
+    </div>
+  </dialog>
+  <dialog class="modal" id="profileModal" aria-labelledby="profileModalTitle">
+    <div class="modal-dialog">
+      <div class="modal-head"><h2 id="profileModalTitle">档案管理</h2><button class="icon-button" data-close-modal="profileModal" type="button" aria-label="关闭档案管理">×</button></div>
+      <div class="modal-grid">
+        <section><h3>创建档案</h3><form id="createProfileForm" class="form-stack">
+          <label class="field"><span class="field-label">档案名</span><input id="newProfileName" type="text" placeholder="例如 Lucius7" required></label>
+          <label class="field"><span class="field-label">Client ID</span><input id="newClientId" type="text" autocomplete="off" required></label>
+          <label class="field"><span class="field-label">Client Secret</span><input id="newClientSecret" type="password" autocomplete="new-password" required></label>
+          <button class="button button-primary" id="createProfileSubmit" type="submit">创建档案</button>
+        </form></section>
+        <section><h3>现有档案</h3><div class="existing-list" id="existingProfilesList"></div></section>
       </div>
     </div>
-  </div>
-
-  <div class="modal hidden" id="authModal" aria-hidden="true">
-    <div class="modal-backdrop" data-close-modal="authModal"></div>
-    <div class="modal-dialog modal-dialog-narrow">
-      <div class="modal-head">
-        <div>
-          <div class="section-kicker">Authorize</div>
-          <h3 id="authModalTitle">授权 Fitbit 档案</h3>
-        </div>
-        <button class="icon-button" data-close-modal="authModal" type="button" aria-label="关闭">×</button>
-      </div>
-
-      <div class="modal-body">
-        <div class="auth-steps">
-          <p>1. 点下面按钮打开 Fitbit 授权页。</p>
-          <p>2. 完成授权后，把浏览器地址栏里最终跳转的完整 URL 粘贴回来。</p>
-          <p>3. 如果你只拿到了 `code`，直接粘贴 `code` 也可以。</p>
-        </div>
-
-        <div class="auth-actions">
-          <a class="button button-primary" id="authOpenLink" href="#" rel="noreferrer noopener" target="_blank">打开 Fitbit 授权页</a>
-        </div>
-
-        <form id="authExchangeForm" class="form-stack">
-          <label class="field">
-            <span class="field-label">回调 URL 或 code</span>
-            <textarea id="authRedirectValue" rows="4" placeholder="粘贴 https://localhost:... 或单独的 code" required></textarea>
-          </label>
-          <button class="button button-primary button-block" id="authExchangeSubmit" type="submit">提交授权结果</button>
-        </form>
-      </div>
+  </dialog>
+  <dialog class="modal modal-narrow" id="authModal" aria-labelledby="authModalTitle">
+    <div class="modal-dialog">
+      <div class="modal-head"><h2 id="authModalTitle">授权 Fitbit 档案</h2><button class="icon-button" data-close-modal="authModal" type="button" aria-label="关闭授权窗口">×</button></div>
+      <p class="muted">打开 Fitbit 授权页，完成后粘贴最终回调 URL 或授权 code。</p>
+      <a class="button" id="authOpenLink" href="#" rel="noreferrer noopener" target="_blank">打开 Fitbit 授权页</a>
+      <form id="authExchangeForm" class="form-stack">
+        <label class="field"><span class="field-label">回调 URL 或 code</span><textarea id="authRedirectValue" rows="4" required></textarea></label>
+        <button class="button button-primary" id="authExchangeSubmit" type="submit">提交授权结果</button>
+      </form>
     </div>
-  </div>
-
-  <script src="app.js?v=20260326-12"></script>
+  </dialog>
 </body>
 </html>
