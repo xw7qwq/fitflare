@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <meta name="description" content="Fitflare 个人健康看板：同步 Google Health，保留 Fitbit 历史，查看睡眠、活动与恢复趋势。">
+  <meta name="description" content="Fitflare 私人健康看板：同步 Google Health，保留 Fitbit 历史，查看睡眠、活动与恢复趋势。">
   <title>Fitflare · 健康记录</title>
   <link rel="canonical" href="https://fitflare.lucius7.dev/">
   <link rel="icon" href="/assets/favicon.ico" sizes="any">
@@ -19,34 +19,31 @@
     <header class="topbar">
       <a class="brand" href="/" aria-label="Fitflare 首页"><span class="brand-icon" aria-hidden="true">F</span><strong>Fitflare</strong><span class="brand-caption">健康记录</span></a>
       <div class="topbar-actions">
-        <span class="mode-chip" id="adminModeChip">公开只读模式</span>
-        <a class="button button-light" href="/api/public/v1/docs" target="_blank" rel="noreferrer">API 文档</a>
-        <button class="button" id="adminLoginBtn" type="button">管理员登录</button>
-        <button class="button hidden" id="openManagerBtn" type="button">档案管理</button>
-        <button class="button hidden" id="reloadBtn" type="button">重建缓存</button>
-        <button class="button button-primary hidden" id="syncBtn" type="button">同步健康数据</button>
-        <button class="button button-light hidden" id="adminLogoutBtn" type="button">退出管理</button>
+        <span class="mode-chip" id="adminModeChip">私有健康记录</span>
+        <button class="button" id="adminLoginBtn" type="button">登录</button>
+        <button class="button hidden" id="openAccountBtn" type="button">连接 Google Health</button>
+        <button class="button hidden" id="reloadBtn" type="button">刷新视图</button>
+        <button class="button button-primary hidden" id="syncBtn" type="button">同步数据</button>
+        <button class="button button-light hidden" id="adminLogoutBtn" type="button">退出登录</button>
       </div>
     </header>
     <div class="nav-bar">
-      <section class="toolbar" aria-label="档案与范围">
+      <section class="toolbar" aria-label="统计范围">
         <div class="toolbar-fields">
-          <label class="field"><span class="field-label">档案</span><select id="profileSelect" aria-label="选择档案"><option>正在加载</option></select></label>
           <label class="field"><span class="field-label">统计范围</span><select id="rangeSelect" aria-label="选择统计范围"><option value="14">最近 14 天</option><option value="30" selected>最近 30 天</option><option value="90">最近 90 天</option></select></label>
         </div>
-        <div class="sync-meta"><span>最近记录 <strong id="latestRecordText">暂无</strong></span><span>缓存更新 <strong id="lastSyncText">暂无</strong></span></div>
+        <div class="sync-meta"><span>最近记录 <strong id="latestRecordText">暂无</strong></span><span>最近同步 <strong id="lastSyncText">暂无</strong></span></div>
       </section>
       <nav class="tab-strip" aria-label="健康视图"><div class="tab-buttons" role="tablist" aria-label="仪表盘视图"><button class="tab-button" id="tab-overview" role="tab" aria-selected="true" aria-controls="panel-overview" tabindex="0" data-view="overview" type="button">总览</button>
 <button class="tab-button" id="tab-sleep" role="tab" aria-selected="false" aria-controls="panel-sleep" tabindex="-1" data-view="sleep" type="button">睡眠</button>
 <button class="tab-button" id="tab-activity" role="tab" aria-selected="false" aria-controls="panel-activity" tabindex="-1" data-view="activity" type="button">活动</button>
 <button class="tab-button" id="tab-recovery" role="tab" aria-selected="false" aria-controls="panel-recovery" tabindex="-1" data-view="recovery" type="button">恢复</button>
 <button class="tab-button" id="tab-body" role="tab" aria-selected="false" aria-controls="panel-body" tabindex="-1" data-view="body" type="button">体征与营养</button>
-<button class="tab-button" id="tab-account" role="tab" aria-selected="false" aria-controls="panel-account" tabindex="-1" data-view="account" type="button">设备与数据</button>
-<button class="tab-button" id="tab-family" role="tab" aria-selected="false" aria-controls="panel-family" tabindex="-1" data-view="family" type="button">档案</button></div></nav>
+<button class="tab-button" id="tab-account" role="tab" aria-selected="false" aria-controls="panel-account" tabindex="-1" data-view="account" type="button">设备与数据</button></div></nav>
     </div>
     <main id="mainContent" tabindex="-1" aria-busy="true">
       <header class="page-heading"><div><h1 id="pageTitle">总览</h1><p id="pageDescription">睡眠、活动与恢复的整体状态。</p></div><span id="statusText" class="status-text" role="status">正在加载</span></header>
-      <section class="surface empty-state" id="dashboardNotice"><p id="dashboardNoticeText">正在读取本地缓存…</p><button class="button" id="retryBtn" type="button" hidden>重试</button></section>
+      <section class="surface empty-state" id="dashboardNotice"><p id="dashboardNoticeText">正在读取健康记录…</p><button class="button" id="retryBtn" type="button" hidden>重试</button></section>
       <p class="data-note" id="dataQualityNote" hidden></p>
 
       <section id="overviewMetrics" class="overview-metrics" aria-label="核心指标" hidden>
@@ -162,41 +159,36 @@
   </div>
   <details class="surface table-card"><summary>接口同步状态</summary><p class="muted">每个数据接口最近一次同步的结果。</p><div class="table-wrap" id="endpointTableWrap"></div></details>
   <details class="surface table-card"><summary>设备闹钟</summary><div class="table-wrap" id="alarmTableWrap"></div></details>
-  <details class="surface"><summary>本地缓存结构</summary><p class="muted">页面统一读取标准化缓存层；管理员模式会显示具体文件路径。</p><div class="file-list" id="fileList"></div></details>
 </section>
 
-<section class="view-panel" id="panel-family" role="tabpanel" aria-labelledby="tab-family" tabindex="-1" data-view-panel="family" hidden>
-  <div class="family-grid" id="familyGrid"></div>
-</section>
     </main>
-    <footer class="footer"><span>Fitflare · 本地缓存视图 · <a href="/about.html">关于 Fitflare</a> · <a href="/privacy.html">隐私政策</a> · <a href="/terms.html">使用条款</a></span><span>统计范围以最近记录为终点；未佩戴设备的日子不计入均值。</span></footer>
+    <footer class="footer"><span>Fitflare · 我的健康记录 · <a href="/api/public/v1/docs">API 文档</a> · <a href="/about.html">关于 Fitflare</a> · <a href="/privacy.html">隐私政策</a> · <a href="/terms.html">使用条款</a></span><span>统计范围以最近记录为终点；未佩戴设备的日子不计入均值。</span></footer>
   </div>
   <noscript><p class="empty-state">此仪表盘需要 JavaScript。也可通过 <a href="/api/public/v1/docs">API 文档</a> 查看数据接口。</p></noscript>
   <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
   <dialog class="modal modal-narrow" id="adminModal" aria-labelledby="adminModalTitle">
     <div class="modal-dialog">
-      <div class="modal-head"><h2 id="adminModalTitle">管理员登录</h2><button class="icon-button" data-close-modal="adminModal" type="button" aria-label="关闭登录窗口">×</button></div>
-      <p class="muted">公开访客只读。管理模式可同步数据、管理档案和授权。</p>
+      <div class="modal-head"><h2 id="adminModalTitle">登录</h2><button class="icon-button" data-close-modal="adminModal" type="button" aria-label="关闭登录窗口">×</button></div>
+      <p class="muted">登录后查看健康记录，并可连接 Google Health、同步数据。</p>
       <form id="adminPasswordForm" class="form-stack">
-        <label class="field"><span class="field-label">管理员口令</span><input id="adminPasswordInput" type="password" autocomplete="current-password" required autofocus></label>
-        <button class="button button-primary" id="adminLoginSubmit" type="submit">进入管理模式</button>
+        <label class="field"><span class="field-label">登录口令</span><input id="adminPasswordInput" type="password" autocomplete="current-password" required autofocus></label>
+        <button class="button button-primary" id="adminLoginSubmit" type="submit">登录</button>
       </form>
     </div>
   </dialog>
-  <dialog class="modal" id="profileModal" aria-labelledby="profileModalTitle">
+  <dialog class="modal modal-narrow" id="accountModal" aria-labelledby="accountModalTitle">
     <div class="modal-dialog">
-      <div class="modal-head"><h2 id="profileModalTitle">档案管理</h2><button class="icon-button" data-close-modal="profileModal" type="button" aria-label="关闭档案管理">×</button></div>
-      <div class="modal-grid">
-        <section><h3>创建档案</h3><form id="createProfileForm" class="form-stack">
-          <label class="field"><span class="field-label">档案名</span><input id="newProfileName" type="text" placeholder="例如 Lucius7" required></label>
-          <p class="muted">使用已启用 Google Health API 的 Google Cloud Web OAuth 客户端。</p>
-          <label class="field"><span class="field-label">Google Client ID</span><input id="newClientId" type="text" autocomplete="off" required></label>
-          <label class="field"><span class="field-label">Google Client Secret</span><input id="newClientSecret" type="password" autocomplete="new-password" required></label>
-          <label class="field"><span class="field-label">已注册的回调 URI</span><input id="newRedirectUri" type="url" value="http://localhost:8080/callback" required></label>
-          <button class="button button-primary" id="createProfileSubmit" type="submit">创建档案</button>
-        </form></section>
-        <section><h3>现有档案</h3><div class="existing-list" id="existingProfilesList"></div></section>
-      </div>
+      <div class="modal-head"><h2 id="accountModalTitle">账户设置</h2><button class="icon-button" data-close-modal="accountModal" type="button" aria-label="关闭账户设置">×</button></div>
+      <p class="connection-status" id="accountConnectionStatus" role="status">尚未连接 Google Health</p>
+      <button class="button" id="reauthorizeBtn" type="button" hidden>重新授权 Google Health</button>
+      <p class="muted" id="accountSettingsHint">填写 Google Cloud 中启用了 Google Health API 的 Web OAuth 客户端，然后完成授权。</p>
+      <p><a href="https://developers.google.com/health/get-started" target="_blank" rel="noreferrer noopener">Google Health 接入说明</a></p>
+      <form id="accountSetupForm" class="form-stack">
+        <label class="field"><span class="field-label">Google Client ID</span><input id="clientId" type="text" autocomplete="off" required></label>
+        <label class="field"><span class="field-label">Google Client Secret</span><input id="clientSecret" type="password" autocomplete="new-password" required></label>
+        <label class="field"><span class="field-label">已注册的回调 URI</span><input id="redirectUri" type="url" value="http://localhost:8080/callback" required></label>
+        <button class="button button-primary" id="accountSetupSubmit" type="submit">保存并授权</button>
+      </form>
     </div>
   </dialog>
   <dialog class="modal modal-narrow" id="authModal" aria-labelledby="authModalTitle">
@@ -207,19 +199,6 @@
       <form id="authExchangeForm" class="form-stack">
         <label class="field"><span class="field-label">完整回调 URL（含 code 和 state）</span><textarea id="authRedirectValue" rows="4" required></textarea></label>
         <button class="button button-primary" id="authExchangeSubmit" type="submit">提交授权结果</button>
-      </form>
-    </div>
-  </dialog>
-  <dialog class="modal modal-narrow" id="googleCredentialsModal" aria-labelledby="googleCredentialsTitle">
-    <div class="modal-dialog">
-      <div class="modal-head"><h2 id="googleCredentialsTitle">Google 客户端配置</h2><button class="icon-button" data-close-modal="googleCredentialsModal" type="button" aria-label="关闭客户端配置">×</button></div>
-      <p class="muted">填写 Google Cloud 中的 Web OAuth 客户端，回调 URI 必须完全一致。保存后继续授权，成功连接后保留历史数据并切换同步来源。</p>
-      <p><a href="https://developers.google.com/health/get-started" target="_blank" rel="noreferrer noopener">Google Health 接入说明</a></p>
-      <form id="googleCredentialsForm" class="form-stack">
-        <label class="field"><span class="field-label">Google Client ID</span><input id="googleClientId" type="text" autocomplete="off" required></label>
-        <label class="field"><span class="field-label">Google Client Secret</span><input id="googleClientSecret" type="password" autocomplete="new-password" required></label>
-        <label class="field"><span class="field-label">已注册的回调 URI</span><input id="googleRedirectUri" type="url" value="http://localhost:8080/callback" required></label>
-        <button class="button button-primary" id="googleCredentialsSubmit" type="submit">保存并继续授权</button>
       </form>
     </div>
   </dialog>

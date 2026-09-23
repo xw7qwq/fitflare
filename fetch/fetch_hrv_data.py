@@ -13,6 +13,7 @@ from auth.refresh_token import refresh_token
 from common.google_health import require_legacy_fitbit_tokens, profile_fetch_lock
 from common.profile_paths import (
     get_active_profile,
+    activate_profile_context,
     tokens_file_for,
     csv_path_for,
     ensure_dirs_for_csv,
@@ -27,8 +28,7 @@ PROFILE_ID = get_active_profile(args.profile)
 
 TOKENS_FILE = tokens_file_for(PROFILE_ID)
 CSV_FILE = csv_path_for(PROFILE_ID, "fitbit_hrv.csv")
-os.environ["FITBIT_TOKENS_FILE"] = TOKENS_FILE
-os.environ["FITBIT_PROFILE"] = PROFILE_ID or ""
+activate_profile_context(PROFILE_ID)
 ensure_dirs_for_csv(CSV_FILE)
 CHUNK_DAYS = 30
 FALLBACK_START_DATE = datetime(2019, 1, 1)

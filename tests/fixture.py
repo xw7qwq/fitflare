@@ -11,6 +11,8 @@ def make_fixture(profiles_dir):
         for name in ('auth', 'cache', 'csv'):
             (directory / name).mkdir(parents=True, exist_ok=True)
         (directory / 'auth/client.json').write_text(json.dumps({'client_id': 'test-only', 'created_at': '2026-01-01T00:00:00'}))
+        (directory / 'auth/google_client.json').write_text(json.dumps({'client_id': 'test-only.apps.googleusercontent.com', 'client_secret': 'test-only',
+                                                                         'redirect_uri': 'http://localhost:8080/callback'}))
         (directory / 'auth/tokens.json').write_text('{}')
         (directory / 'csv/example.csv').write_text('date,value\n2026-09-23,1\n')
         daily = [dict(date=str(date(2026, 8, 1) + timedelta(days=i)), sleep_hours=7+i%3/10,

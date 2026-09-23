@@ -35,8 +35,10 @@ class GoogleHealthDataTests(unittest.TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
-        self.tokens = self.root / "auth" / "tokens.json"
-        self.tokens.parent.mkdir()
+        # All account data lives under profiles/<configured owner>/.
+        self.account = self.root / "profiles" / profile_paths.owner_profile_id()
+        self.tokens = self.account / "auth" / "tokens.json"
+        self.tokens.parent.mkdir(parents=True)
         self.tokens.write_text(json.dumps({"oauth_type": "google", "access_token": "synthetic-access",
                                           "granted_scopes": [ACTIVITY_SCOPE]}))
         patcher = patch.object(profile_paths, "ROOT_DIR", str(self.root))
@@ -165,7 +167,7 @@ class GoogleHealthDataTests(unittest.TestCase):
         self.assertEqual(row["sleepScoreSource"], "local_estimate")
 
     def test_merge_preserves_history_and_missing_metrics(self):
-        path = str(self.root / "csv" / "fitbit_activity.csv")
+        path = str(self.account / "csv" / "fitbit_activity.csv")
         merge_csv(path, [{"date": "2026-10-20", "steps": 123, "sedentaryMinutes": 300}], ["date", "steps", "sedentaryMinutes"])
         merge_csv(path, [{"date": "2026-10-20", "steps": None}, {"date": "2026-10-21", "steps": 0}], ["date", "steps"])
         rows, _ = csv_rows(path)
@@ -205,14 +207,14 @@ class GoogleHealthDataTests(unittest.TestCase):
             "summary": {"minutesAsleep": "450", "minutesInSleepPeriod": "480"}}}
         client.reconcile.side_effect = lambda metric, *_: [point] if metric == "sleep" else []
         self.assertEqual(sync_profile(None, client=client, today=date(2026, 10, 22)), 0)
-        rows, _ = csv_rows(str(self.root / "csv" / "fitbit_sleep.csv"))
+        rows, _ = csv_rows(str(self.account / "csv" / "fitbit_sleep.csv"))
         self.assertEqual(rows[0]["date"], "2026-10-22")
         self.assertEqual(rows[0]["minutesAsleep"], "450")
-        state = read_json(str(self.root / "cache" / "google_health_sync.json"))
+        state = read_json(str(self.account / "cache" / "google_health_sync.json"))
         self.assertEqual(state["completed_through"]["sleep"], "2026-10-22")
 
     def test_sleep_migration_replaces_duplicate_provider_ids_only_on_returned_days(self):
-        path = str(self.root / "csv" / "fitbit_sleep.csv")
+        path = str(self.account / "csv" / "fitbit_sleep.csv")
         merge_csv(path, [{"date": "2026-10-20", "logId": "old20"}, {"date": "2026-10-21", "logId": "old21"}], ["date", "logId"], sleep=True)
         merge_csv(path, [{"date": "2026-10-21", "logId": "google21"}, {"date": "2026-10-21", "logId": "nap21"}], ["date", "logId"], sleep=True)
         merge_csv(path, [], ["date", "logId"], sleep=True)
@@ -230,7 +232,7 @@ class GoogleHealthDataTests(unittest.TestCase):
         return client
 
     def test_partial_scopes_do_not_erase_existing_data_or_claim_complete(self):
-        path = str(self.root / "csv" / "fitbit_sleep.csv")
+        path = str(self.account / "csv" / "fitbit_sleep.csv")
         merge_csv(path, [{"date": "2026-10-20", "minutesAsleep": 400}], ["date", "minutesAsleep"], sleep=True)
         before = Path(path).read_bytes()
         client = self.fake_sync_client([PROFILE_SCOPE])
@@ -239,7 +241,7 @@ class GoogleHealthDataTests(unittest.TestCase):
         self.assertEqual(Path(path).read_bytes(), before)
         client.daily_rollup.assert_not_called()
         client.reconcile.assert_not_called()
-        snapshot = read_json(str(self.root / "cache" / "fitbit_profile_snapshot.json"))
+        snapshot = read_json(str(self.account / "cache" / "fitbit_profile_snapshot.json"))
         self.assertEqual(snapshot["sync_status"], "partial")
         self.assertTrue(snapshot["endpoints"]["google_health_sleep"]["reason"].startswith("missing_scope:"))
 
@@ -254,19 +256,19 @@ class GoogleHealthDataTests(unittest.TestCase):
             return []
         client.daily_rollup.side_effect = rollup
         self.assertEqual(sync_profile(None, client=client, today=date(2026, 9, 30)), 2)
-        cursor = read_json(str(self.root / "cache" / "google_health_sync.json"))["completed_through"]
+        cursor = read_json(str(self.account / "cache" / "google_health_sync.json"))["completed_through"]
         self.assertEqual(cursor["total-calories"], "2026-09-14")
         self.assertEqual(cursor["steps"], "2026-09-30")
-        rows, _ = csv_rows(str(self.root / "csv" / "fitbit_activity.csv"))
+        rows, _ = csv_rows(str(self.account / "csv" / "fitbit_activity.csv"))
         self.assertEqual(rows[0]["caloriesOut"], "2000.0")
-        self.assertEqual(start_date_for(str(self.root / "csv" / "fitbit_activity.csv"), "total-calories", "caloriesOut", cursor, date(2026, 9, 1)), date(2026, 9, 8))
+        self.assertEqual(start_date_for(str(self.account / "csv" / "fitbit_activity.csv"), "total-calories", "caloriesOut", cursor, date(2026, 9, 1)), date(2026, 9, 8))
 
     def test_unsupported_goals_keep_historical_payload_with_stale_marker(self):
         snapshot = {"endpoints": {"sleep_goal": {"ok": True, "fetched_at": "2026-10-01", "data": {"goal": {"minDuration": 480}}}}}
-        atomic_json(str(self.root / "cache" / "fitbit_profile_snapshot.json"), snapshot)
+        atomic_json(str(self.account / "cache" / "fitbit_profile_snapshot.json"), snapshot)
         client = self.fake_sync_client([PROFILE_SCOPE])
         sync_profile(None, client=client, today=date(2026, 10, 22))
-        entry = read_json(str(self.root / "cache" / "fitbit_profile_snapshot.json"))["endpoints"]["sleep_goal"]
+        entry = read_json(str(self.account / "cache" / "fitbit_profile_snapshot.json"))["endpoints"]["sleep_goal"]
         self.assertFalse(entry["ok"])
         self.assertTrue(entry["stale"])
         self.assertEqual(entry["cached_provider"], "fitbit")
@@ -275,21 +277,21 @@ class GoogleHealthDataTests(unittest.TestCase):
     def test_full_consent_empty_response_completes_without_inventing_csv_rows(self):
         client = self.fake_sync_client(GOOGLE_HEALTH_SCOPES)
         self.assertEqual(sync_profile(None, client=client, today=date(2026, 10, 22)), 0)
-        self.assertFalse((self.root / "csv" / "fitbit_activity.csv").exists())
-        snapshot = read_json(str(self.root / "cache" / "fitbit_profile_snapshot.json"))
+        self.assertFalse((self.account / "csv" / "fitbit_activity.csv").exists())
+        snapshot = read_json(str(self.account / "cache" / "fitbit_profile_snapshot.json"))
         self.assertEqual(snapshot["sync_status"], "complete")
         self.assertIsNone(snapshot["endpoints"]["food_log_today"]["data"]["summary"]["calories"])
 
     def test_today_snapshot_does_not_present_legacy_metrics_as_fresh(self):
-        path = str(self.root / "csv" / "fitbit_activity.csv")
+        path = str(self.account / "csv" / "fitbit_activity.csv")
         merge_csv(path, [{"date": "2026-10-22", "steps": 123, "activityCalories": 456}], ["date", "steps", "activityCalories"])
         client = self.fake_sync_client(GOOGLE_HEALTH_SCOPES)
         sync_profile(None, client=client, today=date(2026, 10, 22))
-        snapshot = read_json(str(self.root / "cache" / "fitbit_profile_snapshot.json"))
+        snapshot = read_json(str(self.account / "cache" / "fitbit_profile_snapshot.json"))
         self.assertFalse(snapshot["endpoints"]["today_activity_summary"]["ok"])
         client.daily_rollup.side_effect = lambda metric, first, stop: [{"civilStartTime": {"date": DAY}, "steps": {"countSum": "789"}}] if metric == "steps" else []
         sync_profile(None, client=client, today=date(2026, 10, 22))
-        summary = read_json(str(self.root / "cache" / "fitbit_profile_snapshot.json"))["endpoints"]["today_activity_summary"]["data"]["summary"]
+        summary = read_json(str(self.account / "cache" / "fitbit_profile_snapshot.json"))["endpoints"]["today_activity_summary"]["data"]["summary"]
         self.assertEqual(summary["steps"], 789)
         self.assertNotIn("activityCalories", summary)
         self.assertIsNone(summary["caloriesOut"])
@@ -298,27 +300,21 @@ class GoogleHealthDataTests(unittest.TestCase):
         client = self.fake_sync_client([ACTIVITY_SCOPE, PROFILE_SCOPE])
         client.daily_rollup.return_value = [{"steps": {"countSum": "123"}}]
         self.assertEqual(sync_profile(None, client=client, today=date(2026, 10, 22)), 2)
-        self.assertFalse((self.root / "cache" / "google_health_sync.json").exists())
+        self.assertFalse((self.account / "cache" / "google_health_sync.json").exists())
 
     def test_fetch_all_uses_only_google_script_for_migrated_profile(self):
-        with patch.object(fetch_all, "discover_profiles", return_value=[]), \
-             patch.object(fetch_all, "build_dashboard_cache"), \
+        with patch.object(fetch_all, "build_dashboard_cache"), \
              patch.object(fetch_all, "run_script", return_value=(0, None)) as run, \
              patch("sys.argv", ["fetch_all.py"]):
-            with self.assertRaises(SystemExit) as stopped:
-                fetch_all.main()
-        self.assertEqual(stopped.exception.code, 0)
+            self.assertEqual(fetch_all.main(), 0)
         self.assertEqual([Path(call.args[0]).name for call in run.call_args_list], ["fetch_google_health.py"])
 
     def test_fetch_all_keeps_legacy_provider_until_google_authorization(self):
         self.tokens.write_text(json.dumps({"access_token": "synthetic-legacy"}))
-        with patch.object(fetch_all, "discover_profiles", return_value=[]), \
-             patch.object(fetch_all, "build_dashboard_cache"), \
+        with patch.object(fetch_all, "build_dashboard_cache"), \
              patch.object(fetch_all, "run_script", return_value=(0, None)) as run, \
              patch("sys.argv", ["fetch_all.py"]):
-            with self.assertRaises(SystemExit) as stopped:
-                fetch_all.main()
-        self.assertEqual(stopped.exception.code, 0)
+            self.assertEqual(fetch_all.main(), 0)
         self.assertEqual([Path(call.args[0]).name for call in run.call_args_list], [
             "fetch_steps.py", "fetch_rhr_data.py", "fetch_hrv_data.py", "fetch_sleep_data.py", "fetch_profile_snapshot.py"])
 
@@ -337,7 +333,7 @@ class GoogleHealthDataTests(unittest.TestCase):
                 pass
 
     def test_sleep_unknown_fields_preserve_matching_legacy_session(self):
-        path = str(self.root / "csv" / "fitbit_sleep.csv")
+        path = str(self.account / "csv" / "fitbit_sleep.csv")
         merge_csv(path, [{"date": "2026-10-22", "logId": "legacy123", "startTime": "2026-10-21T23:00:00.000", "endTime": "2026-10-22T07:00:00.000", "minutesDeep": 75}], ["date", "logId", "startTime", "endTime", "minutesDeep"], sleep=True)
         merge_csv(path, [{"date": "2026-10-22", "logId": "google123", "startTime": "2026-10-21T23:00:00", "endTime": "2026-10-22T07:00:00", "minutesDeep": None, "minutesAsleep": 420}], ["date", "logId", "startTime", "endTime", "minutesDeep", "minutesAsleep"], sleep=True)
         rows, _ = csv_rows(path)

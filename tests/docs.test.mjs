@@ -2,20 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildRequest, exampleCode, readPreview } from '../js/docs-request.js';
 
-const endpoint = { path: '/api/public/v1/profiles/{profile_id}/series/daily', parameters: [
-  {name:'profile_id', in:'path', required:true}, {name:'metrics', in:'query'}, {name:'limit', in:'query'},
+const endpoint = { path: '/api/public/v1/me/series/{granularity}', parameters: [
+  {name:'granularity', in:'path', required:true}, {name:'metrics', in:'query'}, {name:'limit', in:'query'},
 ] };
 test('documentation requests encode values and stay on the supplied origin', () => {
-  const url = new URL(buildRequest(endpoint, {profile_id:'a/b', metrics:'steps,hrv', limit:'30'}, 'https://example.test'));
+  const url = new URL(buildRequest(endpoint, {granularity:'a/b', metrics:'steps,hrv', limit:'30'}, 'https://example.test'));
   assert.equal(url.origin, 'https://example.test');
   assert.ok(url.pathname.includes('a%2Fb'));
   assert.equal(url.searchParams.get('metrics'), 'steps,hrv');
-  assert.throws(() => buildRequest({...endpoint, path:'https://outside.test/'}, {profile_id:'x'}, 'https://example.test'));
-  assert.throws(() => buildRequest({...endpoint, path:'/api/admin/login'}, {profile_id:'x'}, 'https://example.test'));
-  assert.throws(() => buildRequest(endpoint, {}, 'https://example.test'), /profile_id/);
+  assert.throws(() => buildRequest({...endpoint, path:'https://outside.test/'}, {granularity:'x'}, 'https://example.test'));
+  assert.throws(() => buildRequest({...endpoint, path:'/api/admin/login'}, {granularity:'x'}, 'https://example.test'));
+  assert.throws(() => buildRequest(endpoint, {}, 'https://example.test'), /granularity/);
 });
 test('copyable examples contain the chosen URL and explicit error handling', () => {
-  const url = 'https://example.test/api/public/v1/profiles?x=a%26b';
+  const url = 'https://example.test/api/public/v1/me?x=a%26b';
   assert.ok(exampleCode(url).includes(url));
   assert.match(exampleCode(url, 'javascript'), /response.ok/);
   assert.match(exampleCode(url, 'python'), /raise_for_status/);

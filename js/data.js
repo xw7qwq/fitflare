@@ -6,8 +6,7 @@ export const VIEWS = {
   activity: ['活动', '步数、活动强度、运动记录与累计数据。'],
   recovery: ['恢复', 'HRV 与静息心率相对个人基线的变化。'],
   body: ['体征与营养', '体重、夜间体征与饮食饮水记录。'],
-  account: ['设备与数据', '设备、授权范围与本地数据覆盖。'],
-  family: ['档案', '切换档案，查看各自的最新记录。'],
+  account: ['设备与数据', '设备、授权与本地数据覆盖。'],
 };
 // Older links used a separate lifestyle tab; it now lives inside the body view.
 export const VIEW_ALIASES = { lifestyle: 'body' };
@@ -15,14 +14,6 @@ const METRIC_VIEWS = { sleep_score: 'sleep', sleep_hours: 'sleep', steps: 'activ
 // true: higher is better, false: lower is better, null: neutral.
 export const METRIC_POLARITY = { sleep_hours: true, sleep_score: true, steps: true, active_minutes: true, active_zone_minutes: true, hrv: true, rhr: false, calories_out: null };
 export const METRIC_LABELS = { sleep_hours: '睡眠时长', sleep_score: '睡眠估算得分', steps: '步数', active_minutes: '活跃分钟', active_zone_minutes: '燃脂区分钟', calories_out: '消耗热量', hrv: 'HRV', rhr: '静息心率' };
-const CACHE_LAYERS = {
-  dashboard_cache: ['仪表盘缓存', '聚合指标、图表和记录。'],
-  profile_snapshot: ['健康数据快照', '设备、目标与补充指标。'],
-  activity_csv: ['活动历史', '活动与步数的原始缓存。'],
-  sleep_csv: ['睡眠历史', '睡眠时长与阶段记录。'],
-  hrv_csv: ['HRV 历史', '心率变异性记录。'],
-  rhr_csv: ['静息心率历史', '静息心率记录。'],
-};
 const WEAR_FIELDS = ['steps', 'active_minutes', 'very_active_minutes', 'fairly_active_minutes', 'lightly_active_minutes', 'active_zone_minutes'];
 const NON_WEAR_CLEARED = [...WEAR_FIELDS, 'calories_out', 'activity_calories', 'sedentary_minutes'];
 const DAY_MS = 86400000;
@@ -41,7 +32,6 @@ export function normalizeDashboard(dashboard = {}, authenticated = false) {
     daily: cleanDailyRows(dashboard.charts?.daily),
     account: {
       files: authenticated ? dashboard.files || {} : {},
-      cacheLayers: Object.entries(CACHE_LAYERS).map(([key, [label, detail]]) => ({ key, label, detail })),
     },
   };
 }

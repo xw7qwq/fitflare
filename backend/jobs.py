@@ -2,6 +2,7 @@
 import threading
 from datetime import datetime
 from uuid import uuid4
+from common.profile_paths import owner_profile_id
 
 fetch_jobs = {}
 fetch_procs = {}
@@ -15,6 +16,8 @@ def new_id():
 
 
 def create_fetch(profile):
+    if profile != owner_profile_id():
+        raise ValueError("Only the configured personal account can be synchronized")
     with lock:
         # Keep the last 100 terminal jobs; never evict queued/running work.
         terminal = [key for key, value in fetch_jobs.items() if value.get('status') not in {'queued', 'running'}]

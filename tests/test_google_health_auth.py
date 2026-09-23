@@ -222,7 +222,7 @@ class GoogleHealthAuthTests(unittest.TestCase):
     def test_refresh_dispatch_never_sends_google_token_to_fitbit(self):
         from auth import refresh_token as refresh
         oauth._write_json(self.path, {"oauth_type": "google", "refresh_token": "google-refresh"})
-        with patch.dict(os.environ, {"FITBIT_PROFILE": "Demo"}), patch.object(oauth, "refresh_google_token", return_value="new-google") as google, patch.object(refresh, "requests") as legacy_http:
+        with patch.dict(os.environ, {"FITFLARE_PROFILE_ID": "Demo"}), patch.object(oauth, "refresh_google_token", return_value="new-google") as google, patch.object(refresh, "requests") as legacy_http:
             self.assertEqual(refresh.refresh_token(), "new-google")
         google.assert_called_once_with("Demo", tokens_path=str(self.path), _lock_held=True)
         legacy_http.post.assert_not_called()
@@ -249,7 +249,7 @@ class GoogleHealthAuthTests(unittest.TestCase):
             with self.assertRaises(oauth.GoogleHealthAuthError) as error:
                 self.complete(url)
             self.assertEqual(error.exception.code, "oauth_in_progress")
-            with patch.dict(os.environ, {"FITBIT_PROFILE": "Demo"}):
+            with patch.dict(os.environ, {"FITFLARE_PROFILE_ID": "Demo"}):
                 with self.assertRaises(oauth.GoogleHealthAuthError):
                     refresh.refresh_token()
         self.http.post.assert_not_called()
@@ -283,7 +283,9 @@ class GoogleHealthAuthTests(unittest.TestCase):
 
 class GoogleHealthAuthRouteTests(unittest.TestCase):
     def setUp(self):
-        from server import create_app
+        with patch.dict(os.environ, {"FITBAUS_ADMIN_PASSWORD": "test-import-only", "FITBAUS_ADMIN_PASSWORD_HASH": "",
+                                     "FITBAUS_SESSION_SECRET_FILE": "", "FITBAUS_AUTO_SYNC_ENABLED": "false"}):
+            from server import create_app
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -297,55 +299,61 @@ class GoogleHealthAuthRouteTests(unittest.TestCase):
         patcher = patch.object(profile_paths, "ROOT_DIR", str(self.root))
         patcher.start()
         self.addCleanup(patcher.stop)
-        patcher = patch.dict(os.environ, {}, clear=True)
+        patcher = patch.dict(os.environ, {"FITFLARE_PROFILE_ID": "Demo"}, clear=True)
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.app = create_app(dict(TESTING=True, SECRET_KEY="test-only-key", ADMIN_PASSWORD="test-password",
-                                   ADMIN_PASSWORD_HASH="", SESSION_COOKIE_SECURE=False,
-                                   PROFILES_DIR=str(self.root / "profiles"), DATA_ACCESS_MODE="public"))
+        self.create_app = create_app
+        self.app = self.make_app("Demo")
         self.client = self.app.test_client()
+
+    def make_app(self, owner):
+        return self.create_app(dict(TESTING=True, SECRET_KEY="test-only-key", ADMIN_PASSWORD="test-password",
+                                    ADMIN_PASSWORD_HASH="", SESSION_COOKIE_SECURE=False, OWNER_PROFILE_ID=owner,
+                                    PROFILES_DIR=str(self.root / "profiles"), DATA_ACCESS_MODE="private"))
 
     def login(self, client=None):
         response = (client or self.client).post("/api/admin/login", json={"password": "test-password"})
         return {"X-FitBaus-CSRF": response.json["csrf_token"]}
 
-    def credentials(self, profile="Demo"):
-        return {"profileName": profile, "clientId": "test.apps.googleusercontent.com",
+    def credentials(self):
+        return {"clientId": "test.apps.googleusercontent.com",
                 "clientSecret": "google-test-secret", "redirectUri": "http://localhost:8080/callback"}
 
     def test_credentials_endpoint_requires_admin_csrf_and_preserves_active_tokens(self):
-        endpoint = "/api/google-health-credentials"
+        endpoint = "/api/account/setup"
         self.assertEqual(self.client.post(endpoint, json=self.credentials()).status_code, 401)
         headers = self.login()
         self.assertEqual(self.client.post(endpoint, json=self.credentials()).status_code, 403)
-        result = self.client.get("/api/authorize/Demo")
+        result = self.client.get("/api/authorize")
         self.assertEqual(result.status_code, 400)
         self.assertEqual(result.json["code"], "google_credentials_missing")
         result = self.client.post(endpoint, json=self.credentials(), headers=headers)
         self.assertEqual(result.status_code, 200)
         self.assertNotIn("google-test-secret", result.get_data(as_text=True))
         self.assertEqual(oauth._read_json(self.path), self.legacy)
-        self.assertEqual(self.client.get("/api/authorize/Demo").json["provider"], "google")
+        self.assertEqual(self.client.get("/api/authorize").json["provider"], "google")
 
-    def test_new_profiles_start_with_google_credentials_and_no_fake_connection(self):
-        headers = self.login()
-        response = self.client.post("/api/create-profile", json=self.credentials("NewUser"), headers=headers)
+    def test_fresh_account_setup_saves_google_client_without_fake_connection(self):
+        app = self.make_app("NewUser")
+        client = app.test_client()
+        headers = self.login(client)
+        self.assertEqual(client.post("/api/create-profile", json={"profileName": "Other"}, headers=headers).status_code, 404)
+        response = client.post("/api/account/setup", json=self.credentials(), headers=headers)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual((response.json["configured"], response.json["authorized"]), (True, False))
         auth_dir = self.root / "profiles" / "NewUser" / "auth"
         self.assertTrue((auth_dir / "google_client.json").exists())
         self.assertFalse((auth_dir / "client.json").exists())
         self.assertFalse((auth_dir / "tokens.json").exists())
-        listing = self.client.get("/api/profiles")
-        new_profile = next(profile for profile in listing.json if profile["name"] == "NewUser")
-        self.assertFalse(new_profile["connected"])
-        self.assertNotIn("google-test-secret", listing.get_data(as_text=True))
-        self.assertNotIn("google-test-secret", response.get_data(as_text=True))
+        status = client.get("/api/account")
+        self.assertEqual((status.json["profile_id"], status.json["authorized"]), ("NewUser", False))
+        self.assertNotIn("google-test-secret", status.get_data(as_text=True) + response.get_data(as_text=True))
 
     def test_cache_rebuild_failure_does_not_turn_completed_oauth_into_failure(self):
         headers = self.login()
         result = {"message": "Connected", "oauth_type": "google", "warning": "Existing permission warning."}
         with patch("backend.admin_routes.complete_google_authorization", return_value=result), patch("backend.admin_routes.build_dashboard_cache", side_effect=OSError("cache write failed")) as rebuild:
-            response = self.client.post("/api/authorize-exchange", json={"profileName": "Demo", "redirectUrl": "http://localhost:8080/callback?code=test&state=test"}, headers=headers)
+            response = self.client.post("/api/authorize-exchange", json={"redirectUrl": "http://localhost:8080/callback?code=test&state=test"}, headers=headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json["oauth_type"], "google")
         self.assertIn("Existing permission warning.", response.json["warning"])
@@ -354,14 +362,14 @@ class GoogleHealthAuthRouteTests(unittest.TestCase):
 
     def test_manual_oauth_is_bound_to_original_admin_session(self):
         headers = self.login()
-        self.client.post("/api/google-health-credentials", json=self.credentials(), headers=headers)
-        flow = self.client.get("/api/authorize/Demo").json
+        self.client.post("/api/account/setup", json=self.credentials(), headers=headers)
+        flow = self.client.get("/api/authorize").json
         state = parse_qs(urlsplit(flow["auth_url"]).query)["state"][0]
         full_url = flow["redirect_uri"] + "?" + urlencode({"code": "test-code", "state": state})
         other = self.app.test_client()
         other_headers = self.login(other)
         with patch.object(oauth.requests, "post") as http:
-            result = other.post("/api/authorize-exchange", json={"profileName": "Demo", "redirectUrl": full_url}, headers=other_headers)
+            result = other.post("/api/authorize-exchange", json={"redirectUrl": full_url}, headers=other_headers)
             self.assertEqual(result.status_code, 400)
             self.assertEqual(result.json["code"], "oauth_state_invalid")
             http.assert_not_called()

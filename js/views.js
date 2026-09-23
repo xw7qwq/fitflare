@@ -524,34 +524,11 @@ export function createViews({ state, refs, renderTable }) {
       { key: 'dataset', label: '接口' }, { key: 'group', label: '分组' }, { key: 'status', label: '状态' }, { key: 'updated_at', label: '更新时间' },
     ], null, { updated_at: value => formatDateTime(value) }, { empty: '暂无同步记录。' });
 
-    const files = state.viewModel.account.files || {};
-    refs.fileList.innerHTML = state.viewModel.account.cacheLayers.map(item => `<div class="file-item"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.detail)}</small>${files[item.key] ? `<code>${escapeHtml(files[item.key])}</code>` : ''}</div>`).join('');
-  }
-
-  // ---------- profiles ----------
-  function renderFamily() {
-    const cards = state.profileSummaries;
-    if (!cards.length) { refs.familyGrid.innerHTML = '<div class="empty-state">当前没有档案可对比。</div>'; return; }
-    refs.familyGrid.innerHTML = cards.map(card => {
-      const score = numberOrNull(card.recovery_score);
-      const tone = score === null ? 'neutral' : score >= 70 ? 'good' : score >= 50 ? 'warning' : 'critical';
-      const current = card.id === state.selectedProfile;
-      return `<article class="surface family-profile-card${current ? ' is-current' : ''}">
-        <div class="family-head"><div><h3>${escapeHtml(card.display_name || card.id || '--')}</h3><small>最近记录 ${escapeHtml(formatDate(card.latest_date))}</small></div>
-          <button class="button${current ? ' button-light' : ''}" type="button" data-jump-profile="${escapeHtml(card.id || '')}">${current ? '当前档案' : '查看'}</button></div>
-        <div class="family-score"><span class="chip tone-${tone}">恢复估算 ${score === null ? '--' : formatNumber(score)}</span><small>${escapeHtml(card.recovery_label || '等待数据')}</small></div>
-        <dl class="family-kpis">
-          <div><dt>睡眠得分</dt><dd>${escapeHtml(card.sleep_score == null ? '--' : formatNumber(card.sleep_score, 1))}</dd></div>
-          <div><dt>步数</dt><dd>${escapeHtml(card.steps == null ? '--' : formatNumber(card.steps))}</dd></div>
-          <div><dt>HRV</dt><dd>${escapeHtml(card.hrv == null ? '--' : `${formatNumber(card.hrv, 1)} ms`)}</dd></div>
-          <div><dt>静息心率</dt><dd>${escapeHtml(card.rhr == null ? '--' : `${formatNumber(card.rhr)} bpm`)}</dd></div>
-        </dl></article>`;
-    }).join('');
   }
 
   return {
     overview: () => { renderHero(); renderInsights(); renderKpis(); renderOverviewCharts(); renderWeekCompare(); renderMonthly(); renderCorrelations(); },
     sleep: renderSleepView, activity: renderActivityView, recovery: renderRecoveryView,
-    body: renderBodyView, account: renderAccountView, family: renderFamily, note: renderDataNote,
+    body: renderBodyView, account: renderAccountView, note: renderDataNote,
   };
 }

@@ -5,7 +5,6 @@ const byId = new Map(endpoints.map(item => [item.id, item]));
 const refs = Object.fromEntries([...document.querySelectorAll('[id]')].map(node => [node.id, node]));
 const cards = [...document.querySelectorAll('.endpoint')];
 let activeRequest, requestSequence = 0, noticeTimer;
-let profileValue = 'YOUR_PROFILE';
 
 function notify(text) {
   refs.copyStatus.textContent = text;
@@ -30,7 +29,6 @@ function currentValues() {
 }
 function updateCode() {
   const values = currentValues();
-  if (Object.hasOwn(values, 'profile_id')) profileValue = values.profile_id;
   try {
     const url = buildRequest(byId.get(refs.endpointSelect.value), values, location.origin);
     refs.requestCode.textContent = exampleCode(url, refs.exampleLanguage.value);
@@ -68,7 +66,7 @@ function chooseEndpoint(id) {
       }
       if (input.type === 'number') input.step = '1';
     }
-    input.value = parameter.name === 'profile_id' ? profileValue : (parameter.example ?? '');
+    input.value = parameter.example ?? '';
     wrapper.append(label, input);
     refs.requestFields.append(wrapper);
   }
@@ -123,11 +121,7 @@ async function sendRequest(event) {
   clearResponse();
   const endpoint = byId.get(refs.endpointSelect.value);
   const values = currentValues();
-  if (values.profile_id === 'YOUR_PROFILE') {
-    refs.requestStatus.textContent = '请先通过可见档案接口获取 ID，并替换 YOUR_PROFILE。';
-    document.getElementById('request-profile_id')?.focus();
-    return;
-  }
+
   let url;
   try { url = buildRequest(endpoint, values, location.origin); }
   catch (error) { refs.requestStatus.textContent = error.message; return; }
@@ -195,6 +189,6 @@ window.addEventListener('pagehide', () => { cancelRequest(); clearResponse(); })
 for (const block of document.querySelectorAll('[data-example-path]')) {
   block.textContent = exampleCode(new URL(block.dataset.examplePath, location.origin).href);
 }
-chooseEndpoint('profiles');
+chooseEndpoint('profile');
 document.querySelectorAll('[data-enhanced]').forEach(node => { node.hidden = false; });
 revealAnchor();

@@ -14,29 +14,29 @@ const base = process.env.BASE_URL;
     await page.fill('#adminPasswordInput', process.env.PREVIEW_ADMIN_PASSWORD);
     await page.click('#adminLoginSubmit');
     await page.waitForSelector('#adminLogoutBtn:not(.hidden)');
-    await page.click('#openManagerBtn');
-    await page.click('[data-action="authorize"][data-profile="Demo"]');
-    await page.waitForSelector('#googleCredentialsModal[open]');
-    assert.equal(await page.getAttribute('#googleClientSecret', 'type'), 'password');
-    assert.equal(await page.inputValue('#googleRedirectUri'), 'http://localhost:8080/callback');
+    await page.click('#openAccountBtn');
+    await page.waitForSelector('#accountModal[open]');
+    assert.equal(await page.getAttribute('#clientSecret', 'type'), 'password');
+    assert.equal(await page.inputValue('#redirectUri'), 'http://localhost:8080/callback');
     let saved;
-    await page.route('**/api/google-health-credentials', async route => {
+    await page.route('**/api/account/setup', async route => {
       saved = route.request().postDataJSON();
       assert.ok(route.request().headers()['x-fitbaus-csrf']);
-      await route.fulfill({ json: { message: 'Configured' } });
+      await route.fulfill({ json: { message: 'Configured', profile_id: 'Demo', configured: true, authorized: false, has_data: true } });
     });
-    await page.route('**/api/authorize/Demo', route => route.fulfill({ json: {
+    await page.route('**/api/authorize', route => route.fulfill({ json: {
       mode: 'manual', provider: 'google',
       auth_url: 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic-state',
       redirect_uri: 'http://localhost:8080/callback',
     } }));
-    await page.fill('#googleClientId', 'synthetic.apps.googleusercontent.com');
-    await page.fill('#googleClientSecret', 'synthetic-client-secret');
-    await page.click('#googleCredentialsSubmit');
+    await page.fill('#clientId', 'synthetic.apps.googleusercontent.com');
+    await page.fill('#clientSecret', 'synthetic-client-secret');
+    await page.click('#accountSetupSubmit');
     await page.waitForSelector('#authModal[open]');
-    assert.equal(saved.profileName, 'Demo');
+    assert.equal(saved.profileName, undefined);
+    assert.equal(saved.clientId, 'synthetic.apps.googleusercontent.com');
     assert.equal(saved.redirectUri, 'http://localhost:8080/callback');
-    assert.equal(await page.inputValue('#googleClientSecret'), '');
+    assert.equal(await page.inputValue('#clientSecret'), '');
     assert.match(await page.getAttribute('#authOpenLink', 'href'), /^https:\/\/accounts.google.com\//);
     let submitted;
     await page.route('**/api/authorize-exchange', async route => {
@@ -47,7 +47,7 @@ const base = process.env.BASE_URL;
     await page.fill('#authRedirectValue', callback);
     await page.click('#authExchangeSubmit');
     await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('账号与档案不一致'));
-    assert.equal(submitted.redirectUrl, callback);
+    assert.deepEqual(submitted, { redirectUrl: callback });
     assert.equal(await page.isVisible('#authModal'), true);
     await page.unroute('**/api/authorize-exchange');
     await page.route('**/api/authorize-exchange', route => route.fulfill({ json: {
