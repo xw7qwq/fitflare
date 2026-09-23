@@ -1,25 +1,26 @@
-# fitflare
+# Fitflare
 
 [![Release checks](https://github.com/xw7qwq/fitflare/actions/workflows/check.yml/badge.svg)](https://github.com/xw7qwq/fitflare/actions/workflows/check.yml)
 
-基于 FitBaus 的 Fitbit 自托管数据仪表盘。通过 Fitbit OAuth 授权同步数据，在自己的服务器上保存档案、CSV 与缓存，再用中文界面查看睡眠、活动、恢复和其他健康记录。
+一个给自己使用的健康数据仪表盘：连接自己的 Fitbit 账户，保存本地记录，查看睡眠、活动、HRV、静息心率和长期趋势。中文界面，默认私有访问。
 
-本仓库整理自服务器部署的 [theLucius7/fitbaus](https://github.com/theLucius7/fitbaus)，维护地址为 [xw7qwq/fitflare](https://github.com/xw7qwq/fitflare)。为兼容现有部署，界面仍使用 **FitBaus** 名称，环境变量仍为 `FITBAUS_*`，Compose 服务和容器仍叫 `fitbaus` / `fitbaus-app`。来源与整理范围见 [docs/provenance.md](docs/provenance.md)。本项目与 Fitbit 或 Google 无隶属关系。
+## 一个账户，一份记录
 
-## 功能
+- 七个视图：总览、睡眠、活动、恢复、体征、生活、账户。
+- 连接与重新授权自己的账户，手动或定时同步，查看同步进度。
+- 按日期查看趋势、均值和分页记录；缺失数据保持为空。
+- 登录后读取健康数据，管理操作校验会话与 CSRF。
+- `/api/public/v1/me` 提供个人只读 API、SVG 趋势图和 OpenAPI 文档。
 
-- 中文仪表盘：总览、睡眠、活动、恢复、体征、生活、账户与多档案视图。
-- 图表与记录：近期趋势、睡眠阶段、HRV、静息心率、分区数据表及相关性参考；可用内容取决于设备、授权范围和 Fitbit 返回的数据。
-- 档案隔离：每个档案独立保存 OAuth 凭据、令牌、原始数据和派生缓存。
-- 同步管理：手动同步、可选定时同步、任务进度及档案级文件锁。
-- 访问控制：管理员登录、会话与 CSRF 校验、私有数据模式，以及公开模式下的档案允许列表。
-- 只读 API：版本化 JSON 接口、SVG 趋势图、交互文档和 OpenAPI 描述。
+没有档案切换、家庭比较、创建多个档案或网页删除健康记录的功能。后端、定时任务和旧接口也只能访问配置的唯一账户。已有 `profiles/<id>` 目录可以继续使用，不需要重命名或重新导入历史记录。
 
-后端使用 Python 3.11、Flask 和 Gunicorn；前端使用原生 JavaScript 与仓库内的 Chart.js。数据保存在文件系统中，无需额外数据库。
+![Fitflare 个人仪表盘](docs/images/dashboard.png)
 
-## Docker 安装
+截图使用合成测试数据，不包含真实健康记录。
 
-完整的配置、HTTPS、OAuth、更新与备份步骤见 [生产部署指南](DEPLOYMENT.md)。以下命令适用于 Linux 主机，需要 Docker Engine 和 Compose 插件。
+## 开始使用
+
+当前可运行的部署方案是 **Linux + Docker Compose**，使用 Python 3.11、Flask、Gunicorn 和原生 JavaScript。无需数据库或前端打包步骤。
 
 ```bash
 git clone https://github.com/xw7qwq/fitflare.git
@@ -28,70 +29,65 @@ cp deploy/.env.production.example .env
 chmod 600 .env
 ```
 
-先编辑 `.env`，生成并填写管理员密码与会话密钥，再准备数据目录。样例使用 UID/GID `10001`、私有模式、关闭自动同步及仅本机监听；未填写管理员密码时，私有模式会拒绝启动。
+编辑 `.env`，分别生成管理员密码和会话密钥。新安装的 `FITFLARE_PROFILE_ID=me` 表示唯一数据目录；从旧部署迁移时改成原目录名。随后：
 
 ```bash
 sudo install -d -o 10001 -g 10001 -m 700 profiles
 docker compose up -d --build
-docker compose ps
 curl -fsS http://127.0.0.1:9000/api/health
 ```
 
-应用默认绑定宿主机 `127.0.0.1:9000`，通过 Caddy 提供 HTTPS 后再登录。生产样例启用了 Secure Cookie；仅在本机 HTTP 开发时将 `FITBAUS_SESSION_COOKIE_SECURE=false`。授权和首次同步方法见 [DEPLOYMENT.md](DEPLOYMENT.md#fitbit-授权与首次同步)。
+配置 HTTPS 反向代理后登录页面，在“账户设置”填写客户端凭据、完成授权并首次同步。生产样例默认私有、仅监听 `127.0.0.1:9000`，未填写管理员密码会拒绝启动。
 
-## API
+完整步骤、已有数据迁移、备份和回滚见 [DEPLOYMENT.md](DEPLOYMENT.md)。保留 `FITBAUS_*`、Compose 服务 `fitbaus` 和容器 `fitbaus-app` 作为部署兼容名称，产品名称为 Fitflare。
 
-- [API.md](API.md)：接口、分页、访问模式与响应格式。
-- 部署后的 `/api/public/v1/docs`：浏览器交互文档。
-- 部署后的 `/api/public/v1/openapi.json`：OpenAPI 描述。
+## 同步接口的当前限制
 
-API 读取已同步的本地数据；缺失或过期的派生缓存可能在读取时重建。私有模式的数据接口需要管理员会话，文档页仍可访问。公开模式只对外提供允许公开的档案，公开数据不会自动匿名化。
+目前同步实现仍使用 legacy Fitbit Web API。Google 官方宣布其于 **2026 年 9 月下线**，迁移到 Google Health API 后必须重新授权，旧 token 不能直接转移。此仓库的现有缓存浏览不依赖新授权，但不能承诺旧接口继续同步；本轮单人版整理尚未实现 Google Health API 适配。[官方迁移说明](https://developers.google.com/health/migration)
 
-## 目录
+## 能部署到 Cloudflare Workers 免费层吗？
 
-| 路径 | 用途 |
-| --- | --- |
-| `server.py`、`backend/` | Flask 入口、路由、访问控制与同步调度 |
-| `common/` | 档案路径、缓存、Fitbit 权限和 API 定义 |
-| `auth/`、`fetch/` | Fitbit 授权、令牌刷新与数据抓取 |
-| `index.html`、`app.js`、`js/`、`style.css` | 当前仪表盘界面 |
-| `templates/`、`docs.css` | 浏览器 API 文档 |
-| `assets/`、`vendor/` | 图片与前端依赖 |
-| `deploy/` | 生产环境和 Caddy 配置样例 |
-| `scripts/` | 文件审计、文档生成、完整检查与部署脚本 |
-| `tests/` | 单元测试、浏览器测试和合成数据夹具 |
-| `docs/history/` | 有日期的历史改造记录，不能代替当前验证 |
-| `profiles/` | 运行时数据目录，由部署时创建，禁止提交到 Git |
+**现有版本不能原样部署；重写同步与存储后，有条件可行。** 推荐方向是 Static Assets + TypeScript Worker + D1，用 Cron 分批增量同步。免费层的 10 ms CPU 预算要求轻量请求和预计算，不能照搬 Pandas 全量分析、持久化文件、子进程和长期后台线程。
 
-## 开发与检查
+[完整可行性研究](docs/cloudflare-workers.md) 包含官方限制、容量估算、Google Health 授权影响及迁移验收标准。这是经过源码和官方文档核对的设计评估，尚未创建或部署 Worker，也未宣称性能达标。
 
-使用 Python 3.11 和 Node.js 24；完整检查还需要 Docker 与 Chromium。Python 运行依赖固定在 `requirements.lock`。
+## API 与开发
+
+- [API.md](API.md)：单账户只读接口，统一通过 `/me` 访问，无需档案 ID。
+- `/api/public/v1/docs`：交互文档；`/api/public/v1/openapi.json`：OpenAPI。
+- 文档本身可匿名访问；默认私有模式的数据请求仍需登录。
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -r requirements.lock
 npm ci --ignore-scripts
-npx playwright install chromium
-
-npm test
-python -m unittest discover -s tests -p 'test_*.py' -v
-python scripts/docs.py --check
-python scripts/audit.py
-```
-
-Linux 若缺少浏览器系统依赖，可运行 `npx playwright install --with-deps chromium`。完整发布检查为：
-
-```bash
+npx playwright install --with-deps chromium
 npm run check
 ```
 
-该命令检查源文件和文档、运行 JavaScript 与 Python 测试、构建镜像，并以合成档案验证公开/私有模式及浏览器页面。检查结果写入已忽略的 `test-results/`，不会读取生产档案。已有部署的升级使用 `bash scripts/deploy.sh`，流程与回滚限制见 [部署指南](DEPLOYMENT.md#更新与回滚)。
+开发使用 Node.js 24；完整检查需要 Docker。`npm run check` 检查源码和生成文档、构建镜像、执行单元及桌面/手机浏览器回归；所有测试只用合成数据。快速检查可单独执行 `npm test` 和 `python -m unittest discover -s tests -p 'test_*.py' -v`。
 
-API 文档由 `common/api_docs.py` 生成；修改接口说明后运行 `python scripts/docs.py`，不要单独修改生成的 `API.md`。更多约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+API 目录维护在 `common/api_docs.py`，修改后运行 `python scripts/docs.py`。协作约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-## 数据、来源与许可
+## 仓库导航
 
-`profiles/` 包含健康记录、账户信息和 OAuth 凭据；`.env`、备份和测试产物也不应进入仓库。请按 [部署指南](DEPLOYMENT.md#备份与恢复) 将备份保存在仓库外，并参考 [SECURITY.md](SECURITY.md)。
+| 路径 | 内容 |
+| --- | --- |
+| `backend/`、`server.py` | 单账户边界、会话、接口与同步调度 |
+| `common/` | 数据路径、缓存、指标和 API 定义 |
+| `auth/`、`fetch/` | 授权与数据同步；默认只处理配置账户 |
+| `index.html`、`app.js`、`js/`、`style.css` | 个人仪表盘 |
+| `templates/`、`docs.css` | API 文档界面 |
+| `deploy/`、`scripts/` | 配置样例、检查和部署工具 |
+| `tests/` | 合成数据、访问隔离和浏览器回归 |
+| `docs/` | Workers 研究、来源和历史记录 |
+| `profiles/` | 本地私有运行数据，不进入 Git 或镜像 |
 
-继承源码没有提供标准 `LICENSE` 文件；原 README 的说明为 “This project is for personal use.”。这里保留该说明，不另行授予开源许可证。来源和第三方组件说明见 [docs/provenance.md](docs/provenance.md)。
+## 来源与数据
+
+项目基于 [markrai/fitbaus](https://github.com/markrai/fitbaus)，继承自 [theLucius7/fitbaus](https://github.com/theLucius7/fitbaus) 的服务器部署版本。作者和提交历史已保留；完整来源与历史净化说明见 [docs/provenance.md](docs/provenance.md)。本项目与 Fitbit 或 Google 无隶属关系。
+
+继承源码未提供标准许可证，原说明为 “This project is for personal use.”；本次整理不另行授予整个项目的开源许可证。
+
+公开的是源码。真实 `.env`、OAuth 凭据、健康数据、日志和备份均不进入仓库。安全与私密报告说明见 [SECURITY.md](SECURITY.md)。

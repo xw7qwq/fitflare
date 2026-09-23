@@ -3,7 +3,7 @@ import os
 import secrets
 from datetime import timedelta
 from pathlib import Path
-from common.profile_paths import ROOT_DIR
+from common.profile_paths import ROOT_DIR, validate_profile_id
 
 
 def env_flag(name, default):
@@ -37,7 +37,7 @@ def settings():
         'SECRET_KEY': secret or secrets.token_hex(32),
         'ADMIN_PASSWORD': password,
         'ADMIN_PASSWORD_HASH': password_hash,
-        'DATA_ACCESS_MODE': os.getenv('FITBAUS_DATA_ACCESS', 'public').strip().lower(),
+        'DATA_ACCESS_MODE': os.getenv('FITBAUS_DATA_ACCESS', 'private').strip().lower(),
         'PUBLIC_PROFILE_IDS': None if public == '*' else frozenset(p.strip() for p in public.split(',') if p.strip()),
         'SESSION_COOKIE_NAME': 'fitbaus_admin_session',
         'SESSION_COOKIE_HTTPONLY': True,
@@ -45,5 +45,6 @@ def settings():
         'SESSION_COOKIE_SECURE': env_flag('FITBAUS_SESSION_COOKIE_SECURE', True),
         'PERMANENT_SESSION_LIFETIME': timedelta(hours=12),
         'MAX_CONTENT_LENGTH': 64 * 1024,
+        'OWNER_PROFILE_ID': validate_profile_id(os.getenv('FITFLARE_PROFILE_ID', 'me').strip()),
         'PROFILES_DIR': str(Path(ROOT_DIR) / 'profiles'),
     }

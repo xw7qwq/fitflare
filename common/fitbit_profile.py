@@ -6,7 +6,7 @@ from typing import Optional
 import requests
 
 # Allow relative imports when executed from scripts in sibling folders
-from common.profile_paths import tokens_file_for
+from common.profile_paths import activate_profile_context
 
 
 def _load_access_token(tokens_path: str) -> Optional[str]:
@@ -26,12 +26,7 @@ def _ensure_env_for_profile(profile_id: Optional[str]) -> str:
 
     Returns the absolute path to the tokens file for the given profile.
     """
-    tokens_path = tokens_file_for(profile_id)
-    # Prefer explicit token path to avoid any ambiguity
-    os.environ["FITBIT_TOKENS_FILE"] = tokens_path
-    # Some helpers also consult FITBIT_PROFILE
-    os.environ["FITBIT_PROFILE"] = (profile_id or "")
-    return tokens_path
+    return activate_profile_context(profile_id)
 
 
 def get_member_since_date(profile_id: Optional[str]) -> Optional[datetime]:

@@ -5,20 +5,11 @@ export const VIEWS = {
   sleep: ['睡眠', '查看睡眠得分、时长与阶段。'],
   activity: ['活动', '查看步数、活跃分钟与活动记录。'],
   recovery: ['恢复', '对照 HRV、静息心率与睡眠变化。'],
-  body: ['体征', '体重、体脂与其他体征的缓存记录。'],
+  body: ['体征', '体重、体脂与其他体征记录。'],
   lifestyle: ['生活', '饮食、饮水与营养记录。'],
-  account: ['账户', '设备、授权范围与数据缓存。'],
-  family: ['档案', '切换档案，查看各自的最新记录。'],
+  account: ['账户', '设备、授权与同步状态。'],
 };
 const METRIC_VIEWS = { sleep_score: 'sleep', sleep_hours: 'sleep', steps: 'activity', active_minutes: 'activity', active_zone_minutes: 'activity', calories_out: 'activity', hrv: 'recovery', rhr: 'recovery' };
-const CACHE_LAYERS = {
-  dashboard_cache: ['仪表盘缓存', '聚合指标、图表和记录。'],
-  profile_snapshot: ['Fitbit 快照', '设备、目标与补充指标。'],
-  activity_csv: ['活动历史', '活动与步数的原始缓存。'],
-  sleep_csv: ['睡眠历史', '睡眠时长与阶段记录。'],
-  hrv_csv: ['HRV 历史', '心率变异性记录。'],
-  rhr_csv: ['静息心率历史', '静息心率记录。'],
-};
 export function normalizeDashboard(dashboard = {}, authenticated = false) {
   const stats = (Array.isArray(dashboard.stats) ? dashboard.stats : []).map(card => ({
     ...card, targetView: METRIC_VIEWS[card.key] || 'overview',
@@ -32,7 +23,6 @@ export function normalizeDashboard(dashboard = {}, authenticated = false) {
     stats, statsByKey: Object.fromEntries(stats.map(card => [card.key, card])),
     account: {
       files: authenticated ? dashboard.files || {} : {},
-      cacheLayers: Object.entries(CACHE_LAYERS).map(([key, [label, detail]]) => ({ key, label, detail })),
     },
   };
 }

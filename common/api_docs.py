@@ -14,16 +14,16 @@ from common.public_api import (
 )
 
 GROUPS = {
-    'profiles': '档案与指标', 'series': '趋势与图表', 'records': '数据集与表格',
+    'profiles': '账户与指标', 'series': '趋势与图表', 'records': '数据集与表格',
     'snapshots': '快照与接口状态', 'reference': '文档入口',
 }
 GUIDE = (
     ('access', '访问与隐私', (
         'public/v1 只提供 GET 读取，不会主动发起 Fitbit 同步。缺失或过期的派生缓存可能在读取时本地重建。',
-        '公开模式只返回部署者允许公开的档案；私有模式的数据接口要求本站管理员会话。文档始终可读，示例中的 YOUR_PROFILE 是占位符，不是真实档案。',
+        '所有 /me 接口始终读取本站唯一账户，不需要选择或填写档案 ID。默认私有模式要求本站管理员会话；只有部署者显式开启公开模式才允许匿名读取。文档始终可读。',
         '私有模式请先在仪表盘登录，再使用同源浏览器请求。这里不提供 API Key 或 Bearer Token，也不收集、保存或展示管理员密码。cURL 与 Python 示例默认不带会话。',
         '匿名公开版 API 允许跨域读取；私有模式和管理员会话响应不开放 CORS。所有 API 响应使用 private, no-store，不应在共享缓存中保存健康数据。',
-        '公开响应不包含内部 files 路径及 OAuth 凭据文件，但档案和快照仍可能包含个人资料、设备和饮食记录；这不是匿名化数据。',
+        '公开响应不包含内部 files 路径及 OAuth 凭据文件，但账户快照仍可能包含个人资料、设备和饮食记录；这不是匿名化数据。',
     )),
     ('pagination', '范围与分页', (
         'series 与 SVG 的 limit 表示最后 N 个记录点，不等于 N 个日历天；省略时不截断。日、周、月分别由 daily、weekly、monthly 选择。',
@@ -42,7 +42,7 @@ GUIDE = (
 )
 EXAMPLE_ENVELOPE = {
     'api_version': 'v1', 'resource': 'series', 'generated_at': '2026-01-02T08:00:00',
-    'profile_id': 'YOUR_PROFILE',
+    'profile_id': 'me',
     'data': {'granularity': 'daily', 'dimension': 'date',
              'metrics': [{'key': 'steps', 'label': '步数', 'unit': '步', 'tone': 'green'}],
              'points': [{'date': '2026-01-01', 'steps': 5200}, {'date': '2026-01-02', 'steps': None}]},
@@ -59,7 +59,6 @@ def param(name, location, description, example=None, **schema):
 
 
 PATH_PARAMS = {
-    'profile_id': param('profile_id', 'path', '从 /profiles 获取可见档案 ID。', 'YOUR_PROFILE', pattern=r'^[a-zA-Z0-9_\-]{1,128}$'),
     'metric_key': param('metric_key', 'path', '从 /metrics 获取指标 key。', 'steps'),
     'granularity': param('granularity', 'path', '序列聚合粒度。', 'daily', enum=list(SERIES_DIMENSIONS)),
     'dataset': param('dataset', 'path', '完整本地数据集。', 'activity', enum=list(DATASET_LABELS)),
@@ -93,11 +92,10 @@ def endpoint(key, group, suffix, title, description, resource=None, shape='objec
             'resource': resource, 'shape': shape, 'parameters': parameters, 'media': media, 'result': result}
 
 
-PROFILE = '/profiles/{profile_id}'
+PROFILE = '/me'
 ENDPOINTS = (
-    endpoint('index', 'profiles', '', 'API 索引', '可见档案数量、资源分类与文档链接。', 'public-api-index'),
-    endpoint('profiles', 'profiles', '/profiles', '可见档案', '返回当前访问者可见的档案摘要及快捷链接。建议从这里开始。', 'profiles', 'array', result='data[]：档案摘要；meta.count：档案数'),
-    endpoint('profile', 'profiles', PROFILE, '档案概况', '档案资料、概览、覆盖范围、数据地图、快照状态及链接。', 'profile-summary'),
+    endpoint('index', 'profiles', '', 'API 索引', '个人账户入口、资源分类与文档链接。', 'public-api-index'),
+    endpoint('profile', 'profiles', PROFILE, '我的账户', '账户资料、概览、覆盖范围、数据地图、快照状态及链接。', 'profile-summary'),
     endpoint('dashboard', 'profiles', PROFILE+'/dashboard', '仪表盘缓存', '完整公开仪表盘对象，包含指标、趋势、分区与表格，不包含 files。数据较多时优先使用细分接口。', 'dashboard', 'Dashboard'),
     endpoint('catalog', 'profiles', PROFILE+'/catalog', '数据目录', '各数据域的覆盖范围、核心指标、来源和状态。', 'catalog'),
     endpoint('overview', 'profiles', PROFILE+'/overview', '概览', '最近记录、快照概况和本地恢复估算。', 'overview'),
@@ -181,8 +179,8 @@ def build_openapi_spec(base_url='/', access_mode='public'):
         if item['id'] == 'chart':
             operation['responses']['200']['headers'] = {'X-FitBaus-Chart-Meta': {'description': 'JSON 编码的图表元数据', 'schema': {'type': 'string'}}}
         paths[item['path']] = {'get': operation}
-    return {'openapi': '3.1.0', 'info': {'title': 'FitBaus Public API', 'version': PUBLIC_API_VERSION,
-             'description': '只读本地缓存 API。公开模式使用档案白名单；私有模式使用本站会话。字段不承诺匿名化。'},
+    return {'openapi': '3.1.0', 'info': {'title': 'Fitflare Personal API', 'version': PUBLIC_API_VERSION,
+             'description': '单人只读本地缓存 API。/me 始终对应配置的唯一账户；默认使用本站私有会话。字段不承诺匿名化。'},
             'servers': [{'url': base_url or '/'}], 'tags': [{'name': label} for label in GROUPS.values()],
             'security': [{'SessionCookie': []}] if access_mode == 'private' else [{}, {'SessionCookie': []}],
             'paths': paths, 'components': {'schemas': deepcopy(SCHEMAS), 'securitySchemes': {
@@ -219,10 +217,10 @@ def docs_context(access_mode='public'):
 
 
 def render_markdown():
-    lines = ['# FitBaus Public API', '', '> 此文件由 common/api_docs.py 生成。请修改接口目录后运行 python3 scripts/docs.py。', '',
+    lines = ['# Fitflare Personal API', '', '> 此文件由 common/api_docs.py 生成。请修改接口目录后运行 python3 scripts/docs.py。', '',
              f'基础路径：`{BASE}`。全部 {len(ENDPOINTS)} 个接口均为 GET。', '',
-             '## 快速开始', '', '先读取可见档案，再将 YOUR_PROFILE 替换为响应中的档案 ID。YOUR_HOST 需替换为你的部署域名。', '',
-             f"```sh\ncurl -fsS 'https://YOUR_HOST{BASE}/profiles'\n```", '']
+             '## 快速开始', '', '通过 /me 直接读取自己的账户，无需档案 ID。私有模式先在仪表盘登录；YOUR_HOST 替换为部署域名。命令行示例未携带登录会话。', '',
+             f"```sh\ncurl -fsS 'https://YOUR_HOST{BASE}/me'\n```", '']
     for _, title, paragraphs in GUIDE:
         lines += [f'## {title}', '']
         for paragraph in paragraphs:

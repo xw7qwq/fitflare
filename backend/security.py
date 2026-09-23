@@ -1,17 +1,15 @@
 """One access boundary for UI data, public API, CSV and management routes."""
 import hmac
-import re
 import secrets
 import threading
 import time
 from collections import OrderedDict, deque
 from functools import wraps
-from pathlib import Path
 from flask import Blueprint, current_app, jsonify, request, session
 from werkzeug.security import check_password_hash
+from common.profile_paths import owner_profile_id, profile_path_for, validate_profile_id
 
 bp = Blueprint('session', __name__)
-PROFILE_NAME = re.compile(r'[a-zA-Z0-9_-]{1,128}\Z')
 
 
 def is_admin():
@@ -19,11 +17,15 @@ def is_admin():
 
 
 def valid_profile_id(value):
-    if not isinstance(value, str) or not PROFILE_NAME.fullmatch(value):
+    if value != owner_profile_id():
         return False
-    root = Path(current_app.config['PROFILES_DIR']).resolve()
-    path = root / value
-    return not path.is_symlink() and path.resolve().parent == root
+    try:
+        validate_profile_id(value)
+        for subdir in ('auth', 'cache', 'csv'):
+            profile_path_for(value, subdir)
+        return True
+    except (ValueError, OSError):
+        return False
 
 
 def profile_is_visible(profile_id):
@@ -63,6 +65,7 @@ def require_admin(csrf=False):
 
 
 def install_security(app):
+    validate_profile_id(app.config['OWNER_PROFILE_ID'])
     app.config['ADMIN_AUTH_CONFIGURED'] = bool(app.config['ADMIN_PASSWORD'] or app.config['ADMIN_PASSWORD_HASH'])
     if app.config['DATA_ACCESS_MODE'] not in {'public', 'private'}:
         raise RuntimeError('FITBAUS_DATA_ACCESS must be public or private')
@@ -75,10 +78,14 @@ def install_security(app):
 
 
 def guard_request():
+    if request.path in {'/api/create-profile', '/api/delete-profile'}:
+        return jsonify(error='Resource not found'), 404
     read_data = request.blueprint in {'public_api', 'dashboard'}
     docs = request.endpoint in {'public_api.public_api_docs', 'public_api.public_api_docs_markdown', 'public_api.public_api_openapi'}
     if read_data and not docs and current_app.config['DATA_ACCESS_MODE'] == 'private' and not is_admin():
         return auth_error('此站点的数据仅供管理员查看，请先登录。', 401, 'private_data')
+    if request.path.startswith('/api/public/v1/me') and any(name in request.args for name in ('profile', 'profileName', 'profile_id')):
+        return jsonify(error='The personal API does not accept an account selector'), 400
     profile = (request.view_args or {}).get('profile_id')
     if profile is not None:
         if not valid_profile_id(profile) or (read_data and not profile_is_visible(profile)):
@@ -87,9 +94,9 @@ def guard_request():
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
             return jsonify(error='JSON object required'), 400
-        for name in ('profile', 'profileName'):
+        for name in ('profile', 'profileName', 'profile_id'):
             if name in data and not valid_profile_id(data[name]):
-                return jsonify(error='Invalid profile name'), 400
+                return jsonify(error='Only the configured personal account is available'), 400
 
 
 def response_headers(response):

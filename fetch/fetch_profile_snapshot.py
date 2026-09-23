@@ -16,6 +16,7 @@ from common.profile_paths import (
     cache_path_for,
     ensure_dirs_for_cache,
     get_active_profile,
+    activate_profile_context,
     tokens_file_for,
 )
 from common.rate_limit import wait_seconds_with_countdown, wait_until_next_hour_with_countdown
@@ -31,8 +32,7 @@ PROFILE_ID = get_active_profile(args.profile)
 
 TOKENS_FILE = tokens_file_for(PROFILE_ID)
 SNAPSHOT_FILE = cache_path_for(PROFILE_ID, "fitbit_profile_snapshot.json")
-os.environ["FITBIT_TOKENS_FILE"] = TOKENS_FILE
-os.environ["FITBIT_PROFILE"] = PROFILE_ID or ""
+activate_profile_context(PROFILE_ID)
 ensure_dirs_for_cache(SNAPSHOT_FILE)
 
 

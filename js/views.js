@@ -388,7 +388,6 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
 
   function renderAccountView() {
     const snapshotStatus = state.viewModel.snapshotStatus || {}
-    const files = state.viewModel.account.files || {}
     const accountSection = state.dashboard.sections?.account || {}
     const grantedScopes = snapshotStatus.scopes || []
     const missingScopes = snapshotStatus.missing_scopes || []
@@ -426,45 +425,31 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
     renderTable(refs.endpointTableWrap, [
       { key: "dataset", label: "接口" },
       { key: "group", label: "分组" },
-      { key: "scope", label: "Scope" },
+      { key: "scope", label: "所需权限" },
       { key: "status", label: "状态" },
       { key: "updated_at", label: "更新时间" },
     ], state.dashboard.tables?.endpoints || [], {
       updated_at: (value) => formatDateTime(value),
     })
 
-    refs.fileList.innerHTML = state.viewModel.account.cacheLayers
-      .map((item) => {
-        const pathText = files[item.key]
-        const pathBlock = pathText ? `<code>${escapeHtml(pathText)}</code>` : ""
-        return `
-          <div class="file-item" data-tone="${escapeHtml(item.tone || "blue")}">
-            <strong>${escapeHtml(item.label)}</strong>
-            <small>${escapeHtml(item.detail)}</small>
-            ${pathBlock}
-          </div>
-        `
-      })
-      .join("")
-
     refs.scopeList.innerHTML = `
       <div class="scope-chip">
-        <strong>快照概况</strong>
-        <small>已缓存 ${fetchSummary.ok || 0}/${fetchSummary.total || 0} 个接口，缺失 scope ${missingScopes.length} 项。</small>
+        <strong>同步概况</strong>
+        <small>已同步 ${fetchSummary.ok || 0}/${fetchSummary.total || 0} 类数据，缺少 ${missingScopes.length} 项权限。</small>
         <div class="scope-row">
-          ${(grantedScopes.length ? grantedScopes : ["暂无已授权 scope"]).map((scope) => `<span class="tag">${escapeHtml(scope)}</span>`).join("")}
+          ${(grantedScopes.length ? grantedScopes : ["暂无已授权权限"]).map((scope) => `<span class="tag">${escapeHtml(scope)}</span>`).join("")}
         </div>
       </div>
       <div class="scope-chip">
-        <strong>仍需补齐的 scope</strong>
-        <small>重新授权后，页面会在下一次同步时自动补抓这些接口。</small>
+        <strong>待补充权限</strong>
+        <small>重新授权后，下次同步会补充对应的数据。</small>
         <div class="scope-row">
-          ${(missingScopes.length ? missingScopes : ["已覆盖当前页面所需 scope"]).map((scope) => `<span class="tag scope-missing">${escapeHtml(scope)}</span>`).join("")}
+          ${(missingScopes.length ? missingScopes : ["已获得所需权限"]).map((scope) => `<span class="tag scope-missing">${escapeHtml(scope)}</span>`).join("")}
         </div>
       </div>
       <div class="scope-chip">
-        <strong>目标 scope</strong>
-        <small>为了支持体征、生活和账户页，应用会请求这些 Fitbit 读取范围。</small>
+        <strong>申请的权限</strong>
+        <small>用于读取你的体征、生活与账户记录。</small>
         <div class="scope-row">
           ${(requestedScopes.length ? requestedScopes : ["暂无配置"]).map((scope) => `<span class="tag">${escapeHtml(scope)}</span>`).join("")}
         </div>
@@ -494,53 +479,6 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
       .join("")
   }
 
-  function renderFamily() {
-    const cards = state.profileSummaries
-    if (!cards.length) {
-      refs.familyGrid.innerHTML = `<div class="empty-state">当前没有档案可对比。</div>`
-      return
-    }
-
-    refs.familyGrid.innerHTML = cards
-      .map((card) => {
-        return `
-          <article class="family-profile-card">
-            <div class="family-head">
-              <div>
-                <div class="family-label">${escapeHtml(card.display_name || card.id || "--")}</div>
-                <div class="family-meta">最近记录：${escapeHtml(card.latest_date || "暂无")}</div>
-              </div>
-              <button class="button button-light" type="button" data-jump-profile="${escapeHtml(card.id || "")}">查看</button>
-            </div>
-            <div>
-              <div class="family-label">恢复指数</div>
-              <div class="family-score">${formatNumber(card.recovery_score)}</div>
-              <div class="family-meta">${escapeHtml(card.recovery_label || "等待数据")}</div>
-            </div>
-            <div class="family-kpis">
-              <div class="family-kpi">
-                <span>睡眠得分</span>
-                <strong>${card.sleep_score == null ? "--" : formatNumber(card.sleep_score, 1)}</strong>
-              </div>
-              <div class="family-kpi">
-                <span>步数</span>
-                <strong>${card.steps == null ? "--" : formatNumber(card.steps)}</strong>
-              </div>
-              <div class="family-kpi">
-                <span>HRV</span>
-                <strong>${card.hrv == null ? "--" : formatNumber(card.hrv, 1)}</strong>
-              </div>
-              <div class="family-kpi">
-                <span>静息心率</span>
-                <strong>${card.rhr == null ? "--" : formatNumber(card.rhr)}</strong>
-              </div>
-            </div>
-          </article>
-        `
-      })
-      .join("")
-  }
-
   function renderRecoverySummary() {
     const rows = state.dashboard.charts?.daily || [];
     const metrics = [['hrv', 'HRV', 'ms'], ['rhr', '静息心率', 'bpm'], ['sleep_score', '睡眠得分', '分']];
@@ -553,5 +491,5 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
     }).join('');
     refs.recoveryEstimate.textContent = `本地恢复估算：${formatNumber(state.viewModel.overview.recovery_score)}。仅供趋势参考，不是 Fitbit 官方指标或医疗结论。`;
   }
-return { overview: () => { renderOverviewCharts(); renderCorrelations(); }, sleep: renderSleepView, activity: renderActivityView, recovery: renderRecoveryView, body: renderBodyView, lifestyle: renderLifestyleView, account: renderAccountView, family: renderFamily };
+return { overview: () => { renderOverviewCharts(); renderCorrelations(); }, sleep: renderSleepView, activity: renderActivityView, recovery: renderRecoveryView, body: renderBodyView, lifestyle: renderLifestyleView, account: renderAccountView };
 }

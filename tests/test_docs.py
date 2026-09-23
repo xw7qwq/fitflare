@@ -56,10 +56,10 @@ class DocsTests(unittest.TestCase):
 
     def test_catalog_covers_all_versioned_get_routes(self):
         actual = {re.sub(r'<(?:[^:<>]+:)?([^<>]+)>', r'{\1}', rule.rule)
-                  for rule in self.app.url_map.iter_rules() if rule.rule.startswith(api_docs.BASE) and 'GET' in rule.methods}
+                  for rule in self.app.url_map.iter_rules() if rule.rule.startswith(api_docs.BASE) and '/profiles' not in rule.rule and 'GET' in rule.methods}
         spec = api_docs.build_openapi_spec()
         self.assertEqual(set(spec['paths']), actual)
-        self.assertEqual(len(actual), 25)
+        self.assertEqual(len(actual), 24)
         ids = [item['id'] for item in api_docs.ENDPOINTS]
         self.assertEqual(len(ids), len(set(ids)))
         for path, item in spec['paths'].items():
@@ -75,7 +75,7 @@ class DocsTests(unittest.TestCase):
         spec = api_docs.build_openapi_spec()
         with patch.object(public_api, 'load_dataset_rows', return_value=rows):
             for item in api_docs.ENDPOINTS:
-                path = api_docs.example_path(item).replace('YOUR_PROFILE', 'Demo')
+                path = api_docs.example_path(item)
                 with self.subTest(path=path), self.client.get(path) as response:
                     self.assertEqual(response.status_code, 200)
                     self.assertEqual(response.mimetype, item['media'])

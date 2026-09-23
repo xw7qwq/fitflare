@@ -17,7 +17,7 @@ export function createTableRenderer({ getContext, apiRequest }) {
   return function renderTable(container, columns, unusedRows, formatters = {}) {
     if (!container) return;
     const context = getContext();
-    const key = `${context.profile}:${context.version}:${context.authenticated}`;
+    const key = `${context.revision}:${context.version}:${context.authenticated}`;
     let table = tables.get(container);
     if (table?.key === key) return;
     table?.controller?.abort();
@@ -25,12 +25,12 @@ export function createTableRenderer({ getContext, apiRequest }) {
     tables.set(container, table);
     container.innerHTML = '';
     const details = container.closest('details');
-    // Replace the prior listener instead of accumulating handlers on profile changes.
+    // Replace the prior listener instead of accumulating handlers when data refreshes.
     if (details) details.ontoggle = () => { if (details.open && !table.loaded && !table.loading) load(); };
 
     function current() {
       const now = getContext();
-      return tables.get(container) === table && `${now.profile}:${now.version}:${now.authenticated}` === key;
+      return tables.get(container) === table && `${now.revision}:${now.version}:${now.authenticated}` === key;
     }
     async function load() {
       if (!current() || table.loading) return;
@@ -39,7 +39,7 @@ export function createTableRenderer({ getContext, apiRequest }) {
       container.setAttribute('aria-busy', 'true');
       container.innerHTML = '<div class="empty-state">正在读取记录…</div>';
       try {
-        const path = `/api/tables/${encodeURIComponent(context.profile)}/${TABLE_KEYS[container.id]}?offset=${table.offset}&limit=20`;
+        const path = `/api/tables/${TABLE_KEYS[container.id]}?offset=${table.offset}&limit=20`;
         const result = await apiRequest(path, { signal: table.controller.signal });
         if (!current()) return;
         const rows = Array.isArray(result.rows) ? result.rows : [];

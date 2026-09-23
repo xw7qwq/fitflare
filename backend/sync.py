@@ -2,12 +2,14 @@
 import os
 import json
 import subprocess
+import sys
 import threading
+import tempfile
 import time
 import fcntl
-from datetime import datetime
+from datetime import date, datetime
 from collections import deque
-from common.profile_paths import list_profiles as list_profile_ids
+from common.profile_paths import list_profiles as list_profile_ids, owner_profile_id, profile_path_for, tokens_file_for
 from .config import AUTO_SYNC_ENABLED, AUTO_SYNC_INTERVAL_SECONDS, AUTO_SYNC_SCAN_INTERVAL_SECONDS, AUTO_SYNC_STARTUP_DELAY_SECONDS
 from .time_utils import _parse_date, _now_iso
 from . import jobs
@@ -33,8 +35,16 @@ def _auto_sync_log(message: str, level: str = "INFO"):
     print(f"[{timestamp}] [AUTO-SYNC] [{level}] {message}")
 
 
+def _require_owner(profile_id):
+    if profile_id != owner_profile_id():
+        raise ValueError('Background tasks can only use the configured personal account')
+    for directory in ('auth', 'cache', 'csv'):
+        profile_path_for(profile_id, directory)
+
+
 def _profile_cache_dir(profile_id: str) -> str:
-    return os.path.join("profiles", profile_id, "cache")
+    _require_owner(profile_id)
+    return str(profile_path_for(profile_id, 'cache'))
 
 
 def _ensure_profile_cache_dir(profile_id: str):
@@ -42,15 +52,18 @@ def _ensure_profile_cache_dir(profile_id: str):
 
 
 def _profile_fetch_lock_path(profile_id: str) -> str:
-    return os.path.join(_profile_cache_dir(profile_id), ".fetch.lock")
+    _require_owner(profile_id)
+    return str(profile_path_for(profile_id, "cache", ".fetch.lock"))
 
 
 def _auto_sync_state_path(profile_id: str) -> str:
-    return os.path.join(_profile_cache_dir(profile_id), "auto_sync_state.json")
+    _require_owner(profile_id)
+    return str(profile_path_for(profile_id, "cache", "auto_sync_state.json"))
 
 
 def _dashboard_cache_path(profile_id: str) -> str:
-    return os.path.join(_profile_cache_dir(profile_id), "dashboard.json")
+    _require_owner(profile_id)
+    return str(profile_path_for(profile_id, "cache", "dashboard.json"))
 
 
 def _load_json_file(path: str) -> dict:
@@ -67,10 +80,16 @@ def _load_json_file(path: str) -> dict:
 def _write_json_file(path: str, payload: dict):
     directory = os.path.dirname(os.path.abspath(path)) or "."
     os.makedirs(directory, exist_ok=True)
-    tmp_path = f"{path}.tmp"
-    with open(tmp_path, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, ensure_ascii=False, indent=2)
-    os.replace(tmp_path, path)
+    fd, tmp_path = tempfile.mkstemp(prefix='.sync-', suffix='.tmp', dir=directory)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 def _load_auto_sync_state(profile_id: str) -> dict:
@@ -111,7 +130,8 @@ def _last_auto_sync_reference(profile_id: str) -> datetime | None:
 
 
 def _profile_has_refresh_token(profile_id: str) -> bool:
-    tokens_path = os.path.join("profiles", profile_id, "auth", "tokens.json")
+    _require_owner(profile_id)
+    tokens_path = tokens_file_for(profile_id)
     payload = _load_json_file(tokens_path)
     return bool(payload.get("refresh_token"))
 
@@ -129,8 +149,11 @@ def _profile_due_for_auto_sync(profile_id: str, now_dt: datetime | None = None) 
 
 
 def _prepare_fetch_env(profile_id: str) -> dict:
+    _require_owner(profile_id)
     env = os.environ.copy()
+    env["FITFLARE_PROFILE_ID"] = profile_id
     env["FITBIT_PROFILE"] = profile_id
+    env["FITBIT_TOKENS_FILE"] = tokens_file_for(profile_id)
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUNBUFFERED"] = "1"
     return env
@@ -172,10 +195,11 @@ def _release_profile_fetch_lock(lock_fd):
 
 
 def _refresh_profile_tokens(profile_id: str, log_prefix: str) -> tuple[bool, str | None]:
-    tokens_file = os.path.join("profiles", profile_id, "auth", "tokens.json")
+    _require_owner(profile_id)
+    tokens_file = tokens_file_for(profile_id)
     print(f"[{log_prefix}] Checking tokens file: {tokens_file}")
     if not os.path.exists(tokens_file):
-        return False, f'Profile {profile_id} not found. Go to Profile Management -> New Profile'
+        return False, f'Profile {profile_id} not found. Open Account settings and configure Fitbit'
 
     try:
         with open(tokens_file, "r", encoding="utf-8") as handle:
@@ -184,10 +208,10 @@ def _refresh_profile_tokens(profile_id: str, log_prefix: str) -> tuple[bool, str
         return False, f"Error checking tokens: {exc}"
 
     if not tokens or "refresh_token" not in tokens or not tokens.get("refresh_token"):
-        return False, f'Profile {profile_id} needs authorization. Go to Profile Management -> Existing Profiles -> Auth'
+        return False, f'Profile {profile_id} needs authorization. Open Account settings and authorize Fitbit'
 
     refresh_result = subprocess.run(
-        ["python", "auth/refresh_token.py"],
+        [sys.executable, "auth/refresh_token.py"],
         cwd=os.getcwd(),
         capture_output=True,
         text=True,
@@ -210,7 +234,7 @@ def _refresh_profile_tokens(profile_id: str, log_prefix: str) -> tuple[bool, str
         error_msg = "Token file not found"
     if "Refresh token is invalid or expired" in error_msg:
         error_msg = "Refresh token is invalid or expired"
-    return False, f"Token refresh failed: {error_msg}. Go to Profile Management -> Existing Profiles -> Auth"
+    return False, f"Token refresh failed: {error_msg}. Open Account settings and authorize Fitbit"
 
 
 def _run_auto_sync_for_profile(profile_id: str):
@@ -241,7 +265,7 @@ def _run_auto_sync_for_profile(profile_id: str):
             return
 
         proc = subprocess.Popen(
-            ["python", "fetch/fetch_all.py", "--profile", profile_id],
+            [sys.executable, "fetch/fetch_all.py", "--profile", profile_id],
             cwd=os.getcwd(),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -298,7 +322,7 @@ def run_auto_sync_cycle():
 
     profiles = _discover_syncable_profiles()
     if not profiles:
-        _auto_sync_log("No authorized profiles available for automatic sync")
+        _auto_sync_log("The personal account is not authorized; skipping automatic sync")
         return
 
     now_dt = datetime.now()
@@ -351,6 +375,10 @@ def stop_auto_sync_scheduler():
 
 def run_fetch_script(profile_id, job_id):
     """Run fetch_all.py script in background thread with live status updates"""
+    _require_owner(profile_id)
+    with jobs.lock:
+        if jobs.fetch_jobs.get(job_id, {}).get("profile") != profile_id:
+            return
     lock_fd = None
     try:
         print(f"[DEBUG] Thread started for job {job_id}")
@@ -365,7 +393,7 @@ def run_fetch_script(profile_id, job_id):
         if lock_fd is None:
             jobs.fetch_jobs[job_id]['status'] = 'failed'
             jobs.fetch_jobs[job_id]['end_time'] = _now_iso()
-            jobs.fetch_jobs[job_id]['error'] = '当前档案已有同步任务在运行。'
+            jobs.fetch_jobs[job_id]['error'] = '当前账户已有同步任务在运行。'
             return
 
         jobs.log_fetch(job_id, f"Starting fetch operation for profile: {profile_id}")
@@ -411,7 +439,7 @@ def run_fetch_script(profile_id, job_id):
             return
 
         # Prepare command
-        cmd = ['python', 'fetch/fetch_all.py']
+        cmd = [sys.executable, 'fetch/fetch_all.py']
         if profile_id:
             cmd.extend(['--profile', profile_id])
 

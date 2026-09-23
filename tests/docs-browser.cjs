@@ -9,7 +9,7 @@ fs.mkdirSync(out, {recursive:true});
 const report = {mode, layouts:[], checks:[]};
 const check = text => report.checks.push(text);
 async function main() {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined });
   try {
     for (const [name,width,height] of [['desktop',1440,1000],['mobile',390,844]]) {
       const page = await browser.newPage({viewport:{width,height}});
@@ -20,8 +20,8 @@ async function main() {
       await page.addInitScript(() => Object.defineProperty(navigator, 'clipboard', {configurable:true,value:{writeText:async text => { window.__copied = text; }}}));
       await page.goto(base+'/api/public/v1/docs', {waitUntil:'networkidle'});
       await page.waitForSelector('#endpointSearch');
-      assert.equal(await page.locator('.endpoint').count(),25);
-      assert.equal(requests.some(url => /\/api\/public\/v1\/profiles/.test(url)),false);
+      assert.equal(await page.locator('.endpoint').count(),24);
+      assert.equal(requests.some(url => /\/api\/public\/v1\/(me|profiles)/.test(url)),false);
       assert.equal(requests.some(url => !url.startsWith(base)),false);
       assert.match(await page.locator('#quickCode').textContent(),new RegExp(base.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth),width);
@@ -46,10 +46,9 @@ async function main() {
       await page.selectOption('#exampleLanguage','python');
       assert.match(await page.locator('#requestCode').textContent(),/timeout=15/);
       const before = requests.length;
-      await page.locator('#sendRequest').click();
-      assert.match(await page.locator('#requestStatus').textContent(),/YOUR_PROFILE/);
+      assert.equal(await page.locator('#request-profile_id').count(),0);
+      await page.selectOption('#endpointSelect','profile');
       assert.equal(requests.length,before);
-      await page.selectOption('#endpointSelect','profiles');
       await page.locator('#sendRequest').click();
       await page.waitForFunction(() => document.getElementById('requestStatus').textContent.includes('HTTP'));
       assert.match(await page.locator('#requestStatus').textContent(),mode==='private'?/HTTP 401/:/HTTP 200/);
@@ -61,7 +60,6 @@ async function main() {
         await page.waitForFunction(() => document.getElementById('requestStatus').textContent.includes('HTTP 200'));
       }
       await page.selectOption('#endpointSelect','table');
-      await page.fill('#request-profile_id','Demo');
       await page.locator('#sendRequest').click();
       await page.waitForFunction(() => document.getElementById('requestStatus').textContent.includes('HTTP 200'));
       const response = JSON.parse(await page.locator('#responsePreview').textContent());
@@ -76,22 +74,21 @@ async function main() {
     const page = await browser.newPage();
     await page.goto(base+'/api/public/v1/docs#try',{waitUntil:'networkidle'});
     await page.selectOption('#endpointSelect','chart');
-    await page.fill('#request-profile_id','Demo');
-    await page.route('**/api/public/v1/profiles/Demo/charts/series.svg*', route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" onload="window.__injected=1"></svg>'}));
+    await page.route('**/api/public/v1/me/charts/series.svg*', route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" onload="window.__injected=1"></svg>'}));
     await page.locator('#sendRequest').click();
     await page.waitForSelector('#responsePreview:not([hidden])');
     assert.match(await page.locator('#responsePreview').textContent(),/<svg/);
     assert.equal(await page.evaluate(()=>window.__injected),undefined);
-    await page.selectOption('#endpointSelect','profiles');
-    await page.route('**/api/public/v1/profiles', route=>route.fulfill({contentType:'text/plain',body:'Z'.repeat(90000)}));
+    await page.selectOption('#endpointSelect','profile');
+    await page.route('**/api/public/v1/me', route=>route.fulfill({contentType:'text/plain',body:'Z'.repeat(90000)}));
     await page.locator('#sendRequest').click();
     await page.waitForFunction(()=>document.getElementById('requestStatus').textContent.includes('64 KiB'));
     assert.equal((await page.locator('#responsePreview').textContent()).length,65536);
     await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:()=>Promise.reject(new Error('Denied'))}}));
     await page.locator('[data-copy="requestCode"]').click();
     assert.match(await page.locator('#copyStatus').textContent(),/手动复制/);
-    await page.unroute('**/api/public/v1/profiles');
-    await page.route('**/api/public/v1/profiles',async route=>{await new Promise(r=>setTimeout(r,1200));await route.fulfill({contentType:'application/json',body:'{"late":true}'}).catch(()=>{});});
+    await page.unroute('**/api/public/v1/me');
+    await page.route('**/api/public/v1/me',async route=>{await new Promise(r=>setTimeout(r,1200));await route.fulfill({contentType:'application/json',body:'{"late":true}'}).catch(()=>{});});
     await page.locator('#sendRequest').click();
     await page.locator('#cancelRequest').click();
     await page.waitForTimeout(1400);
@@ -101,7 +98,7 @@ async function main() {
     check('SVG rendered as inert text; response cap; denied clipboard fallback; explicit cancellation ignores late replies');
     const noJs = await browser.newPage({javaScriptEnabled:false,viewport:{width:390,height:844}});
     await noJs.goto(base+'/api/public/v1/docs');
-    assert.equal(await noJs.locator('.endpoint').count(),25);
+    assert.equal(await noJs.locator('.endpoint').count(),24);
     await noJs.locator('#endpoint-series summary').click();
     assert.equal(await noJs.locator('#endpoint-series table').isVisible(),true);
     assert.equal(await noJs.locator('#try').isVisible(),false);

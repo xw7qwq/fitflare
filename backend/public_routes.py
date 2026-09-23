@@ -10,6 +10,7 @@ from common.public_api import (
 )
 from .repository import load_public_dashboard as _load_public_dashboard, visible_profile_cards as build_profile_cards
 from .time_utils import _now_iso
+from common.profile_paths import owner_profile_id
 
 bp = Blueprint('public_api', __name__)
 
@@ -39,7 +40,7 @@ def _public_text_response(body: str, mimetype: str, status_code: int = 200):
 
 
 def _public_profile_links(base_url: str, profile_id: str) -> dict[str, str]:
-    root = f"{base_url}{PUBLIC_API_BASE_PATH}/profiles/{profile_id}"
+    root = f"{base_url}{PUBLIC_API_BASE_PATH}/me"
     return {
         "self": root,
         "dashboard": f"{root}/dashboard",
@@ -65,8 +66,8 @@ def public_api_index():
     profiles = build_profile_cards()
     sample_profile = profiles[0].get('id') if profiles else None
     data = {
-        'name': 'FitBaus Public API',
-        'description': '公开只读接口，面向其他项目复用本地 Fitbit 缓存、趋势序列和 SVG 图表。',
+        'name': 'Fitflare Personal API',
+        'description': '个人只读接口，用于读取自己的 Fitbit 缓存、趋势序列和 SVG 图表。默认需要管理员会话。',
         'docs': {
             'html': f'{base_url}{PUBLIC_API_BASE_PATH}/docs',
             'markdown': f'{base_url}{PUBLIC_API_BASE_PATH}/docs.md',
@@ -74,7 +75,7 @@ def public_api_index():
         },
         'profiles': {
             'count': len(profiles),
-            'href': f'{base_url}{PUBLIC_API_BASE_PATH}/profiles',
+            'href': f'{base_url}{PUBLIC_API_BASE_PATH}/me',
         },
         'datasets': dataset_keys(),
         'sections': section_keys(),
@@ -130,8 +131,10 @@ def public_profiles():
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>')
 def public_profile_summary(profile_id):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -154,8 +157,10 @@ def public_profile_summary(profile_id):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/dashboard', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/dashboard')
 def public_profile_dashboard(profile_id):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -169,8 +174,10 @@ def public_profile_dashboard(profile_id):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/catalog', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/catalog')
 def public_profile_catalog(profile_id):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -187,8 +194,10 @@ def public_profile_catalog(profile_id):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/overview', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/overview')
 def public_profile_overview(profile_id):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -202,8 +211,10 @@ def public_profile_overview(profile_id):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/coverage', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/coverage')
 def public_profile_coverage(profile_id):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -217,8 +228,10 @@ def public_profile_coverage(profile_id):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/metrics', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/metrics')
 def public_profile_metrics(profile_id):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -234,8 +247,10 @@ def public_profile_metrics(profile_id):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/metrics/<metric_key>', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/metrics/<metric_key>')
 def public_profile_metric(profile_id, metric_key):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -253,8 +268,10 @@ def public_profile_metric(profile_id, metric_key):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/correlations', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/correlations')
 def public_profile_correlations(profile_id):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -270,8 +287,10 @@ def public_profile_correlations(profile_id):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/series/<granularity>', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/series/<granularity>')
 def public_profile_series(profile_id, granularity):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -298,8 +317,10 @@ def public_profile_series(profile_id, granularity):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/datasets', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/datasets')
 def public_profile_datasets(profile_id):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -310,7 +331,7 @@ def public_profile_datasets(profile_id):
         datasets.append({
             'key': dataset,
             'coverage': coverage.get(dataset),
-            'href': f'{base_url}{PUBLIC_API_BASE_PATH}/profiles/{profile_id}/datasets/{dataset}',
+            'href': f'{base_url}{PUBLIC_API_BASE_PATH}/me/datasets/{dataset}',
         })
     return _public_json_response(
         build_envelope(
@@ -323,8 +344,10 @@ def public_profile_datasets(profile_id):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/datasets/<dataset>', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/datasets/<dataset>')
 def public_profile_dataset(profile_id, dataset):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -351,8 +374,10 @@ def public_profile_dataset(profile_id, dataset):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/sections', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/sections')
 def public_profile_sections(profile_id):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -373,8 +398,10 @@ def public_profile_sections(profile_id):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/sections/<section_key>', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/sections/<section_key>')
 def public_profile_section(profile_id, section_key):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -392,8 +419,10 @@ def public_profile_section(profile_id, section_key):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/tables', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/tables')
 def public_profile_tables(profile_id):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -405,7 +434,7 @@ def public_profile_tables(profile_id):
         items.append({
             'key': table_key,
             'count': len(rows) if isinstance(rows, list) else 0,
-            'href': f'{base_url}{PUBLIC_API_BASE_PATH}/profiles/{profile_id}/tables/{table_key}',
+            'href': f'{base_url}{PUBLIC_API_BASE_PATH}/me/tables/{table_key}',
         })
     return _public_json_response(
         build_envelope(
@@ -418,8 +447,10 @@ def public_profile_tables(profile_id):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/tables/<table_key>', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/tables/<table_key>')
 def public_profile_table(profile_id, table_key):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -445,8 +476,10 @@ def public_profile_table(profile_id, table_key):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/snapshot-status', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/snapshot-status')
 def public_profile_snapshot_status(profile_id):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -460,8 +493,10 @@ def public_profile_snapshot_status(profile_id):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/snapshot', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/snapshot')
 def public_profile_snapshot(profile_id):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -476,8 +511,10 @@ def public_profile_snapshot(profile_id):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/snapshot/endpoints', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/snapshot/endpoints')
 def public_profile_snapshot_endpoints(profile_id):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -493,7 +530,7 @@ def public_profile_snapshot_endpoints(profile_id):
             'label': entry.get('label'),
             'group': entry.get('group'),
             'scope': entry.get('scope'),
-            'href': f'{base_url}{PUBLIC_API_BASE_PATH}/profiles/{profile_id}/snapshot/endpoints/{endpoint_key}',
+            'href': f'{base_url}{PUBLIC_API_BASE_PATH}/me/snapshot/endpoints/{endpoint_key}',
         })
     return _public_json_response(
         build_envelope(
@@ -506,8 +543,10 @@ def public_profile_snapshot_endpoints(profile_id):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/snapshot/endpoints/<endpoint_key>', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/snapshot/endpoints/<endpoint_key>')
 def public_profile_snapshot_endpoint(profile_id, endpoint_key):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')
@@ -526,8 +565,10 @@ def public_profile_snapshot_endpoint(profile_id, endpoint_key):
     )
 
 
+@bp.route(f'{PUBLIC_API_BASE_PATH}/me/charts/<chart_key>.svg', defaults={'profile_id': None})
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles/<profile_id>/charts/<chart_key>.svg')
 def public_profile_chart_svg(profile_id, chart_key):
+    profile_id = profile_id or owner_profile_id()
     dashboard_payload = _load_public_dashboard(profile_id)
     if dashboard_payload is None:
         return _public_api_error(f'Profile "{profile_id}" not found', 404, 'profile_not_found')

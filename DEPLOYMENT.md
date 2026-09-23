@@ -1,6 +1,6 @@
 # fitflare 生产部署指南
 
-本文适用于 Linux 上的 Docker Compose 部署。仓库名称为 fitflare，兼容名称保持为 Compose 服务 `fitbaus`、容器 `fitbaus-app`、环境变量 `FITBAUS_*`。宿主机只监听 `127.0.0.1:9000`，由 Caddy 提供 HTTPS。
+本文适用于 Linux 上的 Docker Compose 部署。仓库名称为 fitflare，兼容名称保持为 Compose 服务 `fitbaus`、容器 `fitbaus-app`、环境变量 `FITBAUS_*`。应用只处理 `FITFLARE_PROFILE_ID` 指定的唯一账户。宿主机只监听 `127.0.0.1:9000`，由 Caddy 提供 HTTPS。
 
 ## 1. 准备源码与配置
 
@@ -19,8 +19,9 @@ chmod 600 .env
 | --- | --- |
 | `FITBAUS_UID` / `FITBAUS_GID` | `10001` / `10001`，与数据目录属主一致 |
 | `FITBAUS_BIND_HOST` / `FITBAUS_PORT` | `127.0.0.1` / `9000` |
+| `FITFLARE_PROFILE_ID` | 新安装为 `me`；迁移时填原数据目录名，不是网页可切换的账户 |
 | `FITBAUS_DATA_ACCESS` | `private`，数据读取需要管理员登录 |
-| `FITBAUS_PUBLIC_PROFILES` | 留空，不允许匿名访问任何档案；公开模式按需填写逗号分隔的档案 ID |
+| `FITBAUS_PUBLIC_PROFILES` | 兼容公开模式的允许列表；自用私有模式可留空，公开模式只允许填唯一账户 ID（其他目录始终不可见） |
 | `FITBAUS_ADMIN_PASSWORD` | 必须自行生成；也支持用 `FITBAUS_ADMIN_PASSWORD_HASH` 提供 Werkzeug 兼容哈希 |
 | `FITBAUS_SESSION_SECRET` | 独立生成并持久保存的随机密钥，建议至少 32 字符 |
 | `FITBAUS_SESSION_COOKIE_SECURE` | `true`，管理员通过 HTTPS 登录 |
@@ -74,7 +75,21 @@ curl -fsS https://fitbit.example.com/api/health
 
 生产保持 `FITBAUS_SESSION_COOKIE_SECURE=true`。在 HTTP 地址登录时浏览器不会发送 Secure Cookie；只有隔离的本机开发环境才应设为 `false`。不要将业务端口直接暴露公网来绕过代理问题。
 
+## 从多档案部署迁移
+
+先备份现有 `.env` 和 `profiles/`，记录自己原有的数据目录名，例如 `profiles/myprofile`。设置 `FITFLARE_PROFILE_ID=myprofile`，保留原凭据、CSV、缓存和文件权限。不要将目录改名为 `me`，也不要合并多个目录。
+
+单人版不会删除其他目录，但不会枚举、访问或同步它们，管理员也不例外。旧只读 URL 仅兼容配置的账户；创建/删除档案接口已经移除。`FITBAUS_DATA_ACCESS` 默认改为 `private`，因此升级时必须配置管理员密码；若原 `.env` 显式为 `public`，请主动改为 `private`。
+
+从原始服务器 Git 历史迁移时不要直接合并到净化后的仓库。先在新目录 clone 本仓库，停写并备份后，将原 `.env` 与 `profiles/` 按上述步骤恢复；不要在同一端口同时启动两个容器。现有已经基于本仓库的部署可按“更新与回滚”执行。
+
 ## Fitbit 授权与首次同步
+
+当前实现仍接入旧 Fitbit Web API。Google 公告它于 2026 年 9 月下线；新 Google Health API 需要单独适配及重新授权，不能直接复用旧 token。以下是现有适配器的操作说明，不承诺旧接口仍可用。已有本地记录仍可查看。详见 [迁移研究](docs/cloudflare-workers.md)。
+
+在 HTTPS 页面登录后打开“账户设置”，填写 Client ID/Secret 并点击连接，再用授权窗口完成手工回调。已经连接的账户可以重新授权。页面不要求填写档案名，也不提供删除健康数据的按钮。
+
+下面的命令行是同一账户的维护入口：
 
 先在 Fitbit 开发者平台创建适合自己账户使用的应用，保存 Client ID / Client Secret，并登记与脚本一致的 Redirect URI。下面采用 SSH/Docker 下的手工回调流程，不需要向公网开放 8080 端口。
 
@@ -90,18 +105,18 @@ FITBIT_FALLBACK_REDIRECT=http://localhost:8080/callback
 ```bash
 docker compose up -d
 docker compose exec -e FITBIT_AUTH_TIMEOUT=1 fitbaus \
-  python auth/authorize_fitbit.py --profile myprofile
+  python auth/authorize_fitbit.py
 ```
 
-档案 ID 使用英文字母、数字、下划线或连字符。脚本优先读取 `FITBIT_CLIENT_ID` / `FITBIT_CLIENT_SECRET`，其次读取该档案保存的凭据；缺少凭据时会提示输入。不要将凭据直接写进源码或命令参数。
+`FITFLARE_PROFILE_ID` 使用英文字母、数字、下划线或连字符。脚本默认使用这一目录，不会自动扫描并同步其他目录；显式 `--profile` 只保留给本机维护。脚本优先读取 `FITBIT_CLIENT_ID` / `FITBIT_CLIENT_SECRET`，其次读取该档案保存的凭据；缺少凭据时会提示输入。不要将凭据直接写进源码或命令参数。
 
 1. 脚本尝试本地回调，短暂超时后显示手工授权提示。使用手工流程输出的授权链接，在自己的浏览器完成 Fitbit 登录与权限确认。
 2. 浏览器跳转到已登记的 `http://localhost:8080/callback?code=...`。此处的 localhost 指浏览器所在电脑，即使页面无法连接，也可以从地址栏复制完整 URL。
-3. 将完整回调 URL 粘贴回仍在运行的终端。脚本交换令牌，并保存到 `profiles/myprofile/auth/`。
+3. 将完整回调 URL 粘贴回仍在运行的终端。脚本交换令牌，并保存到 `profiles/<FITFLARE_PROFILE_ID>/auth/`。
 4. 首次同步：
 
 ```bash
-docker compose exec fitbaus python fetch/fetch_all.py --profile myprofile
+docker compose exec fitbaus python fetch/fetch_all.py
 ```
 
 回到网页查看档案和数据；没有数据的指标取决于 Fitbit 的返回结果。授权 URL、回调 URL、令牌和授权日志都不要公开。保持 `FITBIT_FALLBACK_REDIRECT` 与登记地址一致，避免 HTTP 本地回调超时后使用空地址。

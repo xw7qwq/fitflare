@@ -46,14 +46,13 @@ def get(path):
         return json.load(response)
 session = get('/api/admin/session')
 if session['data_access'] == 'public':
-    profiles = get('/api/profiles')
-    if profiles:
-        from urllib.parse import quote
-        data = get('/api/dashboard/' + quote(profiles[0]['name']) + '?tables=none')
+    account = get('/api/account')
+    if account.get('configured') or account.get('authorized'):
+        data = get('/api/dashboard?tables=none')
         assert 'files' not in data and 'tables' not in data
 else:
     try:
-        get('/api/profiles')
+        get('/api/account')
     except HTTPError as error:
         assert error.code == 401
     else:

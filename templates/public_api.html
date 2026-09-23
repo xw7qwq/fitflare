@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <meta name="description" content="FitBaus 只读 API：档案、趋势、分页记录与 SVG 图表。参数说明、示例和 OpenAPI。">
-  <title>API 文档 · FitBaus</title>
+  <meta name="description" content="Fitflare 个人只读 API：账户、趋势、分页记录与 SVG 图表。参数说明、示例和 OpenAPI。">
+  <title>API 文档 · Fitflare</title>
   <link rel="icon" href="/assets/favicon.ico">
   <link rel="stylesheet" href="/docs.css">
   <script src="/js/docs.js" type="module"></script>
@@ -13,7 +13,7 @@
 <body>
   <a href="#main" class="skip-link">跳到文档内容</a>
   <header class="topbar">
-    <a class="brand" href="/"><span class="brand-icon" aria-hidden="true">F</span>FitBaus <span class="brand-divider">/</span><span class="brand-section">API</span></a>
+    <a class="brand" href="/"><span class="brand-icon" aria-hidden="true">F</span>Fitflare <span class="brand-divider">/</span><span class="brand-section">API</span></a>
     <nav class="header-links" aria-label="文档格式">
       <a href="{{ api_base }}/openapi.json">OpenAPI <span aria-hidden="true">↗</span></a>
       <a href="{{ api_base }}/docs.md">Markdown <span aria-hidden="true">↗</span></a>
@@ -40,11 +40,11 @@
         <div class="eyebrow"><span class="version">v1</span> DEVELOPER REFERENCE</div>
         <h1>API 文档</h1>
         <p class="lede">把健康记录接入你的项目。</p>
-        <p>读取档案、趋势与结构化记录，或直接嵌入 SVG 图表。无需重复接入 Fitbit OAuth。</p>
-        <div class="base-row"><span>基础路径</span><code>{{ api_base }}</code><span class="mode">{{ '私有模式 · 需登录' if access_mode == 'private' else '公开模式 · 档案白名单' }}</span></div>
+        <p>读取自己的账户、趋势与结构化记录，或直接嵌入 SVG 图表。无需重复接入 Fitbit OAuth。</p>
+        <div class="base-row"><span>基础路径</span><code>{{ api_base }}</code><span class="mode">{{ '私有模式 · 需登录' if access_mode == 'private' else '公开模式 · 个人账户' }}</span></div>
         <div class="quickstart">
-          <div><h2>先获取可见档案</h2><p>从响应的 <code>data[].id</code> 取得档案 ID，再读取趋势。示例占位符不会自动替换为真实个人信息。</p></div>
-          <div class="code-block"><div class="code-toolbar"><span>cURL</span><button type="button" data-copy="quickCode" hidden data-enhanced>复制</button></div><pre id="quickCode" tabindex="0" data-example-path="{{ api_base }}/profiles">curl -fsS 'https://YOUR_HOST{{ api_base }}/profiles'</pre></div>
+          <div><h2>直接读取我的账户</h2><p>所有 <code>/me</code> 接口只访问本站配置的唯一账户，无需选择或输入档案 ID。</p></div>
+          <div class="code-block"><div class="code-toolbar"><span>cURL</span><button type="button" data-copy="quickCode" hidden data-enhanced>复制</button></div><pre id="quickCode" tabindex="0" data-example-path="{{ api_base }}/me">curl -fsS 'https://YOUR_HOST{{ api_base }}/me'</pre></div>
         </div>
         <p class="small">私有模式请先<a href="/">登录仪表盘</a>。以下文档始终可读，不代表数据已公开。</p>
       </section>
@@ -56,7 +56,7 @@
             <form id="requestForm">
               <label for="endpointSelect">选择接口</label>
               <select id="endpointSelect" name="endpoint">
-                {% for item in endpoints %}<option value="{{ item.id }}"{% if item.id == 'profiles' %} selected{% endif %}>{{ item.title }} · {{ item.path }}</option>{% endfor %}
+                {% for item in endpoints %}<option value="{{ item.id }}"{% if item.id == 'profile' %} selected{% endif %}>{{ item.title }} · {{ item.path }}</option>{% endfor %}
               </select>
               <div id="requestFields" class="field-grid"></div>
               <div class="code-block"><div class="code-toolbar"><label for="exampleLanguage" class="sr-only">示例语言</label><select id="exampleLanguage" aria-label="示例语言"><option value="curl">cURL</option><option value="javascript">JavaScript</option><option value="python">Python</option></select><button type="button" data-copy="requestCode">复制示例</button></div><pre id="requestCode" tabindex="0"></pre></div>
@@ -109,6 +109,6 @@
   </div>
   <div id="copyStatus" class="copy-status" role="status" aria-live="polite"></div>
   <script id="apiDefinitions" type="application/json">{{ interactive|tojson }}</script>
-  <noscript><p class="noscript-note">JavaScript 已禁用。所有接口和参数仍可展开阅读；将示例中的 YOUR_HOST 与 YOUR_PROFILE 替换后调用。</p></noscript>
+  <noscript><p class="noscript-note">JavaScript 已禁用。所有接口和参数仍可展开阅读；将示例中的 YOUR_HOST 替换后调用。</p></noscript>
 </body>
 </html>

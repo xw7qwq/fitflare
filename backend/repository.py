@@ -1,15 +1,13 @@
 """Profile discovery and the shared public-data visibility rules."""
-from pathlib import Path
+from common.profile_paths import owner_profile_id, profile_path_for
 from flask import current_app
 from common.dashboard_cache import build_profile_cards, load_dashboard_cache
 from .security import profile_is_visible
 
 
 def visible_profile_ids():
-    root = Path(current_app.config['PROFILES_DIR'])
-    if not root.is_dir():
-        return []
-    return sorted(p.name for p in root.iterdir() if p.is_dir() and profile_is_visible(p.name))
+    owner = owner_profile_id()
+    return [owner] if profile_is_visible(owner) and profile_path_for(owner).is_dir() else []
 
 
 def visible_profile_cards():

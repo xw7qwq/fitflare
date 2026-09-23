@@ -2,10 +2,11 @@
 import os
 import json
 from datetime import datetime
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from common.dashboard_cache import load_dashboard_cache
 from common.public_api import public_dashboard_payload, build_table_payload, parse_int_arg
-from .security import is_admin
+from .security import is_admin, profile_is_visible
+from common.profile_paths import owner_profile_id, profile_path_for
 from .repository import visible_profile_ids, visible_profile_cards as build_profile_cards
 
 bp = Blueprint('dashboard', __name__)
@@ -14,7 +15,7 @@ bp = Blueprint('dashboard', __name__)
 def list_profiles():
     """List available profiles with creation dates"""
     profiles = []
-    profiles_dir = 'profiles'
+    profiles_dir = current_app.config['PROFILES_DIR']
 
     if os.path.exists(profiles_dir):
         for entry in visible_profile_ids():
@@ -45,11 +46,15 @@ def list_profiles():
     return jsonify(profiles)
 
 
+@bp.route('/api/dashboard')
 @bp.route('/api/dashboard/<profile_id>')
-def dashboard(profile_id):
+def dashboard(profile_id=None):
     """Return the unified dashboard cache for one profile."""
+    profile_id = owner_profile_id()
+    if not profile_is_visible(profile_id):
+        return jsonify(error='Account not found'), 404
     try:
-        profile_dir = os.path.join('profiles', profile_id)
+        profile_dir = profile_path_for(profile_id)
         if not os.path.isdir(profile_dir):
             return jsonify({'error': f'Profile "{profile_id}" not found'}), 404
         payload = load_dashboard_cache(profile_id, rebuild_if_missing=True)
@@ -72,8 +77,10 @@ def profile_summaries():
         return jsonify({'error': f'Failed to build profile summaries: {str(e)}'}), 500
 
 
+@bp.get('/api/tables/<table_key>')
 @bp.get('/api/tables/<profile_id>/<table_key>')
-def dashboard_table(profile_id, table_key):
+def dashboard_table(table_key, profile_id=None):
+    profile_id = owner_profile_id()
     from .repository import load_public_dashboard
     payload = load_public_dashboard(profile_id)
     if payload is None:
@@ -87,3 +94,12 @@ def dashboard_table(profile_id, table_key):
     except KeyError:
         return jsonify(error='Table not found'), 404
     return jsonify(**rows, meta=meta)
+
+
+@bp.get('/api/account')
+def personal_account():
+    from .admin_routes import account_status
+    try:
+        return jsonify(account_status())
+    except (OSError, ValueError):
+        return jsonify(error='Unable to read personal account settings'), 500

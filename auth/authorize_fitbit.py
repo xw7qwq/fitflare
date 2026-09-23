@@ -415,46 +415,6 @@ def get_auth_code_advanced(client_id: str):
     copy_to_clipboard(server.auth_code)
     return (server.auth_code, redirect_uri)
 
-def update_profiles_index(profile_id):
-    """Update profiles/index.json to include the new profile"""
-    if not profile_id:
-        return  # Skip for default profile
-    
-    try:
-        # Get the profiles directory path
-        profiles_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "profiles")
-        index_file = os.path.join(profiles_dir, "index.json")
-        
-        # Ensure profiles directory exists
-        os.makedirs(profiles_dir, exist_ok=True)
-        
-        # Read existing profiles or create empty list
-        existing_profiles = []
-        if os.path.exists(index_file):
-            try:
-                with open(index_file, "r", encoding="utf-8") as f:
-                    existing_profiles = json.load(f)
-                if not isinstance(existing_profiles, list):
-                    existing_profiles = []
-            except (json.JSONDecodeError, Exception):
-                existing_profiles = []
-        
-        # Add new profile if not already present
-        if profile_id not in existing_profiles:
-            existing_profiles.append(profile_id)
-            existing_profiles.sort()  # Keep sorted for consistency
-            
-            # Write updated profiles list
-            with open(index_file, "w", encoding="utf-8") as f:
-                json.dump(existing_profiles, f, indent=2)
-            
-            print(f"📝 Added profile '{profile_id}' to profiles/index.json")
-        else:
-            print(f"ℹ️ Profile '{profile_id}' already exists in profiles/index.json")
-            
-    except Exception as e:
-        print(f"⚠️ Warning: Could not update profiles/index.json: {e}")
-
 def exchange_code_for_token(auth_code, redirect_uri, client_id, client_secret, profile_id=None):
     """Exchange authorization code for access token"""
     print("\n🔄 Exchanging authorization code for access token...")
@@ -482,8 +442,6 @@ def exchange_code_for_token(auth_code, redirect_uri, client_id, client_secret, p
             # Use atomic write to prevent race conditions with fetch process
             _atomic_write(tokens_path, res.text)
             
-            # Update profiles index for new profiles
-            update_profiles_index(profile_id)
             
             # Parse and display token info
             token_data = res.json()
@@ -503,106 +461,16 @@ def exchange_code_for_token(auth_code, redirect_uri, client_id, client_secret, p
         print(f"❌ Error: {e}")
         return False
 
-def sync_existing_profiles():
-    """Sync existing profiles to index.json"""
-    try:
-        profiles_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "profiles")
-        index_file = os.path.join(profiles_dir, "index.json")
-        
-        if not os.path.exists(profiles_dir):
-            return
-        
-        # Find all existing profile directories
-        existing_profiles = []
-        for item in os.listdir(profiles_dir):
-            profile_path = os.path.join(profiles_dir, item)
-            if os.path.isdir(profile_path) and not item.startswith('.'):
-                # Check if it has auth/tokens.json
-                tokens_file = os.path.join(profile_path, "auth", "tokens.json")
-                if os.path.exists(tokens_file):
-                    existing_profiles.append(item)
-        
-        existing_profiles.sort()
-        
-        # Read current index or create empty list
-        current_profiles = []
-        if os.path.exists(index_file):
-            try:
-                with open(index_file, "r", encoding="utf-8") as f:
-                    current_profiles = json.load(f)
-                if not isinstance(current_profiles, list):
-                    current_profiles = []
-            except (json.JSONDecodeError, Exception):
-                current_profiles = []
-        
-        # Update if there are differences
-        if set(existing_profiles) != set(current_profiles):
-            with open(index_file, "w", encoding="utf-8") as f:
-                json.dump(existing_profiles, f, indent=2)
-            print(f"🔄 Synced {len(existing_profiles)} profiles to index.json")
-        
-    except Exception as e:
-        print(f"⚠️ Warning: Could not sync profiles to index.json: {e}")
-
 def main():
     """Main authorization flow"""
     try:
-        parser = argparse.ArgumentParser(description="Fitbit authorization (advanced)")
-        parser.add_argument("--profile", help="Profile id to save tokens under", default=None)
+        parser = argparse.ArgumentParser(description="Authorize the configured personal Fitbit account")
+        parser.add_argument("--profile", help="Explicit local directory override for maintenance only", default=None)
         parser.add_argument("--verbose", action="store_true", help="Print selected credentials and paths")
         parser.add_argument("--reenter", action="store_true", help="Re-enter and overwrite saved client credentials for this profile")
-        parser.add_argument("--sync-profiles", action="store_true", help="Sync existing profiles to index.json")
         args = parser.parse_args()
         
-        # Show usage guidance if no profile specified
-        if args.profile is None and not args.sync_profiles:
-            print()
-            print("Correct usage:")
-            print()
-            print("  python authorize_fitbit.py --profile [your_name]")
-            print()
-            print("Example:")
-            print()
-            print("  python authorize_fitbit.py --profile john")
-            print()
-            print("This will create a personal profile for your Fitbit data.")
-            print("You can also use --help to see all available options.")
-            print()
-            print("=" * 60)
-            print()
-            print("Continuing with default profile (single-user setup)...")
-            print("(Press Ctrl+C to cancel and use --profile instead)")
-            print()
-            try:
-                response = input("Do you want to continue with default profile? (y/n): ").strip().lower()
-                if response in ['n', 'no']:
-                    print("Cancelled. Please run with --profile [your_name] for the best experience.")
-                    return
-                elif response not in ['y', 'yes']:
-                    print("Invalid response. Please run with --profile [your_name] for the best experience.")
-                    return
-            except KeyboardInterrupt:
-                print("\nCancelled. Please run with --profile [your_name] for the best experience.")
-                return
-            
-            args.profile = "default"
-        
-        # Sync existing profiles if requested
-        if args.sync_profiles:
-            sync_existing_profiles()
-            return
-
-        # Safety check: prevent proceeding if default profile already exists
-        # Applies both when user explicitly passes --profile default or chooses default interactively
-        if str(args.profile).strip().lower() == "default":
-            root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            default_profile_dir = os.path.join(root_dir, "profiles", "default")
-            default_tokens_path = tokens_file_for("default")
-            default_client_path = client_credentials_file_for("default")
-            if os.path.isdir(default_profile_dir) or os.path.exists(default_tokens_path) or os.path.exists(default_client_path):
-                print("\n⚠️  A default profile already exists. Aborting to avoid overwriting it.")
-                print("   Tip: Use --profile <your_name> to create a new profile, or remove the existing default profile if you intend to recreate it.")
-                return
+        args.profile = get_active_profile(args.profile)
 
         # Load or prompt client credentials
         cid, csec, cred_source, cred_path = _load_or_prompt_credentials(args.profile, reenter=args.reenter)

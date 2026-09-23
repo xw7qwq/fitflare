@@ -8,6 +8,7 @@ from backend.security import install_security, require_admin
 from backend.sync import start_auto_sync_scheduler, stop_auto_sync_scheduler
 from backend import jobs
 from backend.time_utils import _now_iso
+from common.profile_paths import owner_profile_id, profile_path_for
 
 ROOT = Path(__file__).resolve().parent
 STATIC_FILES = {
@@ -48,13 +49,16 @@ def create_app(config=None):
     def serve_profile_csv(profile_id, filename):
         if not filename.endswith('.csv') or Path(filename).name != filename:
             return 'File not found', 404
-        directory = Path(app.config['PROFILES_DIR']) / profile_id / 'csv'
-        return send_from_directory(directory, filename, mimetype='text/csv')
+        try:
+            path = profile_path_for(profile_id, 'csv', filename)
+        except ValueError:
+            return 'File not found', 404
+        return send_from_directory(path.parent, path.name, mimetype='text/csv')
 
     @app.get('/api/health')
     def health_check():
         with jobs.lock:
-            active = sum(job.get('status') == 'running' for job in jobs.fetch_jobs.values())
+            active = sum(job.get('status') == 'running' and job.get('profile') == owner_profile_id() for job in jobs.fetch_jobs.values())
         return jsonify(status='healthy', timestamp=_now_iso(), active_jobs=active,
                        auto_sync_enabled=AUTO_SYNC_ENABLED,
                        auto_sync_interval_seconds=AUTO_SYNC_INTERVAL_SECONDS,

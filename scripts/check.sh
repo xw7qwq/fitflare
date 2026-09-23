@@ -17,7 +17,7 @@ git diff --check
 npm test
 for file in app.js js/*.js; do node --check "$file"; done
 docker build -t "$image" . > "$results/build.log" 2>&1
-run=(docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp --user 10001:10001 -e PYTHONDONTWRITEBYTECODE=1 -e FITBAUS_AUTO_SYNC_ENABLED=false)
+run=(docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp --user 10001:10001 -e PYTHONDONTWRITEBYTECODE=1 -e FITBAUS_AUTO_SYNC_ENABLED=false -e FITFLARE_PROFILE_ID=Demo)
 "${run[@]}" --entrypoint python "$image" scripts/audit.py --image
 "${run[@]}" -v "$root/tests:/app/tests:ro" --entrypoint python "$image" -m unittest discover -s tests -p 'test_*.py' -v 2>&1 | tee "$results/backend-tests.log"
 python3 tests/fixture.py "$runtime/profiles"
@@ -30,7 +30,7 @@ start_preview() {
     -p 127.0.0.1::9000 -v "$runtime/profiles:/app/profiles:ro" \
     -e PYTHONDONTWRITEBYTECODE=1 -e FITBAUS_AUTO_SYNC_ENABLED=false \
     -e FITBAUS_ADMIN_PASSWORD="$password" -e FITBAUS_SESSION_COOKIE_SECURE=false \
-    -e FITBAUS_DATA_ACCESS="$1" -e FITBAUS_PUBLIC_PROFILES=Demo "$image" >/dev/null
+    -e FITFLARE_PROFILE_ID=Demo -e FITBAUS_DATA_ACCESS="$1" -e FITBAUS_PUBLIC_PROFILES=Demo "$image" >/dev/null
   port=$(docker port "$container" 9000/tcp | sed 's/.*://')
   export BASE_URL="http://127.0.0.1:$port"
   for attempt in $(seq 1 40); do
