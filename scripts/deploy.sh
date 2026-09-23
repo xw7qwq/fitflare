@@ -46,8 +46,8 @@ def get(path):
         return json.load(response)
 session = get('/api/admin/session')
 if session['data_access'] == 'public':
-    account = get('/api/account')
-    if account.get('configured') or account.get('authorized'):
+    # The compatibility list exposes at most the owner and honors the public allowlist.
+    if get('/api/profiles'):
         data = get('/api/dashboard?tables=none')
         assert 'files' not in data and 'tables' not in data
 else:
