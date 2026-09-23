@@ -1,11 +1,16 @@
 {
-  "name": "fitbaus-dashboard",
+  "name": "fitflare",
   "private": true,
   "type": "module",
-  "devDependencies": { "playwright": "1.62.1" },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "test:browser": "node tests/browser.cjs",
     "check": "bash scripts/check.sh"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

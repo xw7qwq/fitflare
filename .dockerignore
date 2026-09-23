@@ -73,3 +73,18 @@ secrets/
 **/*.p12
 .github/
 Caddyfile.system
+
+# Repository maintenance and private backups
+docs/
+deploy/
+.editorconfig
+.gitattributes
+backups/
+**/*.tar
+**/*.tar.gz
+**/*.tgz
+**/*.zip
+**/*.bak
+**/*.sqlite
+**/*.sqlite3
+**/*.db

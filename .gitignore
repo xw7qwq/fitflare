@@ -26,3 +26,20 @@ profiles/*/cache/
 node_modules/
 test-results/
 playwright-report/
+
+# Local tools, editors and private backups
+.DS_Store
+.idea/
+.vscode/
+.pytest_cache/
+.coverage
+htmlcov/
+backups/
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.bak
+*.sqlite
+*.sqlite3
+*.db
