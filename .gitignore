@@ -34,3 +34,19 @@ playwright-report/
 Dockerfile.host
 docker-compose.override.yml
 security/
+# Local tools, editors and private backups
+.DS_Store
+.idea/
+.vscode/
+.pytest_cache/
+.coverage
+htmlcov/
+backups/
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.bak
+*.sqlite
+*.sqlite3
+*.db
