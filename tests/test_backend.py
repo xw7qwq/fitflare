@@ -133,7 +133,9 @@ class BackendTests(unittest.TestCase):
 
     def test_docs_and_all_sample_public_routes_render(self):
         self.assertEqual(self.client.get('/api/public/v1/docs').status_code, 200)
-        self.assertIn('Demo', self.client.get('/api/public/v1/docs').get_data(as_text=True))
+        text = self.client.get('/api/public/v1/docs').get_data(as_text=True)
+        self.assertIn('YOUR_PROFILE', text)
+        self.assertNotIn('Demo', text)
         for path in ('/api/public/v1/openapi.json', '/api/public/v1/profiles/Demo/dashboard', '/api/public/v1/profiles/Demo/tables/sleep', '/api/public/v1/profiles/Demo/series/daily', '/api/public/v1/profiles/Demo/charts/overview-trend.svg'):
             self.assertEqual(self.client.get(path).status_code, 200, path)
 

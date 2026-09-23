@@ -1,29 +1,17 @@
 """Versioned read-only API. URLs and envelope shapes remain compatible."""
 import json
-from flask import Blueprint, request, jsonify, make_response, send_file, render_template
+from flask import Blueprint, request, jsonify, make_response, render_template, current_app
+from common.api_docs import build_openapi_spec, docs_context, render_markdown
 from common.public_api import (
     PUBLIC_API_BASE_PATH, build_chart_svg, build_dataset_payload, build_envelope,
-    build_metric_payload, build_openapi_spec, build_section_payload, build_series_payload,
+    build_metric_payload, build_section_payload, build_series_payload,
     build_table_payload, dataset_keys, parse_int_arg, public_dashboard_payload,
     public_snapshot_payload, section_keys, svg_chart_presets, table_keys,
 )
-from .repository import load_public_dashboard as _load_public_dashboard, visible_profile_cards as build_profile_cards, visible_profile_ids as list_profile_ids
+from .repository import load_public_dashboard as _load_public_dashboard, visible_profile_cards as build_profile_cards
 from .time_utils import _now_iso
 
 bp = Blueprint('public_api', __name__)
-
-def _public_api_docs_html(base_url: str) -> str:
-    sample_profile = next(iter(list_profile_ids()), "YOUR_PROFILE")
-    api_root = f"{base_url}{PUBLIC_API_BASE_PATH}"
-    sample_root = f"{base_url}{PUBLIC_API_BASE_PATH}/profiles/{sample_profile}"
-    docs_md = f"{base_url}{PUBLIC_API_BASE_PATH}/docs.md"
-    openapi_json = f"{base_url}{PUBLIC_API_BASE_PATH}/openapi.json"
-    profiles_url = f"{api_root}/profiles"
-    sample_dashboard = f"{sample_root}/dashboard"
-    sample_catalog = f"{sample_root}/catalog"
-    sample_series = f"{sample_root}/series/daily?metrics=sleep_score,steps,hrv&limit=30"
-    sample_chart = f"{sample_root}/charts/series.svg?granularity=daily&metrics=sleep_score,hrv,rhr&limit=30"
-    return render_template("public_api.html", PUBLIC_API_BASE_PATH=PUBLIC_API_BASE_PATH, api_root=api_root, docs_md=docs_md, openapi_json=openapi_json, profiles_url=profiles_url, sample_catalog=sample_catalog, sample_chart=sample_chart, sample_dashboard=sample_dashboard, sample_profile=sample_profile, sample_root=sample_root, sample_series=sample_series)
 
 def _public_api_error(message: str, status_code: int = 400, code: str = "bad_request"):
     response = jsonify({
@@ -38,23 +26,15 @@ def _public_api_error(message: str, status_code: int = 400, code: str = "bad_req
     return response
 
 
-def _public_json_response(payload: dict, status_code: int = 200, max_age: int = 300):
+def _public_json_response(payload: dict, status_code: int = 200):
     response = jsonify(payload)
     response.status_code = status_code
-    response.headers["Cache-Control"] = f"public, max-age={max_age}, stale-while-revalidate={max_age * 2}"
     return response
 
 
-def _public_text_response(body: str, mimetype: str, status_code: int = 200, max_age: int = 300):
+def _public_text_response(body: str, mimetype: str, status_code: int = 200):
     response = make_response(body, status_code)
     response.mimetype = mimetype
-    response.headers["Cache-Control"] = f"public, max-age={max_age}, stale-while-revalidate={max_age * 2}"
-    return response
-
-
-def _public_file_response(path: str, mimetype: str, max_age: int = 300):
-    response = make_response(send_file(path, mimetype=mimetype))
-    response.headers["Cache-Control"] = f"public, max-age={max_age}, stale-while-revalidate={max_age * 2}"
     return response
 
 
@@ -115,19 +95,19 @@ def public_api_index():
 
 @bp.route(f'{PUBLIC_API_BASE_PATH}/docs')
 def public_api_docs():
-    base_url = request.url_root.rstrip('/')
-    return _public_text_response(_public_api_docs_html(base_url), 'text/html', max_age=600)
+    response = _public_text_response(render_template('public_api.html', **docs_context(current_app.config['DATA_ACCESS_MODE'])), 'text/html')
+    response.headers['Content-Security-Policy'] = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    return response
 
 
 @bp.route(f'{PUBLIC_API_BASE_PATH}/docs.md')
 def public_api_docs_markdown():
-    return _public_file_response('API.md', 'text/markdown', max_age=600)
+    return _public_text_response(render_markdown(), 'text/markdown')
 
 
 @bp.route(f'{PUBLIC_API_BASE_PATH}/openapi.json')
 def public_api_openapi():
-    base_url = request.url_root.rstrip('/')
-    return _public_json_response(build_openapi_spec(base_url), max_age=600)
+    return _public_json_response(build_openapi_spec(access_mode=current_app.config['DATA_ACCESS_MODE']))
 
 
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles')
@@ -571,6 +551,6 @@ def public_profile_chart_svg(profile_id, chart_key):
         )
     except KeyError:
         return _public_api_error(f'Chart "{chart_key}" not found', 404, 'chart_not_found')
-    response = _public_text_response(svg, 'image/svg+xml', max_age=300)
+    response = _public_text_response(svg, 'image/svg+xml')
     response.headers['X-FitBaus-Chart-Meta'] = json.dumps(meta, ensure_ascii=False)
     return response

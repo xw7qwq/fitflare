@@ -1,0 +1,125 @@
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const base = process.env.BASE_URL || 'http://127.0.0.1:9001';
+const mode = process.env.DOCS_ACCESS_MODE || 'public';
+const out = process.env.TEST_OUTPUT_DIR || 'test-results';
+fs.mkdirSync(out, {recursive:true});
+const report = {mode, layouts:[], checks:[]};
+const check = text => report.checks.push(text);
+async function main() {
+  const browser = await chromium.launch();
+  try {
+    for (const [name,width,height] of [['desktop',1440,1000],['mobile',390,844]]) {
+      const page = await browser.newPage({viewport:{width,height}});
+      const errors = [], requests = [], csp = [];
+      page.on('pageerror', e => errors.push(e.message));
+      page.on('request', r => requests.push(r.url()));
+      page.on('console', m => { if (m.type() === 'error' && /Content Security Policy|violates.*policy/i.test(m.text())) csp.push(m.text()); });
+      await page.addInitScript(() => Object.defineProperty(navigator, 'clipboard', {configurable:true,value:{writeText:async text => { window.__copied = text; }}}));
+      await page.goto(base+'/api/public/v1/docs', {waitUntil:'networkidle'});
+      await page.waitForSelector('#endpointSearch');
+      assert.equal(await page.locator('.endpoint').count(),25);
+      assert.equal(requests.some(url => /\/api\/public\/v1\/profiles/.test(url)),false);
+      assert.equal(requests.some(url => !url.startsWith(base)),false);
+      assert.match(await page.locator('#quickCode').textContent(),new RegExp(base.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth),width);
+      const layout = {name, width, height:await page.evaluate(() => document.body.scrollHeight), initialRequests:requests.length};
+      await page.screenshot({path:path.join(out,`docs-${mode}-${name}.png`),fullPage:true});
+      await page.keyboard.press('/');
+      assert.equal(await page.locator('#endpointSearch').evaluate(e=>e===document.activeElement),true);
+      await page.fill('#endpointSearch','no-such-endpoint');
+      assert.equal(await page.locator('#noResults').isVisible(),true);
+      await page.keyboard.press('Escape');
+      await page.fill('#endpointSearch','limit');
+      assert.equal(await page.locator('.endpoint:not([hidden])').count(),4);
+      await page.evaluate(() => { location.hash='endpoint-series'; });
+      await page.waitForFunction(() => document.getElementById('endpoint-series').open);
+      assert.equal(await page.locator('#endpointSearch').inputValue(),'');
+      await page.locator('#endpoint-series [data-copy]').click();
+      assert.match(await page.evaluate(()=>window.__copied),/series\/daily/);
+      await page.locator('#endpoint-series [data-use-endpoint]').click();
+      assert.equal(await page.locator('#requestBuilder').getAttribute('open'),'');
+      await page.selectOption('#exampleLanguage','javascript');
+      assert.match(await page.locator('#requestCode').textContent(),/response.ok/);
+      await page.selectOption('#exampleLanguage','python');
+      assert.match(await page.locator('#requestCode').textContent(),/timeout=15/);
+      const before = requests.length;
+      await page.locator('#sendRequest').click();
+      assert.match(await page.locator('#requestStatus').textContent(),/YOUR_PROFILE/);
+      assert.equal(requests.length,before);
+      await page.selectOption('#endpointSelect','profiles');
+      await page.locator('#sendRequest').click();
+      await page.waitForFunction(() => document.getElementById('requestStatus').textContent.includes('HTTP'));
+      assert.match(await page.locator('#requestStatus').textContent(),mode==='private'?/HTTP 401/:/HTTP 200/);
+      if (mode === 'private') {
+        assert.match(await page.locator('#requestStatus').textContent(),/登录/);
+        const result = await page.request.post(base+'/api/admin/login',{data:{password:process.env.PREVIEW_ADMIN_PASSWORD}});
+        assert.equal(result.status(),200);
+        await page.locator('#sendRequest').click();
+        await page.waitForFunction(() => document.getElementById('requestStatus').textContent.includes('HTTP 200'));
+      }
+      await page.selectOption('#endpointSelect','table');
+      await page.fill('#request-profile_id','Demo');
+      await page.locator('#sendRequest').click();
+      await page.waitForFunction(() => document.getElementById('requestStatus').textContent.includes('HTTP 200'));
+      const response = JSON.parse(await page.locator('#responsePreview').textContent());
+      assert.equal(response.data.rows.length,20);
+      await page.evaluate(() => document.querySelectorAll('details').forEach(e => {e.open=true;}));
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth),width);
+      assert.deepEqual(errors,[]); assert.deepEqual(csp,[]);
+      report.layouts.push({...layout,errors,cspErrors:csp});
+      await page.close();
+    }
+    check('desktop/mobile: search, keyboard, anchors, code languages, copy, explicit GET, auth boundary, parameter forms and overflow');
+    const page = await browser.newPage();
+    await page.goto(base+'/api/public/v1/docs#try',{waitUntil:'networkidle'});
+    await page.selectOption('#endpointSelect','chart');
+    await page.fill('#request-profile_id','Demo');
+    await page.route('**/api/public/v1/profiles/Demo/charts/series.svg*', route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" onload="window.__injected=1"></svg>'}));
+    await page.locator('#sendRequest').click();
+    await page.waitForSelector('#responsePreview:not([hidden])');
+    assert.match(await page.locator('#responsePreview').textContent(),/<svg/);
+    assert.equal(await page.evaluate(()=>window.__injected),undefined);
+    await page.selectOption('#endpointSelect','profiles');
+    await page.route('**/api/public/v1/profiles', route=>route.fulfill({contentType:'text/plain',body:'Z'.repeat(90000)}));
+    await page.locator('#sendRequest').click();
+    await page.waitForFunction(()=>document.getElementById('requestStatus').textContent.includes('64 KiB'));
+    assert.equal((await page.locator('#responsePreview').textContent()).length,65536);
+    await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:()=>Promise.reject(new Error('Denied'))}}));
+    await page.locator('[data-copy="requestCode"]').click();
+    assert.match(await page.locator('#copyStatus').textContent(),/手动复制/);
+    await page.unroute('**/api/public/v1/profiles');
+    await page.route('**/api/public/v1/profiles',async route=>{await new Promise(r=>setTimeout(r,1200));await route.fulfill({contentType:'application/json',body:'{"late":true}'}).catch(()=>{});});
+    await page.locator('#sendRequest').click();
+    await page.locator('#cancelRequest').click();
+    await page.waitForTimeout(1400);
+    assert.match(await page.locator('#requestStatus').textContent(),/已取消/);
+    assert.equal(await page.locator('#responsePreview').isVisible(),false);
+    await page.close();
+    check('SVG rendered as inert text; response cap; denied clipboard fallback; explicit cancellation ignores late replies');
+    const noJs = await browser.newPage({javaScriptEnabled:false,viewport:{width:390,height:844}});
+    await noJs.goto(base+'/api/public/v1/docs');
+    assert.equal(await noJs.locator('.endpoint').count(),25);
+    await noJs.locator('#endpoint-series summary').click();
+    assert.equal(await noJs.locator('#endpoint-series table').isVisible(),true);
+    assert.equal(await noJs.locator('#try').isVisible(),false);
+    assert.equal(await noJs.locator('body').evaluate(e=>e.ownerDocument.documentElement.scrollWidth),390);
+    await noJs.close();
+    check('no JavaScript: full documentation remains readable');
+    for (const width of [320,768,1024]) {
+      const sized = await browser.newPage({viewport:{width,height:900}});
+      await sized.goto(base+'/api/public/v1/docs',{waitUntil:'networkidle'});
+      await sized.evaluate(()=>document.querySelectorAll('details').forEach(e=>{e.open=true;}));
+      assert.equal(await sized.evaluate(()=>document.documentElement.scrollWidth),width);
+      await sized.close();
+    }
+    check('320/768/1024 px: expanded documentation stays within the viewport');
+  } finally {
+    await browser.close();
+    fs.writeFileSync(path.join(out,`docs-${mode}-report.json`),JSON.stringify(report,null,2));
+  }
+  console.log(JSON.stringify(report,null,2));
+}
+main().catch(e=>{console.error(e);process.exitCode=1;});

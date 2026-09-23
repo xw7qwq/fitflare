@@ -12,6 +12,7 @@ container="fitbaus-check-$$"
 cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; rm -rf "$runtime"; }
 trap cleanup EXIT
 python3 scripts/audit.py
+python3 scripts/docs.py --check
 git diff --check
 npm test
 for file in app.js js/*.js; do node --check "$file"; done
@@ -41,10 +42,12 @@ start_preview() {
 }
 start_preview public
 TEST_OUTPUT_DIR="$results" npm run test:browser
+DOCS_ACCESS_MODE=public TEST_OUTPUT_DIR="$results" node tests/docs-browser.cjs
 # Synthetic preview cannot contact Fitbit: there are no authorized tokens, and auto-sync is off.
 docker rm -f "$container" >/dev/null
 start_preview private
 node tests/private-browser.cjs
+DOCS_ACCESS_MODE=private TEST_OUTPUT_DIR="$results" node tests/docs-browser.cjs
 printf '%s\n' "$(docker image inspect "$image" --format '{{.Id}}')" > "$results/validated-image.txt"
 node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({status:"passed", completed_at:new Date().toISOString(), fixture:"synthetic"},null,2))' "$results/release-gate.json"
 printf 'Release checks passed. Validated image: %s\n' "$image"
