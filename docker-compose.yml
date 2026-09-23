@@ -1,17 +1,24 @@
 services:
   fitbaus:
     build: .
+    image: ${FITBAUS_IMAGE:-fitbaus-fitbaus:latest}
     container_name: fitbaus-app
     # On Linux bind mounts, prefer running as the host user to avoid write failures
-    user: "${FITBAUS_UID:-1000}:${FITBAUS_GID:-1000}"
+    user: "${FITBAUS_UID:-10001}:${FITBAUS_GID:-10001}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
     ports:
-      - "${FITBAUS_BIND_HOST:-0.0.0.0}:${FITBAUS_PORT:-9000}:9000"   # Web UI (host:container)
+      - "${FITBAUS_BIND_HOST:-127.0.0.1}:${FITBAUS_PORT:-9000}:9000"   # Reverse proxy only
       # - "${FITBAUS_CALLBACK_BIND_HOST:-0.0.0.0}:8080:8080" # Optional: local HTTPS callback port for background OAuth
     volumes:
       # Mount data directories to persist data
       - ./profiles:/app/profiles
     environment:
       - PYTHONIOENCODING=utf-8
+      - PYTHONDONTWRITEBYTECODE=1
       - TZ=${TZ:-Etc/UTC}
       - FITBIT_REDIRECT_URI=${FITBIT_REDIRECT_URI:-http://localhost:8080/callback}
       - FITBIT_CLIENT_ID=${FITBIT_CLIENT_ID:-}
@@ -26,6 +33,9 @@ services:
       - FITBAUS_ADMIN_PASSWORD=${FITBAUS_ADMIN_PASSWORD:-}
       - FITBAUS_ADMIN_PASSWORD_HASH=${FITBAUS_ADMIN_PASSWORD_HASH:-}
       - FITBAUS_SESSION_SECRET=${FITBAUS_SESSION_SECRET:-}
+      - FITBAUS_SESSION_SECRET_FILE=${FITBAUS_SESSION_SECRET_FILE:-}
+      - FITBAUS_DATA_ACCESS=${FITBAUS_DATA_ACCESS:-public}
+      - FITBAUS_PUBLIC_PROFILES=${FITBAUS_PUBLIC_PROFILES-*}
       - FITBAUS_SESSION_COOKIE_SECURE=${FITBAUS_SESSION_COOKIE_SECURE:-true}
     # volumes:
     #   - ./certs:/certs:ro   # If using background OAuth with local HTTPS

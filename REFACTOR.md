@@ -76,7 +76,7 @@ npm run test:browser
 
 ## 发布与回滚
 
-源码及测试审计保存在服务器 /home/lucius7/fitbaus-refactor-20260923/，源码备份不含 profiles 和 .env。项目当时没有 Git 仓库，因此没有伪造提交记录。
+源码及测试审计保存在服务器 /home/lucius7/fitbaus-refactor-20260923/，源码备份不含 profiles 和 .env。后续检查更正：项目原本已有 Git 仓库，但 root 属主触发了 Git 的目录保护；首次重构未形成提交。后续优化保留了已有历史，并先将已部署版本保存为检查点提交。
 
 部署新镜像：
 

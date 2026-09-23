@@ -67,3 +67,9 @@ node_modules/
 tests/
 test-results/
 playwright-report/
+secrets/
+**/*.pem
+**/*.key
+**/*.p12
+.github/
+Caddyfile.system

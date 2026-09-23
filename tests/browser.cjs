@@ -5,6 +5,7 @@ const path = require('node:path');
 const outputDir = process.env.TEST_OUTPUT_DIR || 'test-results';
 fs.mkdirSync(outputDir, { recursive: true });
 const base = process.env.BASE_URL || 'http://127.0.0.1:9001';
+const fixtureProfile = process.env.TEST_PROFILE || 'Demo';
 const report = { base, layouts: [], checks: [] };
 const viewNames = ['overview', 'sleep', 'activity', 'recovery', 'body', 'lifestyle', 'account', 'family'];
 const check = name => report.checks.push(name);
@@ -31,6 +32,10 @@ async function main() {
       await ready(page);
       assert.equal(await page.locator('#dashboardNotice').isVisible(), false);
       assert.equal(await page.locator('#statsGrid > button').count(), 4);
+      const initialRequests = await page.evaluate(() => performance.getEntriesByType('resource').map(entry => entry.name));
+      assert.equal(initialRequests.some(url => url.includes('/api/profile-summaries')), false);
+      assert.equal(initialRequests.some(url => url.includes('/api/tables/')), false);
+      check(`${name}: homepage skips profile summaries and record tables`);
       const initial = await layout(page);
       await page.screenshot({ path: path.join(outputDir, `after-${name}.png`), fullPage: true });
       const chartId = await page.evaluate(() => window.Chart.getChart('overviewTrendChart')?.id);
@@ -50,6 +55,20 @@ async function main() {
         for (const chart of info.visibleCharts) assert.ok(chart.width > 100 && chart.height > 100, `${view} chart size invalid`);
       }
       check(`${name}: all eight views render without overflow`);
+      await page.locator('#tab-sleep').click();
+      await page.locator('#sleepTableWrap').evaluate(element => { const details = element.closest('details'); if (details) details.open = true; });
+      await page.waitForSelector('#sleepTableWrap tbody tr');
+      if (process.env.SYNTHETIC_FIXTURE === '1') {
+        assert.equal(await page.locator('#sleepTableWrap tbody tr').count(), 20);
+        const first = await page.locator('#sleepTableWrap tbody tr').first().innerText();
+        await page.locator('#sleepTableWrap [data-page="next"]').click();
+        await page.waitForFunction(previous => document.querySelector('#sleepTableWrap tbody tr')?.innerText !== previous && document.querySelector('#sleepTableWrap tbody tr'), first);
+        assert.equal(await page.locator('#sleepTableWrap tbody tr').count(), 20);
+        await page.locator('#sleepTableWrap [data-page="next"]').click();
+        await page.waitForFunction(() => document.querySelectorAll('#sleepTableWrap tbody tr').length === 15);
+        assert.equal(await page.locator('#sleepTableWrap [data-page="next"]').isDisabled(), true);
+        check(`${name}: server pagination covers 20 + 20 + 15 records`);
+      }
       await page.locator('#adminLoginBtn').click();
       assert.equal(await page.locator('#adminModal').isVisible(), true);
       assert.equal(await page.locator('#adminPasswordInput').evaluate(input => input === document.activeElement), true);
@@ -91,7 +110,7 @@ async function main() {
       await page.fill('#adminPasswordInput', process.env.PREVIEW_ADMIN_PASSWORD);
       await page.locator('#adminLoginSubmit').click();
       await page.waitForSelector('#adminLogoutBtn:not(.hidden)');
-      assert.match((await page.request.get(base + '/api/dashboard/Lucius7')).headers()['cache-control'], /private, no-store/);
+      assert.match((await page.request.get(base + '/api/dashboard/' + fixtureProfile)).headers()['cache-control'], /private, no-store/);
       assert.equal((await page.request.post(base + '/api/admin/logout')).status(), 403);
       await page.locator('#openManagerBtn').click();
       assert.equal(await page.locator('#newClientSecret').getAttribute('type'), 'password');
@@ -128,7 +147,7 @@ async function main() {
     await racePage.route('**/api/profile-summaries', route => route.fulfill({ contentType: 'application/json', body: '[]' }));
     let slowStarted = false;
     await racePage.route('**/api/dashboard/*', async route => {
-      const slow = route.request().url().endsWith('/Slow');
+      const slow = new URL(route.request().url()).pathname.endsWith('/Slow');
       if (slow) slowStarted = true;
       await new Promise(resolve => setTimeout(resolve, slow ? 1000 : 20));
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ profile: { display_name: slow ? 'Slow' : 'Fast' }, overview: { latest_date: slow ? '2026-09-01' : '2026-09-23' }, charts: { daily: [] } }) }).catch(() => {});

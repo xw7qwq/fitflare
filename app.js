@@ -2,6 +2,7 @@ import { escapeHtml, formatDate, formatDateTime, formatNumber, statusLabel } fro
 import { VIEWS, normalizeDashboard, selectDateWindow } from './js/data.js';
 import { destroyAllCharts, resizeVisibleCharts } from './js/charts.js';
 import { createViews } from './js/views.js';
+import { createTableRenderer } from './js/table.js';
 
 const state = {
   profiles: [], selectedProfile: null, dashboard: null, viewModel: null, profileSummaries: [],
@@ -9,10 +10,15 @@ const state = {
   activeView: 'overview', authProfile: null, fetchJobId: null, fetchTimer: null, fetchNotFoundCount: 0,
 };
 const refs = Object.fromEntries([...document.querySelectorAll('[id]')].map(element => [element.id, element]));
-const views = createViews({ state, refs, getDailySeries });
+const renderTable = createTableRenderer({ apiRequest, getContext: () => ({ profile: state.selectedProfile, version: state.dashboard?.generated_at, authenticated: state.admin.authenticated }) });
+const views = createViews({ state, refs, getDailySeries, renderTable });
 const VALID_RANGES = new Set(['14', '30', '90']);
 let dashboardRequest = 0;
 let dashboardAbort;
+let summariesRequest = null;
+let summariesLoaded = false;
+let summariesEpoch = 0;
+let summariesAbort;
 
 async function initializeApp() {
   bindEvents();
@@ -47,6 +53,7 @@ function bindEvents() {
     const target = event.target.closest('button');
     if (!target) return;
     if (target.dataset.closeModal) closeModal(target.dataset.closeModal);
+    if (target.dataset.retrySummaries) loadProfileSummaries().catch(handleAsyncError);
     if (target.dataset.jumpView) activateView(target.dataset.jumpView, { historyMode: 'push' });
     if (target.dataset.jumpProfile) {
       activateView('overview', { updateHistory: false });
@@ -70,12 +77,30 @@ function bindEvents() {
   window.addEventListener('popstate', () => applyRouteState().catch(handleAsyncError));
 }
 async function refreshProfiles(preferredProfile) {
-  const profiles = await apiRequest('/api/profiles');
+  summariesAbort?.abort();
+  summariesRequest = null;
+  summariesLoaded = false;
+  summariesEpoch++;
+  state.profileSummaries = [];
+  let profiles;
+  try { profiles = await apiRequest('/api/profiles'); }
+  catch (error) {
+    if (error.code !== 'private_data') throw error;
+    state.profiles = [];
+    state.selectedProfile = null;
+    state.dashboard = null;
+    state.viewModel = null;
+    populateProfileSelect();
+    renderEmptyState('此站点为私有模式，请使用顶部的管理员登录查看数据。');
+    setDashboardLoading(false);
+    setStatus('等待登录');
+    return;
+  }
   state.profiles = Array.isArray(profiles) ? profiles : [];
   populateProfileSelect(preferredProfile);
   renderExistingProfilesList();
   await loadDashboard();
-  await loadProfileSummaries();
+  if (state.activeView === 'family') await loadProfileSummaries();
 }
 function populateProfileSelect(preferredProfile) {
   const requested = preferredProfile || getRouteState().profile || state.selectedProfile;
@@ -105,7 +130,7 @@ async function loadDashboard() {
   if (!state.selectedProfile) { setStatus('等待档案'); setDashboardLoading(false); return; }
   try {
     setStatus('正在读取缓存');
-    const payload = await apiRequest(`/api/dashboard/${encodeURIComponent(state.selectedProfile)}`, { signal: dashboardAbort.signal });
+    const payload = await apiRequest(`/api/dashboard/${encodeURIComponent(state.selectedProfile)}?tables=none`, { signal: dashboardAbort.signal });
     if (requestId !== dashboardRequest) return;
     state.dashboard = payload;
     state.viewModel = normalizeDashboard(payload, state.admin.authenticated);
@@ -120,9 +145,26 @@ async function loadDashboard() {
   }
 }
 async function loadProfileSummaries() {
-  const payload = await apiRequest('/api/profile-summaries');
-  state.profileSummaries = Array.isArray(payload) ? payload : [];
-  if (state.activeView === 'family') renderDashboard();
+  if (summariesLoaded) return;
+  if (summariesRequest) return summariesRequest;
+  const epoch = summariesEpoch;
+  summariesAbort = new AbortController();
+  const signal = summariesAbort.signal;
+  refs.familyGrid.innerHTML = '<div class="empty-state">正在读取档案…</div>';
+  summariesRequest = (async () => {
+    try {
+      const payload = await apiRequest('/api/profile-summaries', { signal });
+      if (epoch !== summariesEpoch) return;
+      state.profileSummaries = Array.isArray(payload) ? payload : [];
+      summariesLoaded = true;
+      if (state.activeView === 'family') views.family();
+    } catch (error) {
+      if (error.name === 'AbortError' || epoch !== summariesEpoch) return;
+      if (epoch === summariesEpoch) refs.familyGrid.innerHTML = '<div class="empty-state">档案读取失败。<button class="button" type="button" data-retry-summaries="true">重试</button></div>';
+      throw error;
+    } finally { if (epoch === summariesEpoch) summariesRequest = null; }
+  })();
+  return summariesRequest;
 }
 function renderEmptyState(message = '暂无可显示的数据。', retry = false) {
   destroyAllCharts();
@@ -146,6 +188,7 @@ function renderDashboard() {
   document.querySelectorAll('[data-view-panel]').forEach(panel => { panel.hidden = panel.dataset.viewPanel !== state.activeView; });
   if (state.activeView === 'overview') renderStats();
   views[state.activeView]();
+  if (state.activeView === 'family' && !summariesLoaded) loadProfileSummaries().catch(handleAsyncError);
   requestAnimationFrame(resizeVisibleCharts);
 }
 function renderStats() {
@@ -282,6 +325,7 @@ async function loginAdmin() {
     })
     applyAdminSession(payload)
     closeModal("adminModal")
+    await refreshProfiles(state.selectedProfile)
     showToast("已进入管理员模式。")
     setStatus("管理员模式已启用")
   } finally {
@@ -297,8 +341,8 @@ async function logoutAdmin() {
   })
   applyAdminSession(payload)
   closeModal("adminModal")
+  await refreshProfiles(state.selectedProfile)
   showToast("已退出管理员模式。")
-  setStatus("公开只读模式")
 }
 
 async function createProfile() {
@@ -425,8 +469,7 @@ async function rebuildDashboard() {
     method: "POST",
     requireAdmin: true,
   })
-  await loadDashboard()
-  await loadProfileSummaries()
+  await refreshProfiles(state.selectedProfile)
   showToast("本地缓存已重建。")
 }
 
@@ -479,8 +522,7 @@ function pollFetchStatus() {
         setButtonState(refs.syncBtn, false, "同步 Fitbit")
         if (payload.status === "completed") {
           setStatus("同步完成，正在刷新缓存")
-          await loadDashboard()
-          await loadProfileSummaries()
+          await refreshProfiles(state.selectedProfile)
           showToast("Fitbit 数据已同步完成。")
         } else {
           showToast(payload.error || "同步失败。", true)
@@ -535,7 +577,10 @@ async function apiRequest(path, options = {}) {
       applyAdminSession(payload)
     }
     const message = typeof payload === "string" ? `请求失败 (${response.status})` : payload.error || payload.message || "请求失败"
-    throw new Error(message)
+    const error = new Error(typeof message === 'object' ? message.message || '请求失败' : message)
+    error.status = response.status
+    error.code = payload?.code || payload?.error?.code
+    throw error
   }
   return payload
 }

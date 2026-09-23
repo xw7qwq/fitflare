@@ -13,8 +13,9 @@ bind = f"0.0.0.0:{_port_int}"
 backlog = 2048
 
 # Worker processes
-workers = min(2, multiprocessing.cpu_count() * 2 + 1)
-worker_class = "sync"
+workers = 1  # Job status is in memory: requests must share a single registry.
+worker_class = "gthread"
+threads = 4
 worker_connections = 1000
 timeout = 300
 keepalive = 2
@@ -24,11 +25,12 @@ worker_tmp_dir = "/tmp"
 control_socket_disable = True
 
 # Restart workers after this many requests, to prevent memory leaks
-max_requests = 1000
-max_requests_jitter = 100
+max_requests = 0  # Do not recycle the process in the middle of a background sync.
+max_requests_jitter = 0
 
 # Preload app for better performance
-preload_app = True
+preload_app = False
+umask = 0o077
 
 # Logging
 accesslog = "-"
@@ -50,17 +52,17 @@ raw_env = [
 ]
 
 
-def when_ready(server):
+def post_worker_init(worker):
     try:
         from server import start_auto_sync_scheduler
 
         start_auto_sync_scheduler()
-        server.log.info("FitBaus auto-sync scheduler started")
+        worker.log.info("FitBaus auto-sync scheduler started")
     except Exception:
-        server.log.exception("Failed to start FitBaus auto-sync scheduler")
+        worker.log.exception("Failed to start FitBaus auto-sync scheduler")
 
 
-def on_exit(server):
+def worker_exit(server, worker):
     try:
         from server import stop_auto_sync_scheduler
 

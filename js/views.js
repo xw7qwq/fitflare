@@ -2,7 +2,7 @@ import { escapeHtml, formatDate, formatDateTime, formatNumber, formatDetailValue
 import { weeklySeries, metricWindow } from './data.js';
 import { upsertChart, dualAxisOptions, stackedOptions } from './charts.js';
 
-export function createViews({ state, refs, getDailySeries }) {
+export function createViews({ state, refs, getDailySeries, renderTable }) {
   function renderCorrelations() {
     const correlations = Array.isArray(state.dashboard.correlations) ? state.dashboard.correlations : []
     if (!correlations.length) {
@@ -539,31 +539,6 @@ export function createViews({ state, refs, getDailySeries }) {
         `
       })
       .join("")
-  }
-
-  function renderTable(container, columns, rows, formatters = {}) {
-    if (!container) return
-    if (!rows.length) {
-      container.innerHTML = `<div class="empty-state">当前没有可显示的数据。</div>`
-      return
-    }
-
-    const head = columns.map((column) => `<th scope="col">${escapeHtml(column.label)}</th>`).join("")
-    const body = rows
-      .map((row) => {
-        const cells = columns
-          .map((column) => {
-            const formatter = formatters[column.key]
-            const raw = row[column.key]
-            const value = formatter ? formatter(raw, row) : raw
-            return `<td>${escapeHtml(value == null || value === "" ? "--" : String(value))}</td>`
-          })
-          .join("")
-        return `<tr>${cells}</tr>`
-      })
-      .join("")
-
-    container.innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
   }
 
   function renderRecoverySummary() {
