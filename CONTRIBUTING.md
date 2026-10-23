@@ -1,17 +1,21 @@
 # 开发与维护
 
-环境使用 Python 3.11、Node.js 24，安装步骤见 [README](README.md#开发与检查)。运行依赖固定在 `requirements.lock`，浏览器测试依赖固定在 `package-lock.json`。
+环境使用 Python 3.11、Node.js 24，安装步骤见 [README](README.md#api-与开发)。运行依赖固定在 `requirements.lock`，浏览器测试依赖固定在 `package-lock.json`。
 
 ## 提交变更
 
-1. 从 `main` 创建工作分支，说明改动的触发条件、预期行为和验证方法。
+1. 从最新的 `main` 创建短期工作分支（`feat/`、`fix/`、`chore/` 或 `docs/`），说明改动的触发条件、预期行为和验证方法。
 2. 先运行相关测试，提交前运行 `npm run check`，它与 GitHub Actions 使用同一入口。
-3. 检查 `git diff --check`、`python3 scripts/audit.py` 和 `git status`，只提交源码、文档和配置样例。
-4. 合并前检查 Actions 结果；CI 通过不表示已部署。升级见 [DEPLOYMENT.md](DEPLOYMENT.md#更新与回滚)。
+3. 检查 `git diff --check`、`python3 scripts/audit.py`、`python3 scripts/audit_history.py` 和 `git status`，只提交源码、文档和配置样例。历史审计需要完整克隆，浅克隆请先执行 `git fetch --unshallow`。
+4. 发起面向 `main` 的 PR。主分支要求与最新基线同步、`check` 成功并解决评审讨论；管理员也遵守此规则，不直接推送或强推 `main`。单人维护不要求额外的批准人。
+5. 一般使用 squash 合并；需要保留多个有意义的提交时使用 merge commit。远端工作分支合并后自动删除，本地确认改动已进入 `main` 后清理，并执行 `git fetch --prune`。
+6. CI 通过不表示已部署。只从干净且与 `origin/main` 一致的 `main` 发布，升级见 [DEPLOYMENT.md](DEPLOYMENT.md#更新与回滚)。
 
 `npm test` 运行前端纯函数测试，`python3 -m unittest discover -s tests -p 'test_*.py' -v` 运行后端单元测试。完整的 `npm run check` 还会构建镜像及执行浏览器回归，需要 Docker 和已安装的 Chromium。
 
 所有回归使用生成的 Demo/Hidden 合成档案。不要将生产 `profiles/` 挂载到测试容器，也不要让浏览器回归对生产地址执行管理操作。
+
+仓库启用密钥扫描和推送保护。不要绕过凭据告警；先撤销或轮换泄露值，再处理提交。历史审计额外阻止已知的旧 Fitbit 凭据对象经分支或标签重新进入仓库，但不替代通用密钥扫描。不要执行未经审查的 `git push --all`、`git push --tags` 或镜像推送。
 
 ## API 文档
 
