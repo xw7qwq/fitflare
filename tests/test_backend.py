@@ -122,6 +122,7 @@ class BackendTests(unittest.TestCase):
                 for method in ('POST', 'PUT', 'PATCH', 'DELETE'):
                     response = self.client.open(path, method=method, json={'password': 'legacy', 'clientSecret': 'replacement'})
                     self.assertEqual(response.status_code, 405)
+                    self.assertEqual(response.headers['Allow'], 'GET, HEAD, OPTIONS')
         after = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
         self.assertEqual(before, after)
         self.assertFalse(jobs.fetch_jobs)

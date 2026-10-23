@@ -29,7 +29,7 @@ def install_security(app):
 
 def guard_request():
     if request.method not in {'GET', 'HEAD', 'OPTIONS'}:
-        return jsonify(error='This website is read-only', code='read_only'), 405
+        return jsonify(error='This website is read-only', code='read_only'), 405, {'Allow': 'GET, HEAD, OPTIONS'}
     if request.path.startswith('/api/public/v1/me') and any(name in request.args for name in ('profile', 'profileName', 'profile_id')):
         return jsonify(error='The personal API does not accept an account selector'), 400
     profile = (request.view_args or {}).get('profile_id')
