@@ -1,61 +1,18 @@
 """Dashboard read endpoints used by the browser."""
 import os
-import json
-from datetime import datetime
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request
 from common.dashboard_cache import load_dashboard_cache
 from common.public_api import public_dashboard_payload, build_table_payload, parse_int_arg
-from .security import is_admin, profile_is_visible
+from .security import profile_is_visible
 from common.profile_paths import owner_profile_id, profile_path_for
 from .repository import visible_profile_ids, visible_profile_cards as build_profile_cards
 
 bp = Blueprint('dashboard', __name__)
 
-@bp.route('/api/profiles')
+@bp.get('/api/profiles')
 def list_profiles():
-    """List available profiles with creation dates"""
-    profiles = []
-    profiles_dir = current_app.config['PROFILES_DIR']
-
-    if os.path.exists(profiles_dir):
-        for entry in visible_profile_ids():
-            profile_path = os.path.join(profiles_dir, entry)
-            if os.path.isdir(profile_path) and any(os.path.exists(os.path.join(profile_path, 'auth', name))
-                                                  for name in ('tokens.json', 'google_client.json')):
-                # Try to get creation date from client.json
-                client_file = os.path.join(profile_path, 'auth', 'google_client.json')
-                if not os.path.exists(client_file):
-                    client_file = os.path.join(profile_path, 'auth', 'client.json')
-                creation_date = 'Unknown'
-
-                if os.path.exists(client_file):
-                    try:
-                        with open(client_file, 'r') as f:
-                            client_data = json.load(f)
-                            if 'created_at' in client_data:
-                                # Parse ISO format and format for display
-                                created_dt = datetime.fromisoformat(client_data['created_at'])
-                                creation_date = created_dt.strftime('%Y-%m-%d %H:%M')
-                    except Exception as e:
-                        print(f"Error reading creation date for {entry}: {e}")
-
-                profile = {
-                    'name': entry,
-                    'created': creation_date
-                }
-                if is_admin():
-                    try:
-                        with open(os.path.join(profile_path, 'auth', 'tokens.json'), encoding='utf-8') as handle:
-                            tokens = json.load(handle)
-                        profile['oauth_type'] = tokens.get('oauth_type', 'fitbit')
-                        profile['connected'] = bool(tokens.get('refresh_token'))
-                    except (OSError, ValueError):
-                        profile.update(oauth_type='fitbit', connected=False)
-                profiles.append(profile)
-
-    # Sort by profile name
-    profiles.sort(key=lambda x: x['name'])
-    return jsonify(profiles)
+    """Legacy read alias for the sole visible account; no OAuth metadata."""
+    return jsonify([{'name': owner, 'created': 'Unknown'} for owner in visible_profile_ids()])
 
 
 @bp.route('/api/dashboard')
@@ -70,7 +27,7 @@ def dashboard(profile_id=None):
         if not os.path.isdir(profile_dir):
             return jsonify({'error': f'Profile "{profile_id}" not found'}), 404
         payload = load_dashboard_cache(profile_id, rebuild_if_missing=True)
-        payload = dict(payload if is_admin() else public_dashboard_payload(payload))
+        payload = dict(public_dashboard_payload(payload))
         if request.args.get('tables') == 'none':
             payload.pop('tables', None)
         return jsonify(payload)
@@ -110,8 +67,8 @@ def dashboard_table(table_key, profile_id=None):
 
 @bp.get('/api/account')
 def personal_account():
-    from .admin_routes import account_status
+    from .repository import account_status
     try:
         return jsonify(account_status())
     except (OSError, ValueError):
-        return jsonify(error='Unable to read personal account settings'), 500
+        return jsonify(error='Unable to read data availability'), 500

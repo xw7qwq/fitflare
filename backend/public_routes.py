@@ -1,6 +1,6 @@
 """Versioned read-only API. URLs and envelope shapes remain compatible."""
 import json
-from flask import Blueprint, request, jsonify, make_response, render_template, current_app
+from flask import Blueprint, request, jsonify, make_response, render_template
 from common.api_docs import build_openapi_spec, docs_context, render_markdown
 from common.public_api import (
     PUBLIC_API_BASE_PATH, build_chart_svg, build_dataset_payload, build_envelope,
@@ -96,7 +96,7 @@ def public_api_index():
 
 @bp.route(f'{PUBLIC_API_BASE_PATH}/docs')
 def public_api_docs():
-    response = _public_text_response(render_template('public_api.html', **docs_context(current_app.config['DATA_ACCESS_MODE'])), 'text/html')
+    response = _public_text_response(render_template('public_api.html', **docs_context()), 'text/html')
     response.headers['Content-Security-Policy'] = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     return response
 
@@ -108,7 +108,7 @@ def public_api_docs_markdown():
 
 @bp.route(f'{PUBLIC_API_BASE_PATH}/openapi.json')
 def public_api_openapi():
-    return _public_json_response(build_openapi_spec(access_mode=current_app.config['DATA_ACCESS_MODE']))
+    return _public_json_response(build_openapi_spec())
 
 
 @bp.route(f'{PUBLIC_API_BASE_PATH}/profiles')

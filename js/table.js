@@ -18,7 +18,7 @@ export function createTableRenderer({ getContext, apiRequest }) {
   return function renderTable(container, columns, unusedRows, formatters = {}, options = {}) {
     if (!container) return;
     const context = getContext();
-    const key = `${context.revision}:${context.version}:${context.authenticated}`;
+    const key = `${context.revision}:${context.version}`;
     let table = tables.get(container);
     if (table?.key === key) return;
     table?.controller?.abort();
@@ -31,7 +31,7 @@ export function createTableRenderer({ getContext, apiRequest }) {
 
     function current() {
       const now = getContext();
-      return tables.get(container) === table && `${now.revision}:${now.version}:${now.authenticated}` === key;
+      return tables.get(container) === table && `${now.revision}:${now.version}` === key;
     }
     async function load() {
       if (!current() || table.loading) return;

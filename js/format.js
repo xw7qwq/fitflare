@@ -49,9 +49,6 @@ export function formatDateTime(value) {
   if (Number.isNaN(date.getTime())) return String(value);
   return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date);
 }
-export function statusLabel(status) {
-  return ({ queued: '排队中', running: '同步中', completed: '同步完成', failed: '同步失败', timeout: '同步超时', error: '同步出错', cancelled: '已取消' })[status] || status;
-}
 export function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 }

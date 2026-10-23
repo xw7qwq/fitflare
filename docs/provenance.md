@@ -24,6 +24,14 @@ fitflare 整理自 `lucius7` 服务器 `/home/lucius7/fitbaus` 的部署源码�
 
 上述处理没有更改旧公开仓库 `theLucius7/fitbaus`，也不能证明旧 Fitbit 密钥已撤销。旧凭据仍需在提供方后台撤销或重置。
 
+## 2026-10-23 公开只读整理
+
+用户确认旧仓库 `theLucius7/fitbaus` 已删除，旧 Fitbit 认证也已在提供方删除。这是用户提供的处理结果；本仓库没有保存或重新启用旧密钥。
+
+[PR #3](https://github.com/xw7qwq/fitflare/pull/3) 修复静态资源缓存指纹，[PR #4](https://github.com/xw7qwq/fitflare/pull/4) 修复趋势方向、比较窗口和 HTTPS 链接。公开只读整理保留这些改动，并按当前部署需求移除网页登录、会话、管理面板、原始文件下载和全部 HTTP 写入入口。Google Health 授权和手动同步通过服务器命令行完成，自动同步与历史数据保留。
+
+网站和 API 直接展示配置账户的数据；从旧私有版本升级需要显式设置 `FITFLARE_DATA_ACCESS=public`。当前操作说明以 README、DEPLOYMENT 和 GOOGLE_HEALTH 为准，上面的私有模式记录仅描述先前版本。
+
 ## 许可与第三方组件
 
 继承源码没有标准 `LICENSE`、`COPYING` 或 `NOTICE` 文件，原 README 仅说明：

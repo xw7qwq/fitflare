@@ -63,19 +63,23 @@ base = 'http://127.0.0.1:9000'
 def get(path):
     with urllib.request.urlopen(base+path, timeout=10) as response:
         return json.load(response)
-session = get('/api/admin/session')
-if session['data_access'] == 'public':
-    # The compatibility list exposes at most the owner and honors the public allowlist.
-    if get('/api/profiles'):
-        data = get('/api/dashboard?tables=none')
-        assert 'files' not in data and 'tables' not in data
-else:
+data = get('/api/dashboard?tables=none')
+assert 'files' not in data and 'tables' not in data
+assert set(get('/api/account')) == {'profile_id', 'has_data'}
+for path in ('/api/admin/session', '/api/authorize', '/profiles/index.json'):
     try:
-        get('/api/account')
+        get(path)
     except HTTPError as error:
-        assert error.code == 401
+        assert error.code == 404
     else:
-        raise SystemExit('Private access boundary failed')
+        raise SystemExit('Unexpected management or private-file route: ' + path)
+request = urllib.request.Request(base + '/api/fetch-data', data=b'{}', headers={'Content-Type':'application/json'})
+try:
+    urllib.request.urlopen(request, timeout=10)
+except HTTPError as error:
+    assert error.code == 405
+else:
+    raise SystemExit('HTTP write boundary failed')
 print('Production data access and response checks passed.')
 PY
 # Keep the existing compose default pointing to the successfully validated build.

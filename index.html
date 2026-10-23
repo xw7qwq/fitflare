@@ -19,12 +19,8 @@
     <header class="topbar">
       <a class="brand" href="/" aria-label="Fitflare 首页"><span class="brand-icon" aria-hidden="true">F</span><strong>Fitflare</strong><span class="brand-caption">健康记录</span></a>
       <div class="topbar-actions">
-        <span class="mode-chip" id="adminModeChip">私有健康记录</span>
-        <button class="button" id="adminLoginBtn" type="button">登录</button>
-        <button class="button hidden" id="openAccountBtn" type="button">连接 Google Health</button>
-        <button class="button hidden" id="reloadBtn" type="button">刷新视图</button>
-        <button class="button button-primary hidden" id="syncBtn" type="button">同步数据</button>
-        <button class="button button-light hidden" id="adminLogoutBtn" type="button">退出登录</button>
+        <span class="mode-chip">公开只读</span>
+        <button class="button" id="reloadBtn" type="button">刷新视图</button>
       </div>
     </header>
     <div class="nav-bar">
@@ -166,41 +162,5 @@
   </div>
   <noscript><p class="empty-state">此仪表盘需要 JavaScript。也可通过 <a href="/api/public/v1/docs">API 文档</a> 查看数据接口。</p></noscript>
   <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
-  <dialog class="modal modal-narrow" id="adminModal" aria-labelledby="adminModalTitle">
-    <div class="modal-dialog">
-      <div class="modal-head"><h2 id="adminModalTitle">登录</h2><button class="icon-button" data-close-modal="adminModal" type="button" aria-label="关闭登录窗口">×</button></div>
-      <p class="muted">登录后查看健康记录，并可连接 Google Health、同步数据。</p>
-      <form id="adminPasswordForm" class="form-stack">
-        <label class="field"><span class="field-label">登录口令</span><input id="adminPasswordInput" type="password" autocomplete="current-password" required autofocus></label>
-        <button class="button button-primary" id="adminLoginSubmit" type="submit">登录</button>
-      </form>
-    </div>
-  </dialog>
-  <dialog class="modal modal-narrow" id="accountModal" aria-labelledby="accountModalTitle">
-    <div class="modal-dialog">
-      <div class="modal-head"><h2 id="accountModalTitle">账户设置</h2><button class="icon-button" data-close-modal="accountModal" type="button" aria-label="关闭账户设置">×</button></div>
-      <p class="connection-status" id="accountConnectionStatus" role="status">尚未连接 Google Health</p>
-      <button class="button" id="reauthorizeBtn" type="button" hidden>重新授权 Google Health</button>
-      <p class="muted" id="accountSettingsHint">填写 Google Cloud 中启用了 Google Health API 的 Web OAuth 客户端，然后完成授权。</p>
-      <p><a href="https://developers.google.com/health/get-started" target="_blank" rel="noreferrer noopener">Google Health 接入说明</a></p>
-      <form id="accountSetupForm" class="form-stack">
-        <label class="field"><span class="field-label">Google Client ID</span><input id="clientId" type="text" autocomplete="off" required></label>
-        <label class="field"><span class="field-label">Google Client Secret</span><input id="clientSecret" type="password" autocomplete="new-password" required></label>
-        <label class="field"><span class="field-label">已注册的回调 URI</span><input id="redirectUri" type="url" value="http://localhost:8080/callback" required></label>
-        <button class="button button-primary" id="accountSetupSubmit" type="submit">保存并授权</button>
-      </form>
-    </div>
-  </dialog>
-  <dialog class="modal modal-narrow" id="authModal" aria-labelledby="authModalTitle">
-    <div class="modal-dialog">
-      <div class="modal-head"><h2 id="authModalTitle">连接 Google Health</h2><button class="icon-button" data-close-modal="authModal" type="button" aria-label="关闭授权窗口">×</button></div>
-      <p class="muted">授权读取活动、健康指标和睡眠，以更新图表；营养权限用于饮食与饮水记录，个人资料和设置权限用于账户及设备信息。可只同意需要的数据类别。请使用已关联原 Fitbit 账户的 Google 账号；首次使用需先登录 Google Health 手机应用。完成后粘贴完整回调 URL，即使 localhost 页面无法打开也可复制地址栏。</p>
-      <a class="button" id="authOpenLink" href="#" rel="noreferrer noopener" target="_blank">打开 Google 授权页</a>
-      <form id="authExchangeForm" class="form-stack">
-        <label class="field"><span class="field-label">完整回调 URL（含 code 和 state）</span><textarea id="authRedirectValue" rows="4" required></textarea></label>
-        <button class="button button-primary" id="authExchangeSubmit" type="submit">提交授权结果</button>
-      </form>
-    </div>
-  </dialog>
 </body>
 </html>

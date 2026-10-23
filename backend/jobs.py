@@ -6,7 +6,6 @@ from common.profile_paths import owner_profile_id
 
 fetch_jobs = {}
 fetch_procs = {}
-auth_jobs = {}
 lock = threading.RLock()
 verbose_logging = False
 
