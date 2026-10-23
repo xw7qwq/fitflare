@@ -35,9 +35,20 @@ FitBaus 新授权默认使用 Google Health API v4。旧 Fitbit 档案在完成�
 ## 3. 命令行和环境变量
 
 ```bash
-python auth/authorize_google_health.py --profile Lucius7
+python auth/authorize_google_health.py --profile Lucius7 --configure
 python fetch/fetch_all.py --profile Lucius7
 ```
+
+容器部署且网页显示「管理未配置」时，可直接在服务器终端运行，无需先启用网页管理：
+
+```bash
+docker exec -it fitbaus-app python auth/authorize_google_health.py --profile Lucius7 --configure --no-browser
+docker exec -it fitbaus-app python fetch/fetch_all.py --profile Lucius7
+```
+
+第一条命令交互读取 Client ID、Client Secret 和回调 URI，并输出 Google 授权链接。用自己的浏览器完成授权，将完整回调 URL 粘贴回终端。已有客户端配置时可以省略 `--configure`。第二条命令只在授权成功后运行。
+
+如要启用网页管理，在部署的 `.env` 中设置自己的 `FITBAUS_ADMIN_PASSWORD`，然后运行 `docker compose up -d --no-build fitbaus`。不要把口令提交到 Git。已有 Google 环境变量配置时可不填表单。
 
 可通过 `GOOGLE_HEALTH_CLIENT_ID`、`GOOGLE_HEALTH_CLIENT_SECRET` 和可选的 `GOOGLE_HEALTH_REDIRECT_URI` 提供配置；环境变量优先于表单设置。否则使用档案私有的 `auth/google_client.json`。授权状态和令牌不写入版本库或镜像。
 

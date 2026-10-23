@@ -56,7 +56,7 @@ The app validates identity before changing providers, disables legacy fetching f
 For headless use:
 
 ```bash
-python auth/authorize_google_health.py --profile myprofile
+python auth/authorize_google_health.py --profile myprofile --configure
 python fetch/fetch_all.py --profile myprofile
 ```
 
