@@ -2,7 +2,8 @@
 """Fitflare application factory and static entry points; imports start no jobs."""
 import os
 from pathlib import Path, PurePosixPath
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, make_response, request, send_from_directory
+from backend.assets import AssetManifest
 from backend.config import settings, AUTO_SYNC_ENABLED, AUTO_SYNC_INTERVAL_SECONDS, AUTO_SYNC_SCAN_INTERVAL_SECONDS
 from backend.security import install_security, require_admin
 from backend.sync import start_auto_sync_scheduler, stop_auto_sync_scheduler
@@ -25,13 +26,27 @@ def create_app(config=None):
     app.config.update(settings())
     app.config.update(config or {})
     install_security(app)
+    assets = AssetManifest(ROOT, STATIC_FILES)
+    app.extensions['assets'] = assets
+    app.jinja_env.globals['asset_url'] = assets.url
+    mimetypes = {'.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html'}
+
+    def serve_asset(name):
+        response = make_response(assets.render(name))
+        suffix = PurePosixPath(name).suffix
+        response.mimetype = mimetypes[suffix]
+        response.set_etag(assets.version(name))
+        # Only a URL carrying the current fingerprint may be cached indefinitely.
+        immutable = suffix != '.html' and request.args.get('v') == assets.version(name)
+        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable' if immutable else 'no-cache'
+        return response.make_conditional(request)
     from backend import security, dashboard_routes, public_routes, admin_routes
     for module in (security, dashboard_routes, public_routes, admin_routes):
         app.register_blueprint(module.bp)
 
     @app.get('/')
     def index():
-        return send_from_directory(ROOT, 'index.html')
+        return serve_asset('index.html')
 
     @app.get('/favicon.ico')
     def favicon():
@@ -43,6 +58,8 @@ def create_app(config=None):
         image = filename.startswith('assets/') and path.suffix.lower() in {'.png', '.jpg', '.jpeg', '.svg', '.ico', '.webp'}
         if '..' in path.parts or '\\' in filename or (filename not in STATIC_FILES and not image):
             return 'File not found', 404
+        if assets.handles(filename):
+            return serve_asset(filename)
         return send_from_directory(ROOT, filename)
 
     @app.get('/profiles/<profile_id>/csv/<filename>')
@@ -69,7 +86,7 @@ def create_app(config=None):
     def static_cache_headers(response):
         if request.path == '/vendor/chart.umd-4.4.1.min.js' and response.status_code == 200:
             response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
-        elif request.path == '/' or request.path.lstrip('/') in STATIC_FILES:
+        elif (request.path == '/' or request.path.lstrip('/') in STATIC_FILES) and 'immutable' not in response.headers.get('Cache-Control', ''):
             response.headers['Cache-Control'] = 'no-cache'
         return response
 

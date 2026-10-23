@@ -6,7 +6,7 @@
 
 - 正式地址：`https://fitflare.lucius7.dev/`；旧地址 `https://fitbit.lucius7.dev/` 保留路径和查询参数跳转至新地址。
 - 部署目录：`/home/lucius7/fitflare`，即本仓库的 `main` 检出；持久数据在其中的 `profiles/`。
-- 账户目录：`FITFLARE_PROFILE_ID=Lucius7`；访问模式：私有，需登录。
+- 账户目录：`FITFLARE_PROFILE_ID=Lucius7`；访问模式：公开只读（`FITFLARE_DATA_ACCESS=public`、`FITFLARE_PUBLIC_PROFILES=Lucius7`），任何人可查看健康记录，同步与授权需登录。
 - Caddy 主配置：`/home/lucius7/server-ops/caddy/Caddyfile`，用 `caddyctl check` / `caddyctl apply` 检查并原子加载；服务登记在 `/home/lucius7/server-ops/services.json`。
 - Google OAuth 应用名称 `Fitflare`，正式版（个人自用）；自动同步每 21600 秒（6 小时）。
 - 服务器专用的两个文件不进入 Git（已列入 `.gitignore` 与 `.dockerignore`）：
