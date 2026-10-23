@@ -1,6 +1,6 @@
 # 开发与维护
 
-环境使用 Python 3.11、Node.js 24，安装步骤见 [README](README.md#api-与开发)。运行依赖固定在 `requirements.lock`，浏览器测试依赖固定在 `package-lock.json`。
+环境使用 Python 3.11、Node.js 24（版本写在 `.nvmrc`），安装步骤见 [README](README.md#api-与开发)。运行依赖固定在 `requirements.lock`，浏览器测试依赖固定在 `package-lock.json`。
 
 ## 提交变更
 

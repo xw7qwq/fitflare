@@ -85,7 +85,7 @@ npx playwright install --with-deps chromium
 npm run check
 ```
 
-开发使用 Node.js 24；完整检查需要 Docker。`npm run check` 检查源码和生成文档、构建镜像、执行单元及桌面/手机浏览器回归；所有测试只用合成数据。快速检查可单独执行 `npm test` 和 `FITFLARE_DATA_ACCESS=public python -m unittest discover -s tests -p 'test_*.py' -v`。
+开发使用 Node.js 24（`.nvmrc`）；完整检查需要 Docker。`npm run check` 检查源码和生成文档、构建镜像、执行单元及桌面/手机浏览器回归；所有测试只用合成数据。快速检查可单独执行 `npm test` 和 `FITFLARE_DATA_ACCESS=public python -m unittest discover -s tests -p 'test_*.py' -v`。
 
 API 目录维护在 `common/api_docs.py`，修改后运行 `python scripts/docs.py`。协作约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
