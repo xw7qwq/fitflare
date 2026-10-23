@@ -1,85 +1,158 @@
-# Fitflare 生产部署
+# Fitflare 生产部署指南
 
-## 当前部署（2026-10-23）
+本文适用于 Linux 上的 Docker Compose 部署。Compose 项目和服务名为 `fitflare`，容器为 `fitflare-app`，配置变量统一使用 `FITFLARE_*`。应用只处理 `FITFLARE_PROFILE_ID` 指定的唯一账户。宿主机只监听 `127.0.0.1:9000`，由反向代理提供 HTTPS。
 
-- 正式地址：`https://fitflare.lucius7.dev/`
-- 旧地址：`https://fitbit.lucius7.dev/`，保留路径和查询参数并跳转至新地址。
-- SSH：`lucius7`
-- 部署目录：`/home/lucius7/fitbaus`（Git 检出，`main` 分支）
-- Docker Compose 服务：`fitbaus`；容器：`fitbaus-app`
-- 上游监听：`127.0.0.1:9000`，通过 Caddy 和 Cloudflare 代理提供 HTTPS。
-- 持久数据：部署目录的 `profiles/`；历史 CSV、缓存和授权凭据保留。
-- Google OAuth 应用名称：`Fitflare`；发布状态：正式版（个人自用）。
-- 自动同步：每 21600 秒（6 小时）检查并同步。
+## 当前部署（lucius7 服务器）
 
-网站、API 文档与 OAuth 品牌统一为 Fitflare。已有目录、Compose 服务、环境变量、Cookie 和自定义 API 标头保留兼容名称，避免改名打断现有数据及运维。
+- 正式地址：`https://fitflare.lucius7.dev/`；旧地址 `https://fitbit.lucius7.dev/` 保留路径和查询参数跳转至新地址。
+- 部署目录：`/home/lucius7/fitflare`，即本仓库的 `main` 检出；持久数据在其中的 `profiles/`。
+- 账户目录：`FITFLARE_PROFILE_ID=Lucius7`；访问模式：私有，需登录。
+- Caddy 主配置：`/home/lucius7/server-ops/caddy/Caddyfile`，用 `caddyctl check` / `caddyctl apply` 检查并原子加载；服务登记在 `/home/lucius7/server-ops/services.json`。
+- Google OAuth 应用名称 `Fitflare`，正式版（个人自用）；自动同步每 21600 秒（6 小时）。
+- 服务器专用的两个文件不进入 Git（已列入 `.gitignore` 与 `.dockerignore`）：
+  - `Dockerfile.host`：基于本机安全修补的运行时基底 `local/cpython-pip-security-20261022:fitflare`，只复制应用代码。不要换回上游原始镜像。
+  - `docker-compose.override.yml`：让 Compose 使用 `Dockerfile.host` 构建。
 
-## 运行与检查
+## 1. 准备源码与配置
+
+安装 Docker Engine、Compose 插件和 Git，然后在选定目录执行：
 
 ```bash
-cd /home/lucius7/fitbaus
+git clone https://github.com/xw7qwq/fitflare.git
+cd fitflare
+cp deploy/.env.production.example .env
+chmod 600 .env
+```
+
+编辑 `.env`。以下是生产样例中的关键设置：
+
+| 变量 | 建议值或用途 |
+| --- | --- |
+| `FITFLARE_UID` / `FITFLARE_GID` | `10001` / `10001`，与数据目录属主一致 |
+| `FITFLARE_BIND_HOST` / `FITFLARE_PORT` | `127.0.0.1` / `9000` |
+| `FITFLARE_PROFILE_ID` | 新安装为 `me`；迁移时填原数据目录名，不是网页可切换的账户 |
+| `FITFLARE_DATA_ACCESS` | `private`，数据读取需要登录 |
+| `FITFLARE_PUBLIC_PROFILES` | 仅公开模式使用，只能填唯一账户 ID；私有模式留空 |
+| `FITFLARE_ADMIN_PASSWORD` | 必须自行生成；也支持用 `FITFLARE_ADMIN_PASSWORD_HASH` 提供 Werkzeug 兼容哈希 |
+| `FITFLARE_SESSION_SECRET` | 独立生成并持久保存的随机密钥，至少 32 字符；也可用 `FITFLARE_SESSION_SECRET_FILE` |
+| `FITFLARE_SESSION_COOKIE_SECURE` | `true`，通过 HTTPS 登录 |
+| `FITFLARE_AUTO_SYNC_ENABLED` | 首次部署设为 `false`，授权并验证手动同步后再开启 |
+| `GOOGLE_HEALTH_CLIENT_ID` / `_SECRET` | 可选；不填则在网页“账户设置”中保存 |
+| `TZ` | 按需要设置容器时区 |
+
+分别执行以下命令两次，为密码与会话密钥生成不同的随机值，并填入 `.env`：
+
+```bash
+python3 -c 'import secrets; print(secrets.token_urlsafe(48))'
+```
+
+不要沿用样例密码。没有管理员口令或哈希时，私有模式会拒绝启动。会话密钥变化会使已有登录失效。`.env` 不进入镜像和 Git；不要将展开后的 `docker compose config` 输出发布到工单或聊天记录，因为其中可能包含凭据。
+
+## 2. 准备持久化目录并首次启动
+
+Compose 将宿主机 `./profiles` 挂载到容器 `/app/profiles`。首次创建时按样例 UID/GID 设置权限：
+
+```bash
+sudo install -d -o 10001 -g 10001 -m 700 profiles
+docker compose up -d --build
 docker compose ps
 curl -fsS http://127.0.0.1:9000/api/health
-docker compose logs --tail 100 fitbaus
 ```
 
-手动同步：
+若迁入已有数据，应先备份，再使整个 `profiles/` 归配置的 UID/GID 所有；目录权限设为 `700`、文件权限设为 `600`。不要删除已有目录或通过开放所有用户写权限来修复问题。
 
-```bash
-docker exec -it fitbaus-app python fetch/fetch_all.py --profile Lucius7
+镜像使用固定的 Python 基础镜像摘要和 `requirements.lock`，以非 root 用户运行。Compose 启用只读根文件系统，移除 capabilities 并启用 no-new-privileges，可写区域只有 `profiles/` 与临时目录。Gunicorn 保持单 worker、多线程，因为后台任务状态保存在单个进程中。
+
+首次启动使用上述 `docker compose up -d --build`。`scripts/deploy.sh` 会读取已有容器和镜像，**不能用于首次安装**。
+
+## 3. 配置 HTTPS 反向代理
+
+将自有域名解析到服务器，并让反向代理接收 80/443 请求。Caddy 示例：
+
+```caddy
+fitflare.example.com {
+    reverse_proxy 127.0.0.1:9000
+}
 ```
 
-## 发布与回滚
+参考文件：[deploy/caddy-fitflare.example.caddy](deploy/caddy-fitflare.example.caddy)。不要用示例覆盖已有服务器的其他站点配置；本服务器使用 `server-ops` 的 `caddyctl`。随后在 HTTPS 页面登录，确认能读取健康记录。未登录访问数据接口应返回 `401`；首页和 API 文档可以正常展示。
 
-部署目录 `/home/lucius7/fitbaus` 就是 Git 仓库检出，保持在 `main` 且工作区干净；构建上下文即该目录。服务器专用设置放在两个不入库的文件中（已列入 `.gitignore`）：
+生产保持 `FITFLARE_SESSION_COOKIE_SECURE=true`。在 HTTP 地址登录时浏览器不会发送 Secure Cookie；只有隔离的本机开发环境才应设为 `false`。不要将业务端口直接暴露公网来绕过代理问题。
 
-- `Dockerfile.host`：基于本机安全修补的运行时基底 `local/cpython-pip-security-20261022:fitbaus`，只复制应用代码。不要换回上游原始镜像。
-- `docker-compose.override.yml`：让 Compose 使用 `Dockerfile.host` 构建；镜像标签仍由 `FITBAUS_IMAGE` 决定，默认 `fitbaus-fitbaus:latest`。
+## 4. 连接 Google Health 与首次同步
 
-发布只使用统一脚本：
+在 Google Cloud 创建启用 Google Health API 的 Web OAuth 客户端，回调 URI 登记为 `http://localhost:8080/callback`。完整步骤与权限范围见 [GOOGLE_HEALTH.md](GOOGLE_HEALTH.md)。
+
+1. 在 HTTPS 页面登录，点击顶部“连接 Google Health”，填写 Client ID、Client Secret 与回调 URI 并保存。
+2. 打开 Google 授权页，用关联原 Fitbit 账户的 Google 账号同意所需权限。
+3. 浏览器跳转到 `http://localhost:8080/callback?code=...&state=...`。localhost 指浏览器所在电脑，页面打不开也没关系，从地址栏复制**完整 URL**，粘贴回授权窗口提交。
+4. 点击“同步数据”完成首次同步。确认数据正常后再开启自动同步。
+
+命令行维护入口（同一账户，无需 `--profile`）：
 
 ```bash
-cd /home/lucius7/fitbaus
+docker exec -it fitflare-app python auth/authorize_google_health.py --configure --no-browser
+docker exec -it fitflare-app python fetch/fetch_all.py
+```
+
+`profiles/<FITFLARE_PROFILE_ID>/auth/google_client.json` 保存客户端配置，`tokens.json` 保存授权；不要打印、提交或上传这些文件。授权 URL、回调 URL 和令牌都不要公开。同步包含网络请求、限流等待和令牌刷新，首次抓取可能耗时较长。
+
+## 从多档案部署迁移
+
+先备份现有 `.env` 和 `profiles/`，记录原有数据目录名，例如 `profiles/myprofile`。设置 `FITFLARE_PROFILE_ID=myprofile`，保留原凭据、CSV、缓存和文件权限。不要将目录改名为 `me`，也不要合并多个目录。
+
+Fitflare 不会删除其他目录，但不会枚举、访问或同步它们，登录用户也不例外。创建/删除档案接口已经移除。`FITFLARE_DATA_ACCESS` 默认是 `private`，升级时必须配置管理员密码。旧版 `FITBAUS_*` 变量不再读取，升级时需把 `.env` 中的变量名改为 `FITFLARE_*`；会话 Cookie 改名后需要重新登录一次。
+
+## 更新与回滚
+
+部署主机需要 Python 3、Node.js 24、npm、Chromium 系统依赖和 `flock`。先确认当前没有正在运行的同步，也没有其他终端在抓取数据。
+
+```bash
+cd /home/lucius7/fitflare
 git switch main && git pull --ff-only
 bash scripts/deploy.sh
 ```
 
-脚本依次完成：用 `Dockerfile.host` 构建 `fitbaus-fitbaus:release-<UTC 时间>` 并运行完整发布门禁（`scripts/check.sh`，仅用合成数据）→ 确认没有正在进行的同步 → 把当前镜像标记为 `fitbaus-fitbaus:rollback` → 切换并等待健康检查 → 验证线上访问边界 → 成功后标记为 `fitbaus-fitbaus:latest`。任一步失败会自动恢复原镜像。
+脚本依次执行：
 
-手动回滚：
+1. 构建 `fitflare:release-<UTC 时间>`（存在 `Dockerfile.host` 时自动使用它），用合成数据跑完整发布门禁。
+2. 检查同步锁，以及 Compose 的非 root、只读根文件系统配置。
+3. 保留当前镜像为 `fitflare:rollback`，替换应用容器。
+4. 等待健康检查，再验证线上数据访问边界；成功后标记为 `fitflare:latest`。
 
-```bash
-FITBAUS_IMAGE=fitbaus-fitbaus:rollback docker compose up -d --no-deps --no-build fitbaus
-```
-
-不要在其他目录构建或手工修改 Compose 的 `image`/`build`，以免线上代码与仓库不一致。缓存结构版本变化时，首个请求会自动重建 `profiles/*/cache/dashboard.json`。
-
-容器以非 root 用户运行，根文件系统只读，移除 capabilities，并启用 no-new-privileges。只挂载 `profiles/` 持久数据，令牌和客户端密钥不进入镜像。
-
-## 域名与 HTTPS
-
-Cloudflare 的 `fitflare` A 记录指向现有服务器并启用代理。旧 `fitbit` 记录保留，用于兼容跳转。Caddy 主配置：
-
-`/home/lucius7/server-ops/caddy/Caddyfile`
-
-使用已有的 `caddyctl check` 和 `caddyctl apply` 检查并原子加载候选配置，自动保留受限备份；不直接覆盖共用配置或重启其他服务。
-
-Google 品牌首页、隐私政策、使用条款分别使用新域名下的 `/about.html`、`/privacy.html`、`/terms.html`。授权网域仍为 `lucius7.dev`。
-
-## Google Health 授权
-
-当前使用 Google Health API v4 与六项只读权限。访问令牌按需自动刷新。OAuth 已切换为正式版并重新签发刷新令牌，不再使用测试模式的七天授权。Google 仍可因撤销、长时间未使用等原因使授权失效。
-
-客户端回调保持 `http://localhost:8080/callback`。这是手动粘贴回调的流程，与网站域名无关，不需要开放公网 8080 端口。配置或重新授权：
+切换后的健康或访问检查失败时，脚本自动恢复前一镜像。回滚只恢复应用镜像，**不会恢复 `.env`、Compose 文件或数据**。手工回滚：
 
 ```bash
-docker exec -it fitbaus-app python auth/authorize_google_health.py --profile Lucius7 --configure --no-browser
+FITFLARE_IMAGE=fitflare:rollback docker compose up -d --no-deps --no-build fitflare
+docker compose ps
+curl -fsS http://127.0.0.1:9000/api/health
 ```
 
-`profiles/Lucius7/auth/google_client.json` 保存 Google 客户端配置；`tokens.json` 保存授权。不要打印、提交或上传这些文件。完整流程见 [GOOGLE_HEALTH.md](GOOGLE_HEALTH.md)。
+通常让 `FITFLARE_IMAGE` 使用默认的 `fitflare:latest`。不要在其他目录构建或手工修改 Compose 的 `image`/`build`，以免线上代码与仓库不一致。缓存结构版本变化时，首个请求会自动重建 `profiles/*/cache/dashboard.json`。脚本不检查 DNS 和代理，发布后还要验证 HTTPS 域名和浏览器登录。
 
-## 访问控制与历史数据
+## 备份与恢复
 
-当前部署使用公开只读看板。网页管理未配置管理员口令时自动停用；授权和运维经 SSH 完成。`FITBAUS_DATA_ACCESS`、`FITBAUS_PUBLIC_PROFILES` 和管理员配置继续使用兼容名称。
+备份必须保存在仓库之外。`profiles/` 包含令牌、凭据、原始记录与缓存；`.env` 包含部署密钥，应与数据一起限制访问。不要上传到 GitHub、CI 产物或公开网盘。
 
-域名和品牌调整不修改 Google OAuth 客户端 ID、权限、历史 CSV 或档案 ID。备份和回滚时保留 `profiles/`，不要执行数据重置。
+先关闭自动同步、等待现有同步完成，再停止容器创建一致备份：
+
+```bash
+docker compose stop fitflare
+sudo install -d -o root -g root -m 700 /var/backups/fitflare
+backup_file=/var/backups/fitflare/$(date -u +%Y%m%dT%H%M%SZ).tar.gz
+sudo tar -czf "$backup_file" profiles .env
+sudo chmod 600 "$backup_file"
+docker compose start fitflare
+```
+
+恢复时先停止同步与容器，将备份解压到仓库外的暂存目录并检查内容；保留当前 `profiles/` 的副本，再恢复 `.env` 与数据，修复到配置的 UID/GID 和私有权限后启动。确认健康接口、登录与数据均正常，再恢复同步。
+
+## 日常检查
+
+```bash
+docker compose ps
+docker compose logs --tail 100 fitflare
+curl -fsS http://127.0.0.1:9000/api/health
+```
+
+容器健康只说明应用响应正常；公网访问还取决于 DNS、代理和 HTTPS。排查时先比较本机健康接口与域名健康接口。日志可能包含账户标识或授权上下文，对外分享前先脱敏。API 用法见 [API.md](API.md)，安全事项见 [SECURITY.md](SECURITY.md)。

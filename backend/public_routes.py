@@ -593,5 +593,5 @@ def public_profile_chart_svg(profile_id, chart_key):
     except KeyError:
         return _public_api_error(f'Chart "{chart_key}" not found', 404, 'chart_not_found')
     response = _public_text_response(svg, 'image/svg+xml')
-    response.headers['X-FitBaus-Chart-Meta'] = json.dumps(meta, ensure_ascii=False)
+    response.headers['X-Fitflare-Chart-Meta'] = json.dumps(meta, ensure_ascii=False)
     return response

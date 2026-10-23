@@ -6,9 +6,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-os.environ['FITBAUS_AUTO_SYNC_ENABLED'] = 'false'
-with patch.dict(os.environ, {'FITBAUS_ADMIN_PASSWORD': 'test-import-only',
-                             'FITBAUS_ADMIN_PASSWORD_HASH': '', 'FITBAUS_SESSION_SECRET_FILE': ''}):
+os.environ['FITFLARE_AUTO_SYNC_ENABLED'] = 'false'
+with patch.dict(os.environ, {'FITFLARE_ADMIN_PASSWORD': 'test-import-only',
+                             'FITFLARE_ADMIN_PASSWORD_HASH': '', 'FITFLARE_SESSION_SECRET_FILE': ''}):
     from server import create_app
 from backend import jobs, sync
 from common import profile_paths
@@ -94,7 +94,7 @@ class BackendTests(unittest.TestCase):
     def test_csrf_and_logout_invalidate_session(self):
         token = self.login()
         self.assertEqual(self.client.post('/api/admin/logout').status_code, 403)
-        self.assertEqual(self.client.post('/api/admin/logout', headers={'X-FitBaus-CSRF':token}).status_code, 200)
+        self.assertEqual(self.client.post('/api/admin/logout', headers={'X-Fitflare-CSRF':token}).status_code, 200)
         self.assertFalse(self.client.get('/api/admin/session').json['authenticated'])
         self.assertEqual(self.client.post('/api/account/setup', json={}).status_code, 401)
         self.assertEqual(self.client.post('/api/create-profile', json={}).status_code, 404)
@@ -136,7 +136,7 @@ class BackendTests(unittest.TestCase):
         for path in ('/api/dashboard/%2e%2e', '/api/dashboard/Link', '/api/authorize/%2e%2e'):
             self.assertEqual(self.client.get(path).status_code, 404)
         token = self.login()
-        response = self.client.post('/api/authorize-exchange', json={'profileName':'../outside','code':'test-only'}, headers={'X-FitBaus-CSRF':token})
+        response = self.client.post('/api/authorize-exchange', json={'profileName':'../outside','code':'test-only'}, headers={'X-Fitflare-CSRF':token})
         self.assertEqual(response.status_code, 400)
 
     def test_docs_and_all_sample_public_routes_render(self):
@@ -169,10 +169,10 @@ class BackendTests(unittest.TestCase):
     def test_manual_job_start_uses_registry_and_prevents_duplicate(self):
         token = self.login()
         with patch('backend.admin_routes.threading.Thread') as thread:
-            response = self.client.post('/api/fetch-data', json={'profile':'Demo'}, headers={'X-FitBaus-CSRF':token})
+            response = self.client.post('/api/fetch-data', json={'profile':'Demo'}, headers={'X-Fitflare-CSRF':token})
             self.assertEqual(response.status_code, 200)
             thread.return_value.start.assert_called_once()
-            second = self.client.post('/api/fetch-data', json={'profile':'Demo'}, headers={'X-FitBaus-CSRF':token})
+            second = self.client.post('/api/fetch-data', json={'profile':'Demo'}, headers={'X-Fitflare-CSRF':token})
             self.assertEqual(second.status_code, 409)
 
     def test_no_scheduler_starts_on_import(self):
@@ -182,7 +182,7 @@ class BackendTests(unittest.TestCase):
     def test_default_is_private_and_owner_is_explicit(self):
         from backend.config import settings
         with patch.dict(os.environ, {'FITFLARE_PROFILE_ID': 'me'}):
-            os.environ.pop('FITBAUS_DATA_ACCESS', None)
+            os.environ.pop('FITFLARE_DATA_ACCESS', None)
             self.assertEqual(settings()['DATA_ACCESS_MODE'], 'private')
             self.assertEqual(settings()['OWNER_PROFILE_ID'], 'me')
             self.assertEqual(profile_paths.get_active_profile(), 'me')
@@ -199,7 +199,7 @@ class BackendTests(unittest.TestCase):
                        '/api/public/v1/profiles/Hidden', '/api/public/v1/profiles/Hidden/dashboard',
                        '/api/authorize/Hidden', '/profiles/Hidden/csv/example.csv'):
             self.assertEqual(self.client.get(prefix).status_code, 404, prefix)
-        headers = {'X-FitBaus-CSRF': token}
+        headers = {'X-Fitflare-CSRF': token}
         for endpoint, body in (('/api/fetch-data', {'profile': 'Hidden'}),
                                ('/api/authorize-exchange', {'profileName': 'Hidden', 'code': 'synthetic'}),
                                ('/api/account/setup', {'profileName': 'Hidden', 'clientId': 'id', 'clientSecret': 'secret'})):
@@ -217,7 +217,7 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/account/setup', json=credentials).status_code, 401)
         token = self.login()
         self.assertEqual(self.client.post('/api/account/setup', json=credentials).status_code, 403)
-        headers = {'X-FitBaus-CSRF': token}
+        headers = {'X-Fitflare-CSRF': token}
         response = self.client.post('/api/account/setup', json=credentials, headers=headers)
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json['configured'])
@@ -267,7 +267,7 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/public/v1/me?profile=Hidden').status_code, 400)
         token = self.login()
         with patch('backend.admin_routes.threading.Thread') as thread:
-            result = self.client.post('/api/fetch-data', json={}, headers={'X-FitBaus-CSRF':token})
+            result = self.client.post('/api/fetch-data', json={}, headers={'X-Fitflare-CSRF':token})
             self.assertEqual(result.status_code, 200)
             self.assertEqual(jobs.fetch_jobs[result.json['job_id']]['profile'], 'Demo')
             thread.return_value.start.assert_called_once()
@@ -279,7 +279,7 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/fetch-jobs').json, [])
         self.assertEqual(self.client.get('/api/fetch-status/legacy').status_code, 404)
         self.assertEqual(self.client.get('/api/authorize-status/legacy').status_code, 404)
-        self.assertEqual(self.client.post('/api/cancel-fetch/legacy', json={}, headers={'X-FitBaus-CSRF':token}).status_code, 404)
+        self.assertEqual(self.client.post('/api/cancel-fetch/legacy', json={}, headers={'X-Fitflare-CSRF':token}).status_code, 404)
         self.assertEqual(jobs.fetch_jobs['legacy']['status'], 'running')
         self.assertEqual(self.client.get('/api/health').json['active_jobs'], 0)
         with self.assertRaises(ValueError):
@@ -327,14 +327,14 @@ class BackendTests(unittest.TestCase):
         token = self.login()
         with patch('common.google_health_auth.os.replace', side_effect=OSError('Synthetic failure')):
             response = self.client.post('/api/account/setup', json={'clientId': 'new.apps.googleusercontent.com', 'clientSecret': 'new-secret'},
-                                        headers={'X-FitBaus-CSRF': token})
+                                        headers={'X-Fitflare-CSRF': token})
         self.assertEqual(response.status_code, 500)
         self.assertEqual(path.read_bytes(), previous)
         self.assertFalse([item for item in path.parent.iterdir() if item.name.startswith('tmp')])
 
     def test_authorization_exchange_and_rebuild_alias_only_use_owner(self):
         token = self.login()
-        headers = {'X-FitBaus-CSRF': token}
+        headers = {'X-Fitflare-CSRF': token}
         with patch('backend.admin_routes.complete_google_authorization', return_value={'message': 'Connected'}) as exchange, \
              patch('backend.admin_routes.build_dashboard_cache'):
             result = self.client.post('/api/authorize-exchange', json={'redirectUrl': 'http://localhost:8080/callback?code=c&state=s'}, headers=headers)
@@ -353,7 +353,7 @@ class BackendTests(unittest.TestCase):
         token = self.login()
         with patch.dict(os.environ, {'GOOGLE_HEALTH_CLIENT_ID': 'env.apps.googleusercontent.com', 'GOOGLE_HEALTH_CLIENT_SECRET': 'env-secret'}):
             response = self.client.post('/api/account/setup', json={'clientId': 'new.apps.googleusercontent.com', 'clientSecret': 'new-secret'},
-                                        headers={'X-FitBaus-CSRF': token})
+                                        headers={'X-Fitflare-CSRF': token})
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json['code'], 'credentials_managed_by_environment')
         self.assertEqual(path.read_bytes(), previous)

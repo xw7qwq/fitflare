@@ -320,15 +320,15 @@ class GoogleHealthDataTests(unittest.TestCase):
 
     def test_cli_fetch_lock_excludes_migration_and_is_shared_by_children(self):
         with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("FITBAUS_FETCH_LOCK_HELD", None)
+            os.environ.pop("FITFLARE_FETCH_LOCK_HELD", None)
             with profile_fetch_lock(None):
-                self.assertEqual(os.environ["FITBAUS_FETCH_LOCK_HELD"], str(self.tokens))
+                self.assertEqual(os.environ["FITFLARE_FETCH_LOCK_HELD"], str(self.tokens))
                 with self.assertRaises(GoogleHealthAuthError):
                     with profile_migration_lock(self.tokens):
                         pass
                 with profile_fetch_lock(None):
                     pass  # Child inherits the parent's existing lock.
-            self.assertNotIn("FITBAUS_FETCH_LOCK_HELD", os.environ)
+            self.assertNotIn("FITFLARE_FETCH_LOCK_HELD", os.environ)
             with profile_migration_lock(self.tokens):
                 pass
 

@@ -1,18 +1,19 @@
+name: fitflare
 services:
-  fitbaus:
+  fitflare:
     build: .
-    image: ${FITBAUS_IMAGE:-fitbaus-fitbaus:latest}
-    container_name: fitbaus-app
+    image: ${FITFLARE_IMAGE:-fitflare:latest}
+    container_name: fitflare-app
     # On Linux bind mounts, prefer running as the host user to avoid write failures
-    user: "${FITBAUS_UID:-10001}:${FITBAUS_GID:-10001}"
+    user: "${FITFLARE_UID:-10001}:${FITFLARE_GID:-10001}"
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m,mode=1777
     ports:
-      - "${FITBAUS_BIND_HOST:-127.0.0.1}:${FITBAUS_PORT:-9000}:9000"   # Reverse proxy only
-      # - "${FITBAUS_CALLBACK_BIND_HOST:-0.0.0.0}:8080:8080" # Optional: local HTTPS callback port for background OAuth
+      - "${FITFLARE_BIND_HOST:-127.0.0.1}:${FITFLARE_PORT:-9000}:9000"   # Reverse proxy only
+      # - "${FITFLARE_CALLBACK_BIND_HOST:-0.0.0.0}:8080:8080" # Optional: local HTTPS callback port for background OAuth
     volumes:
       # Mount data directories to persist data
       - ./profiles:/app/profiles
@@ -30,19 +31,19 @@ services:
       - FITBIT_SSL_KEY=${FITBIT_SSL_KEY:-}
       - FITBIT_AUTH_TIMEOUT=${FITBIT_AUTH_TIMEOUT:-60}
       - FITBIT_FALLBACK_REDIRECT=${FITBIT_FALLBACK_REDIRECT:-}
-      - FITBAUS_AUTO_SYNC_ENABLED=${FITBAUS_AUTO_SYNC_ENABLED:-true}
-      - FITBAUS_AUTO_SYNC_INTERVAL_SECONDS=${FITBAUS_AUTO_SYNC_INTERVAL_SECONDS:-21600}
-      - FITBAUS_AUTO_SYNC_SCAN_INTERVAL_SECONDS=${FITBAUS_AUTO_SYNC_SCAN_INTERVAL_SECONDS:-300}
-      - FITBAUS_ADMIN_PASSWORD=${FITBAUS_ADMIN_PASSWORD:-}
-      - FITBAUS_ADMIN_PASSWORD_HASH=${FITBAUS_ADMIN_PASSWORD_HASH:-}
-      - FITBAUS_SESSION_SECRET=${FITBAUS_SESSION_SECRET:-}
-      - FITBAUS_SESSION_SECRET_FILE=${FITBAUS_SESSION_SECRET_FILE:-}
+      - FITFLARE_AUTO_SYNC_ENABLED=${FITFLARE_AUTO_SYNC_ENABLED:-true}
+      - FITFLARE_AUTO_SYNC_INTERVAL_SECONDS=${FITFLARE_AUTO_SYNC_INTERVAL_SECONDS:-21600}
+      - FITFLARE_AUTO_SYNC_SCAN_INTERVAL_SECONDS=${FITFLARE_AUTO_SYNC_SCAN_INTERVAL_SECONDS:-300}
+      - FITFLARE_ADMIN_PASSWORD=${FITFLARE_ADMIN_PASSWORD:-}
+      - FITFLARE_ADMIN_PASSWORD_HASH=${FITFLARE_ADMIN_PASSWORD_HASH:-}
+      - FITFLARE_SESSION_SECRET=${FITFLARE_SESSION_SECRET:-}
+      - FITFLARE_SESSION_SECRET_FILE=${FITFLARE_SESSION_SECRET_FILE:-}
       - FITFLARE_PROFILE_ID=${FITFLARE_PROFILE_ID:-me}
-      - FITBAUS_DATA_ACCESS=${FITBAUS_DATA_ACCESS:-private}
-      - FITBAUS_PUBLIC_PROFILES=${FITBAUS_PUBLIC_PROFILES-*}
-      - FITBAUS_SESSION_COOKIE_SECURE=${FITBAUS_SESSION_COOKIE_SECURE:-true}
+      - FITFLARE_DATA_ACCESS=${FITFLARE_DATA_ACCESS:-private}
+      - FITFLARE_PUBLIC_PROFILES=${FITFLARE_PUBLIC_PROFILES-*}
+      - FITFLARE_SESSION_COOKIE_SECURE=${FITFLARE_SESSION_COOKIE_SECURE:-true}
     # volumes:
     #   - ./certs:/certs:ro   # If using background OAuth with local HTTPS
     restart: unless-stopped
     # Remove stdin_open and tty for production
-    # To access the container for setup, use: docker exec -it fitbaus-app bash
+    # To access the container for setup, use: docker exec -it fitflare-app bash

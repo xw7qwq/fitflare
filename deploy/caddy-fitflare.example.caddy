@@ -1,5 +1,5 @@
 # Replace the hostname with your domain and point its DNS to the server.
-# Keep FITBAUS_BIND_HOST=127.0.0.1 and FITBAUS_PORT=9000.
+# Keep FITFLARE_BIND_HOST=127.0.0.1 and FITFLARE_PORT=9000.
 fitflare.example.com {
 	encode zstd gzip
 	reverse_proxy 127.0.0.1:9000

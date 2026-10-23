@@ -104,7 +104,7 @@ ENDPOINTS = (
     endpoint('metric', 'profiles', PROFILE+'/metrics/{metric_key}', '单项指标', '按 key 读取一张指标卡；不存在的指标返回 404。', 'metric'),
     endpoint('correlations', 'profiles', PROFILE+'/correlations', '相关性', '缓存中的相关系数、强度和重叠点数，仅供描述性参考。', 'correlations', 'array'),
     endpoint('series', 'series', PROFILE+'/series/{granularity}', '趋势序列', '从完整本地数据聚合序列，按指标选择列，按 limit 截取最后若干点。', 'series', 'Series', (METRICS, SERIES_LIMIT), result='data.points[]：序列点；data.metrics[]：单位等元数据；meta.available_metrics[]：可选指标'),
-    endpoint('chart', 'series', PROFILE+'/charts/{chart_key}.svg', 'SVG 趋势图', '返回可嵌入的 SVG；各指标独立归一化。缺少数据时仍返回带空状态文字的 SVG。', query=SVG_PARAMS, media='image/svg+xml', result='SVG 文本；X-FitBaus-Chart-Meta 响应头包含图表元数据（保留旧版兼容名称）'),
+    endpoint('chart', 'series', PROFILE+'/charts/{chart_key}.svg', 'SVG 趋势图', '返回可嵌入的 SVG；各指标独立归一化。缺少数据时仍返回带空状态文字的 SVG。', query=SVG_PARAMS, media='image/svg+xml', result='SVG 文本；X-Fitflare-Chart-Meta 响应头包含图表元数据'),
     endpoint('datasets', 'records', PROFILE+'/datasets', '数据集目录', '列出支持的完整结构化数据集和覆盖信息。', 'datasets', 'array'),
     endpoint('dataset', 'records', PROFILE+'/datasets/{dataset}', '读取数据集', '读取由 CSV 解析或聚合的完整历史，并从 offset 起分页。', 'dataset', 'Dataset', (OFFSET, page_limit(200)), result='data.rows[]：当前页；data.columns[]：列名提示；meta：分页信息'),
     endpoint('sections', 'records', PROFILE+'/sections', '摘要分区列表', '读取 activity、body、vitals、lifestyle、account 摘要。', 'sections', 'array'),
@@ -177,14 +177,14 @@ def build_openapi_spec(base_url='/', access_mode='public'):
                 operation['responses'][code] = {'description': message, 'content': {'application/json': {'schema': {'$ref': '#/components/schemas/Error'}}}}
             operation['responses']['500'] = {'description': '服务异常；可能为文本响应', 'content': {'text/html': {'schema': {'type': 'string'}}}}
         if item['id'] == 'chart':
-            operation['responses']['200']['headers'] = {'X-FitBaus-Chart-Meta': {'description': 'JSON 编码的图表元数据（响应头名称保留旧版兼容）', 'schema': {'type': 'string'}}}
+            operation['responses']['200']['headers'] = {'X-Fitflare-Chart-Meta': {'description': 'JSON 编码的图表元数据', 'schema': {'type': 'string'}}}
         paths[item['path']] = {'get': operation}
     return {'openapi': '3.1.0', 'info': {'title': 'Fitflare Personal API', 'version': PUBLIC_API_VERSION,
              'description': '单人只读本地缓存 API。/me 始终对应配置的唯一账户；默认使用本站私有会话。字段不承诺匿名化。'},
             'servers': [{'url': base_url or '/'}], 'tags': [{'name': label} for label in GROUPS.values()],
             'security': [{'SessionCookie': []}] if access_mode == 'private' else [{}, {'SessionCookie': []}],
             'paths': paths, 'components': {'schemas': deepcopy(SCHEMAS), 'securitySchemes': {
-                'SessionCookie': {'type': 'apiKey', 'in': 'cookie', 'name': 'fitbaus_admin_session',
+                'SessionCookie': {'type': 'apiKey', 'in': 'cookie', 'name': 'fitflare_session',
                                   'description': '在本站仪表盘登录后由浏览器管理；不是 Google Health OAuth 令牌；Cookie 名称为旧版兼容标识。'}}}}
 
 

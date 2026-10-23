@@ -482,7 +482,7 @@ async function apiRequest(path, options = {}) {
   const { ignore404, requireAdmin, skipAdminHandling, ...fetchOptions } = options
   const headers = new Headers(fetchOptions.headers || {})
   if (requireAdmin && state.admin.csrfToken) {
-    headers.set("X-FitBaus-CSRF", state.admin.csrfToken)
+    headers.set("X-Fitflare-CSRF", state.admin.csrfToken)
   }
 
   const response = await fetch(path, {

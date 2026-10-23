@@ -1,4 +1,4 @@
-"""Authorize or migrate a profile using Google OAuth with state and PKCE."""
+"""Authorize or migrate the personal account using Google OAuth with state and PKCE."""
 import argparse
 from getpass import getpass
 import os
@@ -17,8 +17,8 @@ from common.profile_paths import resolve_or_prompt_profile
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Connect a Fitflare profile to Google Health")
-    parser.add_argument("--profile", help="Existing profile name")
+    parser = argparse.ArgumentParser(description="Connect the Fitflare account to Google Health")
+    parser.add_argument("--profile", help="Explicit local directory override for maintenance only")
     parser.add_argument("--configure", action="store_true", help="Prompt for separate Google Cloud OAuth credentials")
     parser.add_argument("--no-browser", action="store_true", help="Only print the Google authorization URL")
     args = parser.parse_args()

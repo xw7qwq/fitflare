@@ -1,6 +1,6 @@
 # Google Health API v4 接入与迁移
 
-Fitflare 新授权默认使用 Google Health API v4。旧 Fitbit 档案在完成新授权前仍使用原连接；授权成功后按档案切换来源，保留历史 CSV 和公共查询接口。
+Fitflare 新授权默认使用 Google Health API v4。旧 Fitbit 账户在完成新授权前仍使用原连接；授权成功后切换来源，保留历史 CSV 和个人查询接口。
 
 ## 1. 配置 Google Cloud
 
@@ -18,13 +18,13 @@ Fitflare 新授权默认使用 Google Health API v4。旧 Fitbit 档案在完成
    | `.settings.readonly` | 设备资料 |
 
 4. 在 Credentials 创建 **Web application** OAuth 客户端，Authorized redirect URIs 填写 `http://localhost:8080/callback`。保存 Client ID 和 Client Secret，不使用原 Fitbit 应用凭据。
-5. 先在 Google Health 手机应用中登录对应 Google 账号；如有旧 Fitbit 账号，完成关联或迁移。必须与本地档案历史数据所属账号相同。
+5. 先在 Google Health 手机应用中登录对应 Google 账号；如有旧 Fitbit 账号，完成关联或迁移。必须与本地历史数据所属账号相同。
 
 配置界面名称和项目限制以 [Google 官方设置文档](https://developers.google.com/health/setup)为准。Testing 模式下 Google 的离线刷新令牌通常在七天后过期，长期自动同步需要按控制台要求调整发布状态；发布或验证不会由 Fitflare 自动完成。
 
 ## 2. 在 Fitflare 完成授权
 
-1. 管理员登录 → 档案管理 → 对已有档案点击「连接 Google Health」。首次会打开 Google 客户端配置表单；也可直接点「Google 客户端配置」。
+1. 登录 → 点击顶部「连接 Google Health」（已配置时为「账户设置」），填写 Google 客户端信息并保存；已配置的账户可点「重新授权 Google Health」。
 2. 填入新 Client ID、Client Secret 和完全相同的回调 URI，保存并继续。
 3. 打开 Google 授权页，同意需要的数据权限。
 4. 复制最终浏览器地址栏的**完整 URL**（包含 `code` 和 `state`），粘贴回 Fitflare。localhost 页面无法访问不影响复制 URL。请在十分钟内提交；超时重新开始。
@@ -35,22 +35,22 @@ Fitflare 新授权默认使用 Google Health API v4。旧 Fitbit 档案在完成
 ## 3. 命令行和环境变量
 
 ```bash
-python auth/authorize_google_health.py --profile Lucius7 --configure
-python fetch/fetch_all.py --profile Lucius7
+python auth/authorize_google_health.py --configure
+python fetch/fetch_all.py
 ```
 
 容器部署且网页显示「管理未配置」时，可直接在服务器终端运行，无需先启用网页管理：
 
 ```bash
-docker exec -it fitbaus-app python auth/authorize_google_health.py --profile Lucius7 --configure --no-browser
-docker exec -it fitbaus-app python fetch/fetch_all.py --profile Lucius7
+docker exec -it fitflare-app python auth/authorize_google_health.py --configure --no-browser
+docker exec -it fitflare-app python fetch/fetch_all.py
 ```
 
 第一条命令交互读取 Client ID、Client Secret 和回调 URI，并输出 Google 授权链接。用自己的浏览器完成授权，将完整回调 URL 粘贴回终端。已有客户端配置时可以省略 `--configure`。第二条命令只在授权成功后运行。
 
-如要启用网页管理，在部署的 `.env` 中设置自己的 `FITBAUS_ADMIN_PASSWORD`，然后运行 `docker compose up -d --no-build fitbaus`。不要把口令提交到 Git。已有 Google 环境变量配置时可不填表单。
+如要启用网页管理，在部署的 `.env` 中设置自己的 `FITFLARE_ADMIN_PASSWORD`，然后运行 `docker compose up -d --no-build fitflare`。不要把口令提交到 Git。已有 Google 环境变量配置时可不填表单。
 
-可通过 `GOOGLE_HEALTH_CLIENT_ID`、`GOOGLE_HEALTH_CLIENT_SECRET` 和可选的 `GOOGLE_HEALTH_REDIRECT_URI` 提供配置；环境变量优先于表单设置。否则使用档案私有的 `auth/google_client.json`。授权状态和令牌不写入版本库或镜像。
+可通过 `GOOGLE_HEALTH_CLIENT_ID`、`GOOGLE_HEALTH_CLIENT_SECRET` 和可选的 `GOOGLE_HEALTH_REDIRECT_URI` 提供配置；环境变量优先于表单设置。否则使用账户目录中私有的 `auth/google_client.json`。授权状态和令牌不写入版本库或镜像。
 
 ## 数据兼容
 
@@ -68,10 +68,10 @@ docker exec -it fitbaus-app python fetch/fetch_all.py --profile Lucius7
 | 找不到 Google 凭据 | 配置新的 Google Web OAuth 客户端 |
 | `redirect_uri_mismatch` | 核对 Google Cloud 与表单回调 URI，包括协议、端口和路径 |
 | 账号未关联 Google Health | 先在手机应用登录并完成旧 Fitbit 账号迁移 |
-| 账号与档案不一致 | 使用历史数据所属账号；其它账号请创建新档案 |
+| 账号与本地记录不一致 | 使用历史数据所属账号；Fitflare 只服务一个账户，其它账号请单独部署 |
 | state 过期或不匹配 | 重新发起授权，复制本次完整回调 URL |
-| 部分权限未授予 | 在档案管理中重新授权，选择需要的数据类别 |
+| 部分权限未授予 | 在账户设置中重新授权，选择需要的数据类别 |
 | 授权已失效 | 重新授权，并检查 Google Cloud 的测试/发布状态 |
-| 当前档案正在同步 | 同步完成后重试，避免迁移与数据写入同时发生 |
+| 当前账户正在同步 | 同步完成后重试，避免迁移与数据写入同时发生 |
 
 参考：[迁移指南](https://developers.google.com/health/migration)、[权限范围](https://developers.google.com/health/scopes)、[v4 REST 参考](https://developers.google.com/health/reference/rest)。

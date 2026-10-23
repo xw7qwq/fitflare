@@ -166,7 +166,7 @@ async function main() {
       await setupPage.route('**/api/account', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ profile_id: 'Demo', configured, authorized, has_data: false }) }));
       await setupPage.route('**/api/account/setup', async route => {
         setupBodies.push(route.request().postDataJSON());
-        assert.ok(route.request().headers()['x-fitbaus-csrf']);
+        assert.ok(route.request().headers()['x-fitflare-csrf']);
         configured = true;
         await route.fulfill({ contentType: 'application/json', body: '{}' });
       });

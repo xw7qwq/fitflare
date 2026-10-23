@@ -25,7 +25,7 @@ class PersonalCliTests(unittest.TestCase):
                 handle.write('{"access_token": "synthetic-legacy"}')
 
     def run_sync(self, arguments=(), return_code=0):
-        with patch.dict(os.environ, {'FITFLARE_PROFILE_ID': 'Demo', 'FITBIT_PROFILE': 'Hidden', 'FITBAUS_FETCH_LOCK_HELD': ''}), \
+        with patch.dict(os.environ, {'FITFLARE_PROFILE_ID': 'Demo', 'FITBIT_PROFILE': 'Hidden', 'FITFLARE_FETCH_LOCK_HELD': ''}), \
              patch('sys.argv', ['fetch_all.py', *arguments]), \
              patch.object(fetch_all, 'run_script', return_value=(return_code, None)) as runner, \
              patch.object(fetch_all, 'build_dashboard_cache') as cache, \
@@ -63,7 +63,7 @@ class PersonalCliTests(unittest.TestCase):
 class UnauthorizedCliTests(unittest.TestCase):
     def test_account_without_tokens_stops_before_running_fetches(self):
         with tempfile.TemporaryDirectory() as root, patch.object(profile_paths, 'ROOT_DIR', root), \
-             patch.dict(os.environ, {'FITFLARE_PROFILE_ID': 'Demo', 'FITBAUS_FETCH_LOCK_HELD': ''}), \
+             patch.dict(os.environ, {'FITFLARE_PROFILE_ID': 'Demo', 'FITFLARE_FETCH_LOCK_HELD': ''}), \
              patch('sys.argv', ['fetch_all.py']), patch.object(fetch_all, 'run_script') as runner, \
              contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(fetch_all.main(), 1)

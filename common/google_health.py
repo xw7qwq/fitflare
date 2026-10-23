@@ -56,20 +56,20 @@ def require_legacy_fitbit_tokens(path):
 def profile_fetch_lock(profile_id=None):
     """Share the migration/sync lock, including CLI parents and child scripts."""
     path = os.path.abspath(tokens_file_for(profile_id))
-    previous = os.environ.get("FITBAUS_FETCH_LOCK_HELD")
+    previous = os.environ.get("FITFLARE_FETCH_LOCK_HELD")
     if previous == path:
         yield
         return
     from common.google_health_auth import profile_migration_lock
     with profile_migration_lock(path):
-        os.environ["FITBAUS_FETCH_LOCK_HELD"] = path
+        os.environ["FITFLARE_FETCH_LOCK_HELD"] = path
         try:
             yield
         finally:
             if previous is None:
-                os.environ.pop("FITBAUS_FETCH_LOCK_HELD", None)
+                os.environ.pop("FITFLARE_FETCH_LOCK_HELD", None)
             else:
-                os.environ["FITBAUS_FETCH_LOCK_HELD"] = previous
+                os.environ["FITFLARE_FETCH_LOCK_HELD"] = previous
 
 
 def granted_scopes(tokens):

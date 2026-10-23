@@ -61,7 +61,7 @@ def _read_json(path):
     except FileNotFoundError:
         return {}
     except (ValueError, OSError) as exc:
-        raise GoogleHealthAuthError("无法读取授权配置，请检查档案授权文件。") from exc
+        raise GoogleHealthAuthError("无法读取授权配置，请检查账户授权文件。") from exc
     if not isinstance(value, dict):
         raise GoogleHealthAuthError("授权配置格式错误。")
     return value
@@ -139,7 +139,7 @@ def profile_migration_lock(tokens_path):
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
-            raise GoogleHealthAuthError("当前档案正在同步，请等待同步完成后重试授权。", "sync_in_progress", 409) from exc
+            raise GoogleHealthAuthError("当前账户正在同步，请等待同步完成后重试授权。", "sync_in_progress", 409) from exc
         yield
     finally:
         os.close(fd)
@@ -159,7 +159,7 @@ def profile_token_lock(tokens_path):
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
-            raise GoogleHealthAuthError("此档案正在刷新令牌或完成授权，请稍后重试。", "oauth_in_progress", 409) from exc
+            raise GoogleHealthAuthError("账户正在刷新令牌或完成授权，请稍后重试。", "oauth_in_progress", 409) from exc
         yield
     finally:
         os.close(fd)
@@ -295,9 +295,9 @@ def complete_google_authorization(profile_id, redirect_url, *, session_binding="
         old_google = old.get("oauth_type") == "google"
         legacy_connected = not old_google and bool(old.get("access_token") or old.get("refresh_token"))
         if old_google and old.get("health_user_id") != health_id:
-            raise GoogleHealthAuthError("Google Health 账号与当前档案不一致，请使用原账号授权或创建新档案。", "account_mismatch")
+            raise GoogleHealthAuthError("Google Health 账号与本地记录不一致，请使用原账号授权。", "account_mismatch")
         if legacy_connected and (not old.get("user_id") or old["user_id"] != legacy_id):
-            raise GoogleHealthAuthError("Google Health 账号与此档案原 Fitbit 用户标识不一致，无法合并历史数据。请使用对应账号，或创建新档案。", "account_mismatch")
+            raise GoogleHealthAuthError("Google Health 账号与本地记录的原 Fitbit 用户标识不一致，无法合并历史数据，请使用对应账号授权。", "account_mismatch")
         same_client = old_google and old.get("oauth_client_id") == credentials["client_id"]
         refresh_token = token.get("refresh_token") or (old.get("refresh_token") if same_client else None)
         if not refresh_token:
@@ -335,7 +335,7 @@ def refresh_google_token(profile_id=None, *, tokens_path=None, session=None, _lo
             return refresh_google_token(profile_id, tokens_path=path, session=session, _lock_held=True)
     old = _read_json(path)
     if old.get("oauth_type") != "google" or not old.get("refresh_token"):
-        raise GoogleHealthAuthError("此档案尚未完成 Google Health 授权。", "google_authorization_required")
+        raise GoogleHealthAuthError("账户尚未完成 Google Health 授权。", "google_authorization_required")
     if old.get("oauth_client_id") and old.get("oauth_client_secret"):
         credentials = {"client_id": old["oauth_client_id"], "client_secret": old["oauth_client_secret"]}
     else:

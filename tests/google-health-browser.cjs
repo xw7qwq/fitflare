@@ -21,7 +21,7 @@ const base = process.env.BASE_URL;
     let saved;
     await page.route('**/api/account/setup', async route => {
       saved = route.request().postDataJSON();
-      assert.ok(route.request().headers()['x-fitbaus-csrf']);
+      assert.ok(route.request().headers()['x-fitflare-csrf']);
       await route.fulfill({ json: { message: 'Configured', profile_id: 'Demo', configured: true, authorized: false, has_data: true } });
     });
     await page.route('**/api/authorize', route => route.fulfill({ json: {
@@ -41,12 +41,12 @@ const base = process.env.BASE_URL;
     let submitted;
     await page.route('**/api/authorize-exchange', async route => {
       submitted = route.request().postDataJSON();
-      await route.fulfill({ status: 400, json: { code: 'account_mismatch', error: '账号与档案不一致' } });
+      await route.fulfill({ status: 400, json: { code: 'account_mismatch', error: '账号与本地记录不一致' } });
     });
     const callback = 'http://localhost:8080/callback?code=synthetic-code&state=synthetic-state';
     await page.fill('#authRedirectValue', callback);
     await page.click('#authExchangeSubmit');
-    await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('账号与档案不一致'));
+    await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('账号与本地记录不一致'));
     assert.deepEqual(submitted, { redirectUrl: callback });
     assert.equal(await page.isVisible('#authModal'), true);
     await page.unroute('**/api/authorize-exchange');

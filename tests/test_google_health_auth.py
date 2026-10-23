@@ -283,8 +283,8 @@ class GoogleHealthAuthTests(unittest.TestCase):
 
 class GoogleHealthAuthRouteTests(unittest.TestCase):
     def setUp(self):
-        with patch.dict(os.environ, {"FITBAUS_ADMIN_PASSWORD": "test-import-only", "FITBAUS_ADMIN_PASSWORD_HASH": "",
-                                     "FITBAUS_SESSION_SECRET_FILE": "", "FITBAUS_AUTO_SYNC_ENABLED": "false"}):
+        with patch.dict(os.environ, {"FITFLARE_ADMIN_PASSWORD": "test-import-only", "FITFLARE_ADMIN_PASSWORD_HASH": "",
+                                     "FITFLARE_SESSION_SECRET_FILE": "", "FITFLARE_AUTO_SYNC_ENABLED": "false"}):
             from server import create_app
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -313,7 +313,7 @@ class GoogleHealthAuthRouteTests(unittest.TestCase):
 
     def login(self, client=None):
         response = (client or self.client).post("/api/admin/login", json={"password": "test-password"})
-        return {"X-FitBaus-CSRF": response.json["csrf_token"]}
+        return {"X-Fitflare-CSRF": response.json["csrf_token"]}
 
     def credentials(self):
         return {"clientId": "test.apps.googleusercontent.com",

@@ -227,7 +227,7 @@ curl -fsS 'https://YOUR_HOST/api/public/v1/me/series/daily?metrics=sleep_hours,s
 
 返回可嵌入的 SVG；各指标独立归一化。缺少数据时仍返回带空状态文字的 SVG。
 
-返回：`image/svg+xml`；SVG 文本；X-FitBaus-Chart-Meta 响应头包含图表元数据（保留旧版兼容名称）。
+返回：`image/svg+xml`；SVG 文本；X-Fitflare-Chart-Meta 响应头包含图表元数据。
 
 | 参数 | 位置 | 约束 | 说明 |
 | --- | --- | --- | --- |

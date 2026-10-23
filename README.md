@@ -1,245 +1,94 @@
 # Fitflare
 
-Personal deployment: https://fitflare.lucius7.dev/
+[![Release checks](https://github.com/xw7qwq/fitflare/actions/workflows/check.yml/badge.svg)](https://github.com/xw7qwq/fitflare/actions/workflows/check.yml)
 
-![Fitflare Dashboard](https://img.shields.io/badge/Fitflare-blue)
-![Python](https://img.shields.io/badge/Python-3.7+-green)
-![Google Health API](https://img.shields.io/badge/Google_Health-API_v4-orange)
+一个给自己使用的健康数据仪表盘：通过 Google Health API 同步自己的数据，保留 Fitbit 历史记录，在中文界面查看睡眠、活动、HRV、静息心率和长期趋势。默认私有访问。
 
-## a data analytics dashboard for Google Health and Fitbit history
+## 一个账户，一份记录
 
-Fitflare is a self-hosted dashboard for analyzing your Google Health data and retained Fitbit history with beautiful visualizations, trend analysis, and comprehensive analytics. This project is not affiliated with Fitbit® or Google®
+- 六个视图：总览、睡眠、活动、恢复、体征与营养、设备与数据。
+- 总览给出恢复估算、本期要点、带迷你趋势的核心指标、近 7 天对比和月度趋势。
+- 睡眠结构与作息、活动强度与一周规律、步数日历、HRV / 静息心率个人基线等图表；未佩戴设备的日子留空并不计入均值。
+- 连接或重新授权 Google Health，手动或定时同步，查看同步进度。
+- 登录后读取健康数据，管理操作校验会话与 CSRF。
+- `/api/public/v1/me` 提供个人只读 API、SVG 趋势图和 OpenAPI 文档。
 
+没有档案切换、家庭比较、创建多个档案或网页删除健康记录的功能。后端、定时任务和旧接口也只能访问配置的唯一账户。已有 `profiles/<id>` 目录可以继续使用，不需要重命名或重新导入历史记录。
 
-| ![Chart 1](assets/chart1.jpg) | ![Chart 2](assets/chart2.jpg) | ![Chart 3](assets/chart3.jpg) |
-|---------|---------|---------|
-| ![Chart 4](assets/chart4.jpg) | ![Chart 5](assets/chart5.jpg) | ![Chart 6](assets/chart6.jpg) |
+![Fitflare 个人仪表盘](docs/images/dashboard.png)
 
-## 🚀 Features
+截图使用合成测试数据，不包含真实健康记录。
 
-- **Multiple Data Views**: Steps, Sleep Score, Minutes Asleep, Heart Rate Variability (HRV), Resting Heart Rate (RHR)
-- **Interactive Charts**: Line charts, bar charts, histograms, and scatter plots
-- **Time Period Analysis**: Daily, Monthly, and Yearly views
-- **Advanced Analytics**: Comprehensive analytics with correlation analysis
-- **Data Export**: Download charts and data as CSV files
-- **Multi-Profile Support**: Manage multiple Abit accounts
-- **Beautiful UI**: Modern, responsive design with dark theme
+## 开始使用
 
-## Public API
-
-Fitflare now exposes a versioned public read-only API for other projects.
-
-- Human docs: [`API.md`](API.md)
-- Browser docs: `/api/public/v1/docs`
-- OpenAPI JSON: `/api/public/v1/openapi.json`
-
-Key endpoints:
-
-- `/api/public/v1/profiles`
-- `/api/public/v1/profiles/<profile_id>/dashboard`
-- `/api/public/v1/profiles/<profile_id>/datasets/<dataset>`
-- `/api/public/v1/profiles/<profile_id>/series/<granularity>`
-- `/api/public/v1/profiles/<profile_id>/charts/overview-trend.svg`
-
-## Google Health API v4 setup
-
-New connections use Google OAuth and Google Health API v4. Existing Fitbit connections remain active until that profile completes Google authorization; historical CSVs are retained. Legacy Fitbit tokens cannot be reused with Google Health.
-
-1. Follow [Google Cloud setup](https://developers.google.com/health/setup): create a project, enable Google Health API, configure an external OAuth consent screen, and add your own Google account as a test user.
-2. Create a **Web application** OAuth client and register `http://localhost:8080/callback` as an authorized redirect URI. Fitflare accepts a manually pasted full redirect URL, so localhost does not need to serve a page.
-3. Enable the read-only scopes listed in [GOOGLE_HEALTH.md](GOOGLE_HEALTH.md). Save the Google Client ID and Client Secret privately.
-4. Start Fitflare with `docker compose up -d --build`. Configure the existing administrator password and production HTTPS reverse proxy as described in [DEPLOYMENT.md](DEPLOYMENT.md).
-5. Open the dashboard → administrator login → **档案管理**. For an existing profile select **连接 Google Health** and enter the Google client configuration; for a new profile fill in the new-profile form.
-6. Open Google consent, using the Google account linked to your original Fitbit data, then paste the **entire final callback URL including `code` and `state`** into Fitflare. First sign into the Google Health mobile app if the account is not linked yet.
-7. Select **同步健康数据**. Manual and scheduled syncs now use Google Health for this profile.
-
-The app validates identity before changing providers, disables legacy fetching for migrated profiles, and revokes the legacy Fitbit token. If linking fails, the previous connection and historical data remain intact. Missing permissions are reported; only permitted datasets are updated.
-
-For headless use:
+当前可运行的部署方案是 **Linux + Docker Compose**，使用 Python 3.11、Flask、Gunicorn 和原生 JavaScript。无需数据库或前端打包步骤。
 
 ```bash
-python auth/authorize_google_health.py --profile myprofile --configure
-python fetch/fetch_all.py --profile myprofile
+git clone https://github.com/xw7qwq/fitflare.git
+cd fitflare
+cp deploy/.env.production.example .env
+chmod 600 .env
 ```
 
-Google client configuration can also be supplied using `GOOGLE_HEALTH_CLIENT_ID`, `GOOGLE_HEALTH_CLIENT_SECRET`, and optional `GOOGLE_HEALTH_REDIRECT_URI`. Per-profile credentials are saved separately in `profiles/<id>/auth/google_client.json`; the old `client.json` is reserved for legacy Fitbit.
+编辑 `.env`，分别生成管理员密码和会话密钥。新安装的 `FITFLARE_PROFILE_ID=me` 表示唯一数据目录；从旧部署迁移时改成原目录名。随后：
 
-See [GOOGLE_HEALTH.md](GOOGLE_HEALTH.md) for migration details, supported data, and troubleshooting. CSV filenames retain the `fitbit_` prefix so the public read API and existing charts stay compatible.
-
-## 📊 Dashboard Features
-
-### Chart Types
-
-1. **Steps**: Daily step counts with histogram analysis
-2. **Sleep Score**: Sleep quality scores with distribution analysis
-3. **Minutes Asleep**: Sleep duration tracking
-4. **HRV**: Heart Rate Variability analysis
-5. **RHR**: Resting Heart Rate trends
-6. **Comprehensive Analytics**: Advanced correlation and trend analysis
-7. **Predictions & Family Insights**: AI-powered health predictions and family wellness analysis
-8. **Life Events**: Personal event tracking with health correlation analysis
-
-### View Options
-
-- **Daily View**: Shows individual day data points
-- **Monthly View**: Aggregated monthly averages
-- **Yearly View**: Year-over-year comparisons
-
-### Interactive Features
-
-- **Date Range Selection**: Filter data by custom date ranges
-- **Data Previews**: Expandable tables showing raw data
-- **Export Options**: Download charts and data as CSV files
-- **Trend Analysis**: Linear regression trend lines
-- **Histogram Analysis**: Distribution analysis for steps and sleep scores
-- **Profile Selection**: Dropdown to switch between different user profiles
-- **Sleep Histogram Download**: Export sleep score distribution data as CSV
-- **Comprehensive Analytics**: Advanced correlation analysis with downloadable summary
-- **Predictions & Family Insights**: AI-powered health predictions with confidence scores and family wellness analysis
-- **Life Events Tracking**: Personal event logging with sentiment analysis and health correlation
-
-### Advanced Features
-
-#### **Predictions & Family Insights**
-The Predictions & Family Insights feature provides AI-powered health forecasting and family wellness analysis:
-
-**Individual Predictions:**
-- **Sleep Score Predictions**: 7-day forecasts based on recent trends with confidence scores
-- **HRV Predictions**: Heart Rate Variability forecasting with trend analysis
-- **Steps Predictions**: Daily step count projections with activity insights
-- **RHR Predictions**: Resting Heart Rate trend predictions
-- **Weekly Pattern Analysis**: Identifies recurring weekly health patterns
-- **Health Risk Assessment**: Comprehensive risk evaluation based on multiple metrics
-
-**Family Insights (Multi-Profile):**
-- **Family Wellness Dashboard**: Compare health metrics across family members
-- **Shared Fatigue Detection**: Identifies when multiple family members show stress signals
-- **Bedtime Correlation Analysis**: Compares sleep patterns between family members
-- **Burnout Risk Assessment**: Family-wide stress and fatigue monitoring
-- **Health Trend Comparison**: Side-by-side analysis of family health trends
-
-**Requirements:**
-- Minimum 7 days of data for predictions
-- 2+ profiles required for family insights
-- Data automatically filtered by selected date range
-
-#### **Life Events**
-The Life Events feature allows you to track personal events and correlate them with your health data:
-
-**Event Management:**
-- **Event Logging**: Add personal events with dates and sentiment (positive, negative, neutral)
-- **Date Range Integration**: Events are automatically filtered by your selected date range
-- **Profile-Specific Storage**: Each profile maintains its own event history
-- **Persistent Storage**: Events are saved locally and persist between sessions
-
-**Health Correlation:**
-- **Visual Timeline**: Events are displayed alongside your health data
-- **Sentiment Analysis**: Track how different types of events affect your health metrics
-- **Pattern Recognition**: Identify correlations between life events and health trends
-- **Data Export**: Export event data for external analysis
-
-**Usage:**
-1. Select "Life Events" from the Chart dropdown
-2. Add events using the form (Date, Event Name, Sentiment)
-3. Events are automatically filtered by your date range selection
-4. View events alongside your health data for correlation analysis
-
-## 🛠️ Troubleshooting
-
-### Common Issues
-
-**Authentication and data fetching:**
-
-- The Google client redirect URI must exactly match the URI used in Fitflare.
-- Add the Google account to the consent screen's test users while the project is in Testing.
-- Use the same account as the historical Fitbit profile. Identity mismatch is rejected to prevent mixing different people's data.
-- If Google reports an unlinked account, sign into the Google Health mobile app and complete Fitbit account migration before trying again.
-- If a refresh token expires, use **重新授权**. OAuth projects in Testing can require renewed consent; see Google's OAuth documentation.
-- Missing data stays empty, rather than being stored as zero. Check the account page's per-dataset status for missing permissions and API errors.
-
-**Dashboard Not Loading:**
-- Make sure you've fetched data first using `fetch_all.py`
-- Check that CSV files exist in the `profiles/[profile_name]/csv/` directory
-- Verify the correct profile is selected in the dropdown
-- Try refreshing your browser
-
-**Profile Management Issues:**
-- If you can't see your profile data, check the profile dropdown in the UI
-- Ensure you're using the same profile name for authentication and data fetching
-- Use `python auth/authorize_fitbit.py --sync-profiles` to refresh the profile list
-- Check that profile directories exist in the `profiles/` folder
-
-**Data Reset Issues:**
-- Use `python reset.py` to clean up all user data and start fresh
-- The reset script will ask for confirmation before deleting data
-- Run without parameters to see usage instructions: `python reset.py`
-
-### Getting Help
-
-If you encounter issues:
-
-Feel free to reach out to me at: markraidc@gmail.com
-
-## 📁 Project Structure
-
-```
-fitbaus/
-├── auth/                          # Authentication scripts
-│   ├── authorize_fitbit.py
-│   ├── refresh_token.py
-│   └── client.json                # Default client credentials (if used)
-├── fetch/                         # Data fetching scripts
-│   ├── fetch_all.py              # Main data fetcher
-│   ├── fetch_steps.py
-│   ├── fetch_sleep_data.py
-│   ├── fetch_hrv_data.py
-│   └── fetch_rhr_data.py
-├── profiles/                     # Multi-profile support (primary data storage)
-│   └── [profile_name]/
-│       ├── auth/
-│       │   ├── tokens.json       # Your access tokens (auto-generated)
-│       │   └── client.json       # Your app credentials (auto-generated)
-│       └── csv/                  # Your data files
-│           ├── fitbit_activity.csv
-│           ├── fitbit_sleep.csv
-│           ├── fitbit_hrv.csv
-│           └── fitbit_rhr.csv
-├── common/                       # Shared utilities
-├── generate/                     # Chart generation scripts
-├── index.html                    # Main dashboard
-├── script.js                     # Dashboard logic
-├── style.css                     # Styling
-├── reset.py                      # Data reset utility
-├── requirements.txt              # Python dependencies
-├── Dockerfile                    # Docker configuration
-├── docker-compose.yml            # Docker Compose setup
-└── README.md                     # This file
+```bash
+sudo install -d -o 10001 -g 10001 -m 700 profiles
+docker compose up -d --build
+curl -fsS http://127.0.0.1:9000/api/health
 ```
 
-## 🔒 Privacy & Security
+配置 HTTPS 反向代理后登录页面，在“账户设置”填写 Google OAuth 客户端、完成授权并首次同步。生产样例默认私有、仅监听 `127.0.0.1:9000`，未填写管理员密码会拒绝启动。
 
-- **Local Data**: All your data is stored locally on your computer
-- **Local cache**: Health data is retrieved from Google Health and cached on your server; access follows your configured dashboard visibility
-- **Secure Authentication**: Uses OAuth 2.0 for secure API access
-- **Token Management**: Access tokens are stored securely and can be refreshed automatically
+完整步骤、已有数据迁移、备份和回滚见 [DEPLOYMENT.md](DEPLOYMENT.md)；Google Cloud 配置与权限范围见 [GOOGLE_HEALTH.md](GOOGLE_HEALTH.md)。
 
-## 📈 Data retention and API behavior
+## 数据来源
 
-Google Health daily totals use reconciled daily rollups. Historical records are fetched in bounded windows with pagination; successful datasets keep independent progress. Recent dates are fetched again to pick up delayed wearable syncs, and CSVs are merged by date without dropping older history. Google requests use bounded retries and token refresh. Legacy Fitbit rate-limit behavior applies only to profiles that have not migrated.
+同步使用 Google Health API v4 和六项只读权限（活动、健康指标、睡眠、营养、个人资料、设置）。从 Fitbit 迁移的账户需要用关联原 Fitbit 账户的 Google 账号重新授权；授权前仍可浏览已有记录，迁移不会删除历史 CSV。Google Health 不再提供的数据（终身统计、徽章、闹钟等）保留为历史缓存并在页面标注。
 
-Keep private backups of `profiles/`. Sleep scores are local estimates, not official Google Health or Fitbit scores. Some legacy metadata has no v4 equivalent; it is retained as historical cache and labelled accordingly, without making unsupported requests.
+## 能部署到 Cloudflare Workers 免费层吗？
 
-## 🎯 Tips for Best Results
+**现有版本不能原样部署；重写同步与存储后，有条件可行。** 推荐方向是 Static Assets + TypeScript Worker + D1，用 Cron 分批增量同步。免费层的 10 ms CPU 预算要求轻量请求和预计算，不能照搬 Pandas 全量分析、持久化文件、子进程和长期后台线程。
 
-1. **Regular Data Fetching**: Run `fetch_all.py` daily or weekly to maintain a complete dataset
-2. **Consistent Wear**: Wear your Fitbit device consistently for accurate data
-3. **Sync Regularly**: Ensure your Fitbit device syncs with the app regularly
-4. **Profile Management**: Use different profiles for different family members or time periods
+[完整可行性研究](docs/cloudflare-workers.md) 包含官方限制、容量估算、Google Health 授权影响及迁移验收标准。这是设计评估，尚未创建或部署 Worker。
 
-## 📝 License
+## API 与开发
 
-This project is for personal use. Please respect Fitbit's API terms of service and data usage policies.
+- [API.md](API.md)：单账户只读接口，统一通过 `/me` 访问，无需档案 ID。
+- `/api/public/v1/docs`：交互文档；`/api/public/v1/openapi.json`：OpenAPI。
+- 文档本身可匿名访问；默认私有模式的数据请求仍需登录。
 
-## Self-hosting
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.lock
+npm ci --ignore-scripts
+npx playwright install --with-deps chromium
+npm run check
+```
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for runtime settings and [GOOGLE_HEALTH.md](GOOGLE_HEALTH.md) for current authorization. The container runs as non-root, serves `/api/health`, and stores data under the mounted `profiles/` directory. Run `bash scripts/check.sh` before releasing a new image.
+开发使用 Node.js 24；完整检查需要 Docker。`npm run check` 检查源码和生成文档、构建镜像、执行单元及桌面/手机浏览器回归；所有测试只用合成数据。快速检查可单独执行 `npm test` 和 `python -m unittest discover -s tests -p 'test_*.py' -v`。
+
+API 目录维护在 `common/api_docs.py`，修改后运行 `python scripts/docs.py`。协作约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 仓库导航
+
+| 路径 | 内容 |
+| --- | --- |
+| `backend/`、`server.py` | 单账户边界、会话、接口与同步调度 |
+| `common/` | 数据路径、缓存、Google Health 客户端、指标和 API 定义 |
+| `auth/`、`fetch/` | 授权与数据同步；默认只处理配置账户 |
+| `index.html`、`app.js`、`js/`、`style.css` | 个人仪表盘 |
+| `templates/`、`docs.css` | API 文档界面 |
+| `deploy/`、`scripts/` | 配置样例、检查和部署工具 |
+| `tests/` | 合成数据、访问隔离和浏览器回归 |
+| `docs/` | Workers 研究、来源和历史记录 |
+| `profiles/` | 本地私有运行数据，不进入 Git 或镜像 |
+
+## 来源与数据
+
+项目基于 [markrai/fitbaus](https://github.com/markrai/fitbaus)，继承自 [theLucius7/fitbaus](https://github.com/theLucius7/fitbaus) 的服务器部署版本。作者和提交历史已保留；来源说明见 [docs/provenance.md](docs/provenance.md)。本项目与 Fitbit 或 Google 无隶属关系。
+
+继承源码未提供标准许可证，原说明为 “This project is for personal use.”；本次整理不另行授予整个项目的开源许可证。
+
+公开的是源码。真实 `.env`、OAuth 凭据、健康数据、日志和备份均不进入仓库。安全与私密报告说明见 [SECURITY.md](SECURITY.md)。

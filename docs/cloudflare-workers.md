@@ -1,5 +1,7 @@
 # Cloudflare Workers 免费层可行性
 
+> 更新（2026-10-23）：服务器部署已完成 Google Health API v4 迁移，同步不再访问 `api.fitbit.com`，详见 [GOOGLE_HEALTH.md](../GOOGLE_HEALTH.md)。以下 Workers 评估保持原核查日期的结论，未重新测量。
+
 核查日期：2026-09-24。本文依据当前仓库源码与 Cloudflare、Google 官方文档，属于迁移设计，**尚未在 Workers 上部署或测量 CPU，也未完成 Google Health 授权**。
 
 ## 结论
