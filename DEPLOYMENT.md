@@ -5,7 +5,7 @@
 - 正式地址：`https://fitflare.lucius7.dev/`
 - 旧地址：`https://fitbit.lucius7.dev/`，保留路径和查询参数并跳转至新地址。
 - SSH：`lucius7`
-- 部署目录：`/home/lucius7/fitbaus`
+- 部署目录：`/home/lucius7/fitbaus`（Git 检出，`main` 分支）
 - Docker Compose 服务：`fitbaus`；容器：`fitbaus-app`
 - 上游监听：`127.0.0.1:9000`，通过 Caddy 和 Cloudflare 代理提供 HTTPS。
 - 持久数据：部署目录的 `profiles/`；历史 CSV、缓存和授权凭据保留。
@@ -29,12 +29,30 @@ docker compose logs --tail 100 fitbaus
 docker exec -it fitbaus-app python fetch/fetch_all.py --profile Lucius7
 ```
 
-现有 Compose 已指向经过安全修补的构建基底和构建目录。更新前核对 `build.context`、`build.dockerfile` 和 `image`，保留前一镜像标签；不要用上游原始镜像覆盖安全基底。
+## 发布与回滚
+
+部署目录 `/home/lucius7/fitbaus` 就是 Git 仓库检出，保持在 `main` 且工作区干净；构建上下文即该目录。服务器专用设置放在两个不入库的文件中（已列入 `.gitignore`）：
+
+- `Dockerfile.host`：基于本机安全修补的运行时基底 `local/cpython-pip-security-20261022:fitbaus`，只复制应用代码。不要换回上游原始镜像。
+- `docker-compose.override.yml`：让 Compose 使用 `Dockerfile.host` 构建；镜像标签仍由 `FITBAUS_IMAGE` 决定，默认 `fitbaus-fitbaus:latest`。
+
+发布只使用统一脚本：
 
 ```bash
-docker compose build fitbaus
-docker compose up -d --no-build fitbaus
+cd /home/lucius7/fitbaus
+git switch main && git pull --ff-only
+bash scripts/deploy.sh
 ```
+
+脚本依次完成：用 `Dockerfile.host` 构建 `fitbaus-fitbaus:release-<UTC 时间>` 并运行完整发布门禁（`scripts/check.sh`，仅用合成数据）→ 确认没有正在进行的同步 → 把当前镜像标记为 `fitbaus-fitbaus:rollback` → 切换并等待健康检查 → 验证线上访问边界 → 成功后标记为 `fitbaus-fitbaus:latest`。任一步失败会自动恢复原镜像。
+
+手动回滚：
+
+```bash
+FITBAUS_IMAGE=fitbaus-fitbaus:rollback docker compose up -d --no-deps --no-build fitbaus
+```
+
+不要在其他目录构建或手工修改 Compose 的 `image`/`build`，以免线上代码与仓库不一致。缓存结构版本变化时，首个请求会自动重建 `profiles/*/cache/dashboard.json`。
 
 容器以非 root 用户运行，根文件系统只读，移除 capabilities，并启用 no-new-privileges。只挂载 `profiles/` 持久数据，令牌和客户端密钥不进入镜像。
 

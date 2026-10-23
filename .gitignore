@@ -29,3 +29,8 @@ profiles/*/cache/
 node_modules/
 test-results/
 playwright-report/
+
+# Host-only deployment files (see DEPLOYMENT.md)
+Dockerfile.host
+docker-compose.override.yml
+security/

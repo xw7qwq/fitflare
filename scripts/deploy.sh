@@ -5,6 +5,8 @@ cd "$(dirname "$0")/.."
 exec 9>".git/deploy.lock"
 flock -n 9 || { echo 'Another deployment is in progress.'; exit 1; }
 image="fitbaus-fitbaus:release-$(date -u +%Y%m%dT%H%M%SZ)"
+# A host may build on a locally patched base; the gate then validates that exact image.
+if [[ -z "${CHECK_DOCKERFILE:-}" && -f Dockerfile.host ]]; then export CHECK_DOCKERFILE=Dockerfile.host; fi
 CHECK_IMAGE="$image" bash scripts/check.sh
 validated=$(cat "${TEST_OUTPUT_DIR:-test-results}/validated-image.txt")
 [[ "$validated" == "$(docker image inspect "$image" --format '{{.Id}}')" ]]
@@ -17,7 +19,7 @@ for path in Path('/app/profiles').glob('*/cache/.fetch.lock'):
         try:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise SystemExit('Active Fitbit sync; retry deployment after it completes.')
+            raise SystemExit('Active health data sync; retry deployment after it completes.')
 PY
 runtime=$(docker compose config --format json)
 printf '%s' "$runtime" | python3 -c 'import json,sys; c=json.load(sys.stdin)["services"]["fitbaus"]; assert c["user"].split(":")[0] not in ("0","root"), "Configure a non-root FITBAUS_UID first"; assert c.get("read_only")'
