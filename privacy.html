@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>隐私政策 · Fitflare</title><link rel="stylesheet" href="/legal.css"></head>
+<body>
+<header><strong>Fitflare</strong><a href="/about.html">关于应用</a><a href="/">健康看板</a><a href="/terms.html">使用条款</a></header>
+<main>
+<h1>隐私政策</h1><p class="muted">更新日期：2026 年 10 月 23 日 · 适用于 fitbit.lucius7.dev 的 Fitflare / FitBaus 个人部署</p>
+<h2>用途与范围</h2>
+<p>Fitflare 由 Lucius7 自行部署，仅用于本人健康记录的同步、历史留存、趋势分析和展示，不提供公众健康账号注册服务。</p>
+<h2>读取哪些 Google 数据</h2>
+<p>经账号所有者在 Google 授权页面同意后，应用通过 Google Health API 使用以下六类只读权限：</p>
+<ul><li>活动与健身：步数、距离、能量消耗、活动和运动记录。</li><li>健康指标与身体测量：心率、心率变异性、体重、体脂及可用的相关指标。</li><li>睡眠：睡眠时段、阶段和统计。</li><li>个人资料：用于核对 Google Health 身份与对应的本地档案。</li><li>设置：设备及可用的账号设置，用于展示同步状态和记录上下文。</li><li>营养：饮食、饮水及相关统计。</li></ul>
+<p>实际可获取的数据取决于账号记录和 API 支持情况。应用不请求写入权限，不修改或删除 Google Health 中的记录，也不收集 Google 密码。</p>
+<h2>存储与安全</h2>
+<p>健康记录及派生统计以 CSV、JSON 和缓存等形式保存于站点所有者控制的服务器，可能包含迁移前保留的 Fitbit 历史数据。OAuth 客户端凭据和访问／刷新令牌保存在服务器的独立授权文件中，使用受限文件权限，不通过看板、静态文件或公开 API 提供。网络授权和 Google API 请求使用 HTTPS。</p>
+<h2>展示与共享</h2>
+<p class="note">当前部署的健康看板和公开只读 API 可由访客访问，其中包含站点所有者选择公开的健康记录与统计。公开内容可能被访客下载或复制；公开看板不等于私密存储。</p>
+<p>除上述本人选择公开的功能外，数据仅用于本应用的个人健康功能。Google 负责账号授权和 API 数据提供；运行网站所需的托管、网络与反向代理设施会处理服务请求及必要的运行日志。应用不出售健康数据，不将其用于广告投放、信用评估，或训练通用人工智能模型。</p>
+<p>Fitflare 对从 Google API 收到的信息的使用及向其他应用的传输，遵守 <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a> 和 <a href="https://developers.google.com/health/policies/health-api-developer-user-data-policy">Google Health API Developer and User Data Policy</a> 中的 Limited Use 要求。</p>
+<h2>保留、撤销和删除</h2>
+<p>历史记录为持续留存而保存，直到站点所有者删除。可在 <a href="https://myaccount.google.com/connections">Google 账号的第三方连接</a>中撤销 Fitflare 授权，停止后续读取。撤销授权不会自动删除已经保存的本地历史记录。</p>
+<p>需要删除本地数据时，由站点所有者停止同步并删除对应的授权文件、CSV、缓存及备份；不设自动删除期限。网站不能撤回其他访客已经复制的公开内容。有关访问、更正、删除或隐私问题，请联系维护者。</p>
+<h2>联系与更新</h2>
+<p>维护者：Lucius7 · <a href="mailto:luocixi9@gmail.com">luocixi9@gmail.com</a>。数据处理方式变更时，将同步更新本页及更新日期。</p>
+</main>
+<footer><a href="/about.html">关于 Fitflare</a><a href="/terms.html">使用条款</a><a href="/">返回看板</a></footer>
+</body></html>

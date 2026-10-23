@@ -174,6 +174,43 @@ class GoogleHealthDataTests(unittest.TestCase):
         self.assertEqual(rows[1]["steps"], "0")
         self.assertEqual(rows[1]["sedentaryMinutes"], "")
 
+    def test_sleep_without_civil_fields_uses_recorded_offsets_across_dst(self):
+        row = sleep_row({"sleep": {"interval": {
+            "startTime": "2026-11-01T03:00:00Z", "startUtcOffset": "-14400s",
+            "endTime": "2026-11-01T12:00:00Z", "endUtcOffset": "-18000s"}}})
+        self.assertEqual(row["date"], "2026-11-01")
+        self.assertEqual(row["startTime"], "2026-10-31T23:00:00")
+        self.assertEqual(row["endTime"], "2026-11-01T07:00:00")
+        self.assertEqual(row["duration"], 9 * 60 * 60 * 1000)
+
+    def test_sleep_without_civil_fields_keeps_local_wake_date(self):
+        row = sleep_row({"sleep": {"interval": {
+            "startTime": "2026-10-21T15:00:00Z", "startUtcOffset": "28800s",
+            "endTime": "2026-10-21T23:00:00Z", "endUtcOffset": "28800s"}}})
+        self.assertEqual(row["date"], "2026-10-22")
+        self.assertEqual(row["endTime"], "2026-10-22T07:00:00")
+        self.assertIsNone(row["isMainSleep"])
+
+    def test_sleep_without_civil_fields_rejects_missing_or_invalid_timezone(self):
+        for offset in (None, "invalid", "NaNs", "86400s"):
+            with self.subTest(offset=offset):
+                self.assertIsNone(sleep_row({"sleep": {"interval": {
+                    "endTime": "2026-10-21T23:00:00Z", "endUtcOffset": offset}}}))
+
+    def test_sync_sleep_without_civil_fields_updates_csv_and_cursor(self):
+        client = self.fake_sync_client(GOOGLE_HEALTH_SCOPES)
+        point = {"dataPointName": "synthetic-offset-sleep", "sleep": {"interval": {
+            "startTime": "2026-10-21T15:00:00Z", "startUtcOffset": "28800s",
+            "endTime": "2026-10-21T23:00:00Z", "endUtcOffset": "28800s"},
+            "summary": {"minutesAsleep": "450", "minutesInSleepPeriod": "480"}}}
+        client.reconcile.side_effect = lambda metric, *_: [point] if metric == "sleep" else []
+        self.assertEqual(sync_profile(None, client=client, today=date(2026, 10, 22)), 0)
+        rows, _ = csv_rows(str(self.root / "csv" / "fitbit_sleep.csv"))
+        self.assertEqual(rows[0]["date"], "2026-10-22")
+        self.assertEqual(rows[0]["minutesAsleep"], "450")
+        state = read_json(str(self.root / "cache" / "google_health_sync.json"))
+        self.assertEqual(state["completed_through"]["sleep"], "2026-10-22")
+
     def test_sleep_migration_replaces_duplicate_provider_ids_only_on_returned_days(self):
         path = str(self.root / "csv" / "fitbit_sleep.csv")
         merge_csv(path, [{"date": "2026-10-20", "logId": "old20"}, {"date": "2026-10-21", "logId": "old21"}], ["date", "logId"], sleep=True)

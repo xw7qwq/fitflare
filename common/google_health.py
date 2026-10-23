@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import time
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
@@ -317,15 +318,40 @@ def duration_ms(interval):
         return None
 
 
+def interval_civil_datetime(interval, boundary):
+    """Use civil fields when present, otherwise the recorded UTC offset.
+
+    Reconciled sessions can omit output-only civilStartTime/civilEndTime.
+    Each endpoint has its own offset, so DST and travel remain accurate.
+    """
+    civil = civil_datetime(interval.get("civil" + boundary.title() + "Time"))
+    if civil:
+        return civil
+    stamp, offset = interval.get(boundary + "Time"), interval.get(boundary + "UtcOffset")
+    if not isinstance(stamp, str) or not isinstance(offset, str):
+        return None
+    if not re.fullmatch(r"-?\d+(?:\.\d{1,9})?s", offset):
+        return None
+    try:
+        moment = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        if moment.tzinfo is None:
+            return None
+        local_zone = timezone(timedelta(seconds=float(offset[:-1])))
+        return moment.astimezone(local_zone).replace(tzinfo=None).isoformat(timespec="seconds")
+    except (ValueError, OverflowError):
+        return None
+
+
 def sleep_row(point, goal_minutes=450):
     payload = point.get("sleep") or {}
     interval, summary = payload.get("interval") or {}, payload.get("summary") or {}
-    day = civil_date(interval.get("civilEndTime"))
-    if not day:
+    start_time = interval_civil_datetime(interval, "start")
+    end_time = interval_civil_datetime(interval, "end")
+    if not end_time:
         return None
-    row = {"date": day, "logId": point.get("dataPointName") or point.get("name"),
+    row = {"date": end_time[:10], "logId": point.get("dataPointName") or point.get("name"),
            "isMainSleep": (payload.get("metadata") or {}).get("mainSleep"),
-           "startTime": civil_datetime(interval.get("civilStartTime")), "endTime": civil_datetime(interval.get("civilEndTime")),
+           "startTime": start_time, "endTime": end_time,
            "duration": duration_ms(interval)}
     for source, target in {"minutesAsleep": "minutesAsleep", "minutesAwake": "minutesAwake", "minutesToFallAsleep": "minutesToFallAsleep", "minutesAfterWakeUp": "minutesAfterWakeup", "minutesInSleepPeriod": "timeInBed"}.items():
         row[target] = integer(summary.get(source))
