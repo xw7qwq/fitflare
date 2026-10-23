@@ -28,7 +28,10 @@ export function formatMinutes(value) { return numberOrNull(value) === null ? '--
 export function minutesToHours(value) { return numberOrNull(value) === null ? null : Number((Number(value) / 60).toFixed(1)); }
 export function formatSignedDelta(value, digits = 1) {
   const number = numberOrNull(value);
-  return number === null ? '--' : `${number > 0 ? '+' : ''}${formatNumber(number, digits)}`;
+  if (number === null) return '--';
+  // Round first so values like -0.04 read as "0.0" rather than "-0.0".
+  const rounded = Number(number.toFixed(Number.isInteger(digits) && digits >= 0 && digits <= 12 ? digits : 0)) || 0;
+  return `${rounded > 0 ? '+' : ''}${formatNumber(rounded, digits)}`;
 }
 export function metricAverage(rows, key) {
   const values = rows.map(row => numberOrNull(row?.[key])).filter(value => value !== null);

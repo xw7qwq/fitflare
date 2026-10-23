@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { numberOrNull, formatNumber, metricAverage, minutesToHours, escapeHtml, formatClock, formatHoursMinutes, formatRelativeTime } from '../js/format.js';
+import { numberOrNull, formatNumber, metricAverage, minutesToHours, escapeHtml, formatSignedDelta, formatClock, formatHoursMinutes, formatRelativeTime } from '../js/format.js';
 import { selectDateWindow, weeklySeries, metricWindow, normalizeDashboard, cleanDailyRows, fillCalendar, rollingAverage, compareWindows, weekdayProfile, sleepWindow, judgeChange, summarize } from '../js/data.js';
 import { chartHasData, sparklineSvg } from '../js/charts.js';
 
@@ -113,4 +113,11 @@ test('relative time and sparkline output', () => {
   assert.equal(formatRelativeTime(null, now), '暂无');
   assert.equal(sparklineSvg([1], '#000'), '');
   assert.match(sparklineSvg([1, null, 3, 2], '#123456'), /M3\.0 [\d.]+M/);
+});
+test('signed deltas never show a negative zero', () => {
+  assert.equal(formatSignedDelta(-0.04, 1), '0.0');
+  assert.equal(formatSignedDelta(-0.4, 0), '0');
+  assert.equal(formatSignedDelta(-0.06, 1), '-0.1');
+  assert.equal(formatSignedDelta(2.25, 1), '+2.3');
+  assert.equal(formatSignedDelta(null), '--');
 });
