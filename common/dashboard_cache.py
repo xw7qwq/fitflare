@@ -311,6 +311,25 @@ def _parse_rhr_rows(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
     return parsed
 
 
+_WEAR_FIELDS = ("steps", "active_minutes", "very_active_minutes", "fairly_active_minutes", "lightly_active_minutes", "active_zone_minutes")
+_NON_WEAR_CLEARED = _WEAR_FIELDS + ("calories_out", "activity_calories", "sedentary_minutes")
+
+
+def _mark_non_wear(row: dict[str, Any]) -> None:
+    """A day with zero movement and no sleep/heart data means the tracker was off-wrist.
+
+    Its zero steps and BMR-only calories would otherwise drag averages down,
+    so the derived row stores them as missing and flags the day.
+    """
+    if row.get("steps") != 0 or any(row.get(field) for field in _WEAR_FIELDS):
+        return
+    if any(row.get(field) is not None for field in ("minutes_asleep", "hrv", "rhr")):
+        return
+    for field in _NON_WEAR_CLEARED:
+        row[field] = None
+    row["non_wear"] = True
+
+
 def _merge_daily_rows(
     activity_rows: list[dict[str, Any]],
     sleep_rows: list[dict[str, Any]],
@@ -331,6 +350,7 @@ def _merge_daily_rows(
 
     combined = [merged[key] for key in sorted(merged.keys())]
     for row in combined:
+        _mark_non_wear(row)
         minutes_asleep = row.get("minutes_asleep")
         if minutes_asleep is not None:
             row["sleep_hours"] = _round(minutes_asleep / 60.0, 1)
@@ -477,6 +497,16 @@ def _endpoint_data(snapshot: dict[str, Any], key: str) -> Any:
     if not entry.get("ok"):
         return None
     return entry.get("data")
+
+
+def _endpoint_cached_data(snapshot: dict[str, Any], key: str) -> tuple[Any, str | None]:
+    """Return live data, or data retained from an earlier provider plus its cache time."""
+    entry = _endpoint_entry(snapshot, key)
+    if entry.get("ok"):
+        return entry.get("data"), None
+    if entry.get("stale") and entry.get("data") is not None:
+        return entry.get("data"), entry.get("cached_at") or entry.get("fetched_at") or ""
+    return None, None
 
 
 def _token_metadata(profile_id: str | None) -> dict[str, Any]:
@@ -758,7 +788,8 @@ def _build_activity_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], li
     today_payload = _endpoint_data(snapshot, "today_activity_summary") or {}
     summary = today_payload.get("summary") or {}
     goals = today_payload.get("goals") or {}
-    lifetime_payload = _endpoint_data(snapshot, "lifetime_stats") or {}
+    lifetime_payload, lifetime_cached_at = _endpoint_cached_data(snapshot, "lifetime_stats")
+    lifetime_payload = lifetime_payload or {}
     activity_logs = _collect_records(_endpoint_data(snapshot, "activity_log_list"), ("activities",))
     recent_types = _collect_records(_endpoint_data(snapshot, "recent_activity_types"), ("recentActivities", "activities"))
     frequent_types = _collect_records(_endpoint_data(snapshot, "frequent_activity_types"), ("activities",))
@@ -792,7 +823,7 @@ def _build_activity_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], li
             "今日步数达成",
             steps_progress,
             "%",
-            f"{steps or 0} / {steps_goal or 0} 步",
+            f"{steps} / {steps_goal} 步" if steps is not None and steps_goal else f"今日 {steps if steps is not None else '--'} 步 · 未设置目标",
             "green",
             "读取最新活动摘要及本地保存的目标。",
         ),
@@ -800,7 +831,7 @@ def _build_activity_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], li
             "今日距离",
             total_distance,
             "km",
-            f"静息心率 {resting_hr if resting_hr is not None else '--'} bpm",
+            f"静息心率 {resting_hr} bpm" if resting_hr is not None else "今日活动摘要",
             "blue",
             "来自今日活动摘要 summary.distances.total。",
         ),
@@ -829,6 +860,20 @@ def _build_activity_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], li
             "来自历史累计统计，Google Health 暂不更新此项。",
         ),
     ]
+    best_total = _deep_get(lifetime_payload, "best", "total")
+    best = {}
+    if isinstance(best_total, dict):
+        for key in ("steps", "distance", "floors"):
+            entry = best_total.get(key)
+            if isinstance(entry, dict) and _to_float(entry.get("value")) is not None:
+                best[key] = {"value": _round(_to_float(entry.get("value")), 2), "date": _date_only(entry.get("date"))}
+    lifetime = {
+        "steps": lifetime_steps,
+        "distance": lifetime_distance,
+        "floors": _to_int(_lifetime_total_value(lifetime_payload, "floors")),
+        "best": best,
+        "cached_at": lifetime_cached_at,
+    } if lifetime_payload else None
 
     rows: list[dict[str, Any]] = []
     for record in sorted(
@@ -860,7 +905,7 @@ def _build_activity_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], li
                 "detail": detail or "活动记录",
             }
         )
-    return {"metrics": metrics}, rows
+    return {"metrics": metrics, "lifetime": lifetime}, rows
 
 
 def _build_vitals_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -1407,6 +1452,10 @@ def _latest_source_mtime(profile_id: str | None) -> float:
     return max(mtimes) if mtimes else 0.0
 
 
+# Bump when the cached payload shape or derivation changes so old caches rebuild.
+CACHE_SCHEMA_VERSION = 2
+
+
 def _needs_rebuild(profile_id: str | None, dashboard_path: str) -> bool:
     if not os.path.exists(dashboard_path):
         return True
@@ -1507,6 +1556,7 @@ def build_dashboard_cache(profile_id: str | None) -> dict[str, Any]:
     }
 
     payload = {
+        "schema_version": CACHE_SCHEMA_VERSION,
         "generated_at": _now_iso(),
         "profile": profile,
         "overview": overview_payload,
@@ -1542,8 +1592,14 @@ def load_dashboard_cache(profile_id: str | None, rebuild_if_missing: bool = True
     if rebuild_if_missing and _needs_rebuild(profile_id, dashboard_path):
         return build_dashboard_cache(profile_id)
     payload = _read_json(dashboard_path)
-    if payload:
+    if payload and (payload.get("schema_version") == CACHE_SCHEMA_VERSION or not rebuild_if_missing):
         return payload
+    if payload:
+        try:
+            return build_dashboard_cache(profile_id)
+        except OSError:
+            # A read-only volume keeps serving the older cache instead of failing.
+            return payload
     if rebuild_if_missing:
         return build_dashboard_cache(profile_id)
     return {}

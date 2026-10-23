@@ -15,7 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common.google_health import (
     ACTIVITY_COLUMNS, SLEEP_COLUMNS, ACTIVITY_SCOPE, METRICS_SCOPE, SLEEP_SCOPE,
     PROFILE_SCOPE, SETTINGS_SCOPE, GoogleHealthClient, GoogleHealthError,
-    activity_row, civil_datetime, date_value, date_windows, duration_ms, hrv_row,
+    activity_row, date_value, date_windows, duration_ms, hrv_row, interval_civil_datetime,
     number, rhr_row, sleep_row, profile_fetch_lock,
 )
 from common.profile_paths import cache_path_for, csv_path_for, get_active_profile
@@ -185,7 +185,7 @@ def exercise_rows(points):
         seconds = number(active_duration[:-1]) if active_duration.endswith("s") else None
         rows.append({"logId": point.get("dataPointName") or point.get("name"),
                      "activityName": payload.get("displayName") or payload.get("exerciseType"),
-                     "startTime": civil_datetime(interval.get("civilStartTime")),
+                     "startTime": interval_civil_datetime(interval, "start"),
                      "duration": seconds * 1000 if seconds is not None else duration_ms(interval),
                      "distance": distance / 1_000_000 if distance is not None else None,
                      "calories": number(metrics.get("caloriesKcal")), "steps": number(metrics.get("steps")),
