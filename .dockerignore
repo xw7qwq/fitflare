@@ -88,6 +88,7 @@ docs/
 deploy/
 .editorconfig
 .gitattributes
+.nvmrc
 backups/
 **/*.tar
 **/*.tar.gz
