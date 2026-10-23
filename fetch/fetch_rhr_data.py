@@ -10,6 +10,7 @@ import argparse
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from auth.refresh_token import refresh_token
+from common.google_health import require_legacy_fitbit_tokens, profile_fetch_lock
 from common.profile_paths import (
     get_active_profile,
     tokens_file_for,
@@ -347,4 +348,6 @@ def main():
         print(f"📊 Added {new_records} new resting heart rate records. Total records: {final_data_count}")
 
 if __name__ == "__main__":
-    main()
+    with profile_fetch_lock(PROFILE_ID):
+        require_legacy_fitbit_tokens(TOKENS_FILE)
+        main()

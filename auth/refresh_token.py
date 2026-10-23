@@ -136,9 +136,20 @@ def _resolve_client_credentials() -> tuple[str, str]:
 
 
 def refresh_token():
+    from common.google_health_auth import profile_token_lock
     tokens_file = _resolve_tokens_file()
-    print(f"[fitbit] Using token file: {os.path.abspath(tokens_file)}")
+    with profile_token_lock(tokens_file):
+        return _refresh_token_locked(tokens_file)
+
+
+def _refresh_token_locked(tokens_file):
     tokens = _load_tokens(tokens_file)
+    if tokens.get("oauth_type") == "google":
+        from common.google_health_auth import refresh_google_token
+        access_token = refresh_google_token(get_active_profile(None), tokens_path=tokens_file, _lock_held=True)
+        print("[google-health] Token refresh OK.")
+        return access_token
+    print(f"[fitbit] Using token file: {os.path.abspath(tokens_file)}")
     rt = tokens.get("refresh_token")
     print(f"[fitbit] Refresh token: {_mask(rt)}")
 
@@ -235,7 +246,7 @@ def refresh_token():
 if __name__ == "__main__":
     try:
         access_token = refresh_token()
-        print(f"[fitbit] Successfully refreshed token: {_mask(access_token)}")
+        print("Token refresh completed.")
     except Exception as e:
         print(f"[fitbit] Error: {e}")
         exit(1)

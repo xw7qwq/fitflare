@@ -7,6 +7,7 @@ from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common.dashboard_cache import build_dashboard_cache
+from common.google_health import is_google_profile, profile_fetch_lock
 
 
 def run_script(script_path: str, cwd: str, extra_args=None) -> tuple[int, str | None]:
@@ -92,7 +93,7 @@ def discover_profiles(fetch_dir: str) -> list[str]:
 def main():
     this_dir = os.path.dirname(os.path.abspath(__file__))
 
-    parser = argparse.ArgumentParser(description="Run Fitbit fetch scripts for one or more profiles.")
+    parser = argparse.ArgumentParser(description="Fetch health data using each profile's authorized provider.")
     parser.add_argument(
         "--stop-on-error",
         action="store_true",
@@ -167,34 +168,49 @@ def main():
         print("\n" + "=" * 60)
         print(f"Running fetches for profile: {prof or 'default'}")
         print("=" * 60)
-        for i, name in enumerate(scripts, 1):
-            print(f"\n[{i}/{len(scripts)}] Starting {name}...")
-            path = os.path.join(this_dir, name)
-            if not os.path.exists(path):
-                print(f"WARN: Script not found, skipping: {name}")
-                overall_results.append((prof, name, 127))
-                any_fail = True
-                continue
-            extra = ["--profile", prof] if prof else None
-            code, start_line = run_script(path, cwd=this_dir, extra_args=extra)
-            overall_results.append((prof, name, code, start_line))
-            if code != 0 and args.stop_on_error:
-                print("stop-on-error enabled; aborting remainder for this profile.")
-                any_fail = True
-                break
-            print(f"✅ {name} completed")
-
         try:
-            build_dashboard_cache(prof)
-            overall_results.append((prof, "build_dashboard_cache", 0, "Dashboard cache rebuilt"))
-            print("✅ build_dashboard_cache completed")
-        except Exception as e:
-            overall_results.append((prof, "build_dashboard_cache", 1, f"Dashboard cache failed: {e}"))
+            with profile_fetch_lock(prof):
+                try:
+                    profile_scripts = ["fetch_google_health.py"] if is_google_profile(prof) else scripts
+                except (OSError, ValueError) as exc:
+                    print(f"ERR: Cannot determine profile provider: {exc}")
+                    overall_results.append((prof, "provider", 1, None))
+                    any_fail = True
+                    continue
+                for i, name in enumerate(profile_scripts, 1):
+                    print(f"\n[{i}/{len(profile_scripts)}] Starting {name}...")
+                    path = os.path.join(this_dir, name)
+                    if not os.path.exists(path):
+                        print(f"WARN: Script not found, skipping: {name}")
+                        overall_results.append((prof, name, 127, None))
+                        any_fail = True
+                        continue
+                    extra = ["--profile", prof] if prof else None
+                    code, start_line = run_script(path, cwd=this_dir, extra_args=extra)
+                    overall_results.append((prof, name, code, start_line))
+                    if code != 0:
+                        any_fail = True
+                    if code != 0 and args.stop_on_error:
+                        print("stop-on-error enabled; aborting remainder for this profile.")
+                        any_fail = True
+                        break
+                    print(f"{'✅' if code == 0 else '⚠️'} {name} {'completed' if code == 0 else 'incomplete'}")
+
+                try:
+                    build_dashboard_cache(prof)
+                    overall_results.append((prof, "build_dashboard_cache", 0, "Dashboard cache rebuilt"))
+                    print("✅ build_dashboard_cache completed")
+                except Exception as e:
+                    overall_results.append((prof, "build_dashboard_cache", 1, f"Dashboard cache failed: {e}"))
+                    any_fail = True
+                    print(f"ERR: build_dashboard_cache failed: {e}")
+                    if args.stop_on_error:
+                        print("stop-on-error enabled; aborting after cache build failure.")
+                        break
+        except RuntimeError as exc:
+            print(f"ERR: Profile sync unavailable: {exc}")
+            overall_results.append((prof, "profile_lock", 1, None))
             any_fail = True
-            print(f"ERR: build_dashboard_cache failed: {e}")
-            if args.stop_on_error:
-                print("stop-on-error enabled; aborting after cache build failure.")
-                break
 
     # Summary
     print("\n" + "=" * 60)

@@ -23,7 +23,7 @@
         <button class="button" id="adminLoginBtn" type="button">管理员登录</button>
         <button class="button hidden" id="openManagerBtn" type="button">档案管理</button>
         <button class="button hidden" id="reloadBtn" type="button">重建缓存</button>
-        <button class="button button-primary hidden" id="syncBtn" type="button">同步 Fitbit</button>
+        <button class="button button-primary hidden" id="syncBtn" type="button">同步健康数据</button>
         <button class="button button-light hidden" id="adminLogoutBtn" type="button">退出管理</button>
       </div>
     </header>
@@ -51,7 +51,7 @@
       </section>
 <section class="view-panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="-1" data-view-panel="overview" hidden>
 <div class="panel-grid panel-grid-two">
-<article class="surface chart-card"><div class="section-head"><h3>日常趋势</h3><p>步数与睡眠得分，分别对应左右轴。</p></div><div class="chart-frame"><canvas id="overviewTrendChart" role="img" aria-label="日常趋势"></canvas></div></article>
+<article class="surface chart-card"><div class="section-head"><h3>日常趋势</h3><p>步数与睡眠估算得分，分别对应左右轴。</p></div><div class="chart-frame"><canvas id="overviewTrendChart" role="img" aria-label="日常趋势"></canvas></div></article>
 <article class="surface chart-card"><div class="section-head"><h3>周平均变化</h3><p>所选范围内的睡眠时长与 HRV 周均值。</p></div><div class="chart-frame"><canvas id="weeklyTrendChart" role="img" aria-label="周平均变化"></canvas></div></article>
 </div>
 <details class="surface"><summary>相关性 · 补充参考</summary><p class="muted">基于完整缓存计算，相关性不代表因果关系。</p><div class="narrative-grid" id="correlationCards"></div></details>
@@ -59,7 +59,7 @@
 <section class="view-panel" id="panel-sleep" role="tabpanel" aria-labelledby="tab-sleep" tabindex="-1" data-view-panel="sleep" hidden>
         <div class="panel-grid panel-grid-two">
           <article class="surface chart-card">
-            <div class="section-head"><h3>睡眠得分与时长</h3><p>主睡眠记录会自动去重，小睡单独计数。</p></div>
+            <div class="section-head"><h3>睡眠估算得分与时长</h3><p>主睡眠记录会自动去重，小睡单独计数。</p></div>
             <div class="chart-frame">
               <canvas id="sleepTrendChart" role="img" aria-label="睡眠趋势图"></canvas>
             </div>
@@ -117,7 +117,7 @@
 <p class="muted" id="recoveryEstimate"></p>
 <div class="panel-grid panel-grid-two">
 <article class="surface chart-card"><div class="section-head"><h3>HRV 与静息心率</h3><p>展示当前范围内的原始波动。</p></div><div class="chart-frame"><canvas id="recoveryTrendChart" role="img" aria-label="HRV 与静息心率"></canvas></div></article>
-<article class="surface chart-card"><div class="section-head"><h3>睡眠得分与 HRV</h3><p>每个点对应一条同时包含两项指标的记录。</p></div><div class="chart-frame"><canvas id="recoveryScatterChart" role="img" aria-label="睡眠得分与 HRV"></canvas></div></article>
+<article class="surface chart-card"><div class="section-head"><h3>睡眠估算得分与 HRV</h3><p>每个点对应一条同时包含两项指标的记录。</p></div><div class="chart-frame"><canvas id="recoveryScatterChart" role="img" aria-label="睡眠估算得分与 HRV"></canvas></div></article>
 </div>
 <details class="surface"><summary>最近恢复记录</summary><div class="table-wrap" id="recoveryTableWrap"></div></details>
 </section>
@@ -167,7 +167,7 @@
           </article>
 
           <article class="surface data-card">
-            <div class="section-head"><h3>授权范围与快照状态</h3><p>重新授权后，缺失 scope 的接口会在下一次同步自动补齐到本地缓存。</p></div>
+            <div class="section-head"><h3>授权范围与快照状态</h3><p>补充授权后可同步对应类别。新服务未提供的旧资料会保留为历史缓存，并在接口状态中说明。</p></div>
             <div class="scope-list" id="scopeList"></div>
           </article>
         </div>
@@ -191,7 +191,7 @@
           </article>
 
           <article class="surface table-card">
-            <div class="section-head"><h3>Fitbit 接口缓存状态</h3><p>用来确认哪些接口已缓存、哪些因为 scope 缺失被跳过。</p></div>
+            <div class="section-head"><h3>健康数据缓存状态</h3><p>查看哪些类别已更新、缺少权限或仅保留历史记录。</p></div>
             <div class="table-wrap" id="endpointTableWrap"></div>
           </article>
         </div>
@@ -228,8 +228,10 @@
       <div class="modal-grid">
         <section><h3>创建档案</h3><form id="createProfileForm" class="form-stack">
           <label class="field"><span class="field-label">档案名</span><input id="newProfileName" type="text" placeholder="例如 Lucius7" required></label>
-          <label class="field"><span class="field-label">Client ID</span><input id="newClientId" type="text" autocomplete="off" required></label>
-          <label class="field"><span class="field-label">Client Secret</span><input id="newClientSecret" type="password" autocomplete="new-password" required></label>
+          <p class="muted">使用已启用 Google Health API 的 Google Cloud Web OAuth 客户端。</p>
+          <label class="field"><span class="field-label">Google Client ID</span><input id="newClientId" type="text" autocomplete="off" required></label>
+          <label class="field"><span class="field-label">Google Client Secret</span><input id="newClientSecret" type="password" autocomplete="new-password" required></label>
+          <label class="field"><span class="field-label">已注册的回调 URI</span><input id="newRedirectUri" type="url" value="http://localhost:8080/callback" required></label>
           <button class="button button-primary" id="createProfileSubmit" type="submit">创建档案</button>
         </form></section>
         <section><h3>现有档案</h3><div class="existing-list" id="existingProfilesList"></div></section>
@@ -238,12 +240,25 @@
   </dialog>
   <dialog class="modal modal-narrow" id="authModal" aria-labelledby="authModalTitle">
     <div class="modal-dialog">
-      <div class="modal-head"><h2 id="authModalTitle">授权 Fitbit 档案</h2><button class="icon-button" data-close-modal="authModal" type="button" aria-label="关闭授权窗口">×</button></div>
-      <p class="muted">打开 Fitbit 授权页，完成后粘贴最终回调 URL 或授权 code。</p>
-      <a class="button" id="authOpenLink" href="#" rel="noreferrer noopener" target="_blank">打开 Fitbit 授权页</a>
+      <div class="modal-head"><h2 id="authModalTitle">连接 Google Health</h2><button class="icon-button" data-close-modal="authModal" type="button" aria-label="关闭授权窗口">×</button></div>
+      <p class="muted">授权读取活动、健康指标和睡眠，以更新图表；营养权限用于饮食与饮水记录，个人资料和设置权限用于账户及设备信息。可只同意需要的数据类别。请使用已关联原 Fitbit 账户的 Google 账号；首次使用需先登录 Google Health 手机应用。完成后粘贴完整回调 URL，即使 localhost 页面无法打开也可复制地址栏。</p>
+      <a class="button" id="authOpenLink" href="#" rel="noreferrer noopener" target="_blank">打开 Google 授权页</a>
       <form id="authExchangeForm" class="form-stack">
-        <label class="field"><span class="field-label">回调 URL 或 code</span><textarea id="authRedirectValue" rows="4" required></textarea></label>
+        <label class="field"><span class="field-label">完整回调 URL（含 code 和 state）</span><textarea id="authRedirectValue" rows="4" required></textarea></label>
         <button class="button button-primary" id="authExchangeSubmit" type="submit">提交授权结果</button>
+      </form>
+    </div>
+  </dialog>
+  <dialog class="modal modal-narrow" id="googleCredentialsModal" aria-labelledby="googleCredentialsTitle">
+    <div class="modal-dialog">
+      <div class="modal-head"><h2 id="googleCredentialsTitle">Google 客户端配置</h2><button class="icon-button" data-close-modal="googleCredentialsModal" type="button" aria-label="关闭客户端配置">×</button></div>
+      <p class="muted">填写 Google Cloud 中的 Web OAuth 客户端，回调 URI 必须完全一致。保存后继续授权，成功连接后保留历史数据并切换同步来源。</p>
+      <p><a href="https://developers.google.com/health/get-started" target="_blank" rel="noreferrer noopener">Google Health 接入说明</a></p>
+      <form id="googleCredentialsForm" class="form-stack">
+        <label class="field"><span class="field-label">Google Client ID</span><input id="googleClientId" type="text" autocomplete="off" required></label>
+        <label class="field"><span class="field-label">Google Client Secret</span><input id="googleClientSecret" type="password" autocomplete="new-password" required></label>
+        <label class="field"><span class="field-label">已注册的回调 URI</span><input id="googleRedirectUri" type="url" value="http://localhost:8080/callback" required></label>
+        <button class="button button-primary" id="googleCredentialsSubmit" type="submit">保存并继续授权</button>
       </form>
     </div>
   </dialog>

@@ -61,6 +61,7 @@ from common.profile_paths import (
     client_credentials_file_for,
 )
 from common.fitbit_scopes import FITBIT_DASHBOARD_SCOPE_TEXT
+from common.google_health_auth import _read_json, profile_migration_lock, profile_token_lock
 
 # Credentials are loaded dynamically - no hardcoded values for security
 REDIRECT_URI = "http://localhost:8080/callback"
@@ -455,8 +456,31 @@ def update_profiles_index(profile_id):
     except Exception as e:
         print(f"⚠️ Warning: Could not update profiles/index.json: {e}")
 
+def _require_fitbit_authorization_allowed(profile_id):
+    """An old browser tab or CLI must never reconnect a migrated Google profile."""
+    tokens_path = tokens_file_for(get_active_profile(profile_id))
+    if _read_json(tokens_path).get("oauth_type") == "google":
+        raise RuntimeError(
+            "This profile already uses Google Health. Reconnect with "
+            "auth/authorize_google_health.py --profile <profile>; Fitbit authorization is disabled."
+        )
+    return tokens_path
+
+
 def exchange_code_for_token(auth_code, redirect_uri, client_id, client_secret, profile_id=None):
-    """Exchange authorization code for access token"""
+    """Recheck provider under both locks before exchanging or saving legacy tokens."""
+    tokens_path = tokens_file_for(get_active_profile(profile_id))
+    try:
+        with profile_migration_lock(tokens_path), profile_token_lock(tokens_path):
+            _require_fitbit_authorization_allowed(profile_id)
+            return _exchange_code_for_token_locked(auth_code, redirect_uri, client_id, client_secret, profile_id)
+    except (RuntimeError, OSError) as exc:
+        print(f"Fitbit authorization not completed: {exc}")
+        return False
+
+
+def _exchange_code_for_token_locked(auth_code, redirect_uri, client_id, client_secret, profile_id=None):
+    """Exchange legacy credentials while the caller holds fetch and token locks."""
     print("\n🔄 Exchanging authorization code for access token...")
     
     token_url = "https://api.fitbit.com/oauth2/token"
@@ -489,7 +513,6 @@ def exchange_code_for_token(auth_code, redirect_uri, client_id, client_secret, p
             token_data = res.json()
             print("✅ Successfully obtained access token!")
             print(f"📊 Token expires in: {token_data.get('expires_in', 'Unknown')} seconds")
-            print(f"🔄 Refresh token: {token_data.get('refresh_token', 'N/A')[:20]}...")
             print(f"💾 Tokens saved to: {tokens_path}")
             print("\n🎉 You can now run the fetch scripts to get your Fitbit data!")
             return True
@@ -591,6 +614,11 @@ def main():
         if args.sync_profiles:
             sync_existing_profiles()
             return
+
+        # Reject before prompting for credentials or opening a Fitbit consent page.
+        # The exchange checks again under locks in case a Google consent completes
+        # while this legacy browser flow is open.
+        _require_fitbit_authorization_allowed(args.profile)
 
         # Safety check: prevent proceeding if default profile already exists
         # Applies both when user explicitly passes --profile default or chooses default interactively

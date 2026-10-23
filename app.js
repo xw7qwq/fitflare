@@ -42,7 +42,7 @@ function bindEvents() {
   for (const [id, action] of Object.entries(actions)) {
     refs[id].addEventListener('click', () => Promise.resolve().then(action).catch(handleAsyncError));
   }
-  for (const [id, action] of Object.entries({ adminPasswordForm: loginAdmin, createProfileForm: createProfile, authExchangeForm: submitAuthorization })) {
+  for (const [id, action] of Object.entries({ adminPasswordForm: loginAdmin, createProfileForm: createProfile, googleCredentialsForm: saveGoogleCredentials, authExchangeForm: submitAuthorization })) {
     refs[id].addEventListener('submit', event => { event.preventDefault(); action().catch(handleAsyncError); });
   }
   document.querySelectorAll('.tab-button').forEach(button => {
@@ -66,7 +66,7 @@ function bindEvents() {
     if (!profile) return;
     const actions = {
       open: async () => { closeModal('profileModal'); await selectProfile(profile); },
-      authorize: () => startAuthorization(profile), delete: () => deleteProfile(profile),
+      authorize: () => startAuthorization(profile), credentials: () => openGoogleCredentials(profile), delete: () => deleteProfile(profile),
     };
     Promise.resolve().then(actions[target.dataset.action]).catch(handleAsyncError);
   });
@@ -126,7 +126,7 @@ async function loadDashboard() {
   state.dashboard = null;
   state.viewModel = null;
   setDashboardLoading(true);
-  renderEmptyState(state.selectedProfile ? '正在读取本地缓存…' : '暂无档案。管理员登录后可创建并授权 Fitbit 档案。');
+  renderEmptyState(state.selectedProfile ? '正在读取本地缓存…' : '暂无档案。管理员登录后可创建并连接 Google Health 档案。');
   if (!state.selectedProfile) { setStatus('等待档案'); setDashboardLoading(false); return; }
   try {
     setStatus('正在读取缓存');
@@ -291,6 +291,7 @@ function renderAdminControls() {
   if (!authenticated) {
     closeModal("profileModal")
     closeModal("authModal")
+    closeModal("googleCredentialsModal")
   }
 
   renderExistingProfilesList()
@@ -349,6 +350,7 @@ async function createProfile() {
   const profileName = refs.newProfileName.value.trim()
   const clientId = refs.newClientId.value.trim()
   const clientSecret = refs.newClientSecret.value.trim()
+  const redirectUri = refs.newRedirectUri.value.trim()
 
   if (!profileName || !clientId || !clientSecret) {
     showToast("请把新档案信息填完整。", true)
@@ -360,7 +362,7 @@ async function createProfile() {
     await apiRequest("/api/create-profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profileName, clientId, clientSecret }),
+      body: JSON.stringify({ profileName, clientId, clientSecret, redirectUri }),
       requireAdmin: true,
     })
     refs.createProfileForm.reset()
@@ -387,12 +389,13 @@ function renderExistingProfilesList() {
             <div>
               <h5>${escapeHtml(profile.name)}</h5>
               <p>创建时间：${escapeHtml(profile.created || "未知")}</p>
+              ${state.admin.authenticated ? `<p>${profile.oauth_type === 'google' ? '已连接 Google Health' : profile.connected ? '使用旧 Fitbit 连接，请升级授权' : '等待 Google Health 授权'}</p>` : ''}
             </div>
             <span class="hero-meta-pill">${state.selectedProfile === profile.name ? "当前查看" : "可切换"}</span>
           </div>
           <div class="profile-actions">
             <button class="button button-light" type="button" data-action="open" data-profile="${escapeHtml(profile.name)}">打开</button>
-            ${state.admin.authenticated ? `<button class="button button-secondary" type="button" data-action="authorize" data-profile="${escapeHtml(profile.name)}">授权</button>` : ""}
+            ${state.admin.authenticated ? `<button class="button button-secondary" type="button" data-action="authorize" data-profile="${escapeHtml(profile.name)}">${profile.oauth_type === 'google' ? '重新授权' : '连接 Google Health'}</button><button class="button button-secondary" type="button" data-action="credentials" data-profile="${escapeHtml(profile.name)}">Google 客户端配置</button>` : ""}
             ${state.admin.authenticated ? `<button class="button button-secondary" type="button" data-action="delete" data-profile="${escapeHtml(profile.name)}">删除</button>` : ""}
           </div>
         </article>
@@ -402,15 +405,48 @@ function renderExistingProfilesList() {
 }
 
 async function startAuthorization(profileName) {
-  const payload = await apiRequest(`/api/authorize/${encodeURIComponent(profileName)}`, {
-    requireAdmin: true,
-  })
+  let payload
+  try {
+    payload = await apiRequest(`/api/authorize/${encodeURIComponent(profileName)}`, { requireAdmin: true })
+  } catch (error) {
+    if (error.code === 'google_credentials_missing') {
+      openGoogleCredentials(profileName)
+      return
+    }
+    throw error
+  }
   state.authProfile = profileName
-  refs.authModalTitle.textContent = `授权 Fitbit 档案：${profileName}`
+  refs.authModalTitle.textContent = `连接 Google Health：${profileName}`
   refs.authOpenLink.href = payload.auth_url || "#"
   refs.authRedirectValue.value = ""
   closeModal("profileModal")
   openModal("authModal")
+}
+
+function openGoogleCredentials(profileName) {
+  state.authProfile = profileName
+  refs.googleCredentialsForm.reset()
+  refs.googleCredentialsTitle.textContent = `Google 客户端配置：${profileName}`
+  closeModal('profileModal')
+  openModal('googleCredentialsModal')
+}
+
+async function saveGoogleCredentials() {
+  if (!state.authProfile) return
+  setButtonState(refs.googleCredentialsSubmit, true, '保存中…')
+  try {
+    await apiRequest('/api/google-health-credentials', {
+      method: 'POST', requireAdmin: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profileName: state.authProfile, clientId: refs.googleClientId.value.trim(),
+        clientSecret: refs.googleClientSecret.value.trim(), redirectUri: refs.googleRedirectUri.value.trim() }),
+    })
+    closeModal('googleCredentialsModal')
+    await startAuthorization(state.authProfile)
+  } finally {
+    refs.googleClientSecret.value = ''
+    setButtonState(refs.googleCredentialsSubmit, false, '保存并继续授权')
+  }
 }
 
 async function submitAuthorization() {
@@ -420,12 +456,12 @@ async function submitAuthorization() {
   }
   const redirectUrl = refs.authRedirectValue.value.trim()
   if (!redirectUrl) {
-    showToast("请粘贴回调 URL 或 code。", true)
+    showToast("请粘贴完整回调 URL（包括 code 和 state）。", true)
     return
   }
   setButtonState(refs.authExchangeSubmit, true, "提交中...")
   try {
-    await apiRequest("/api/authorize-exchange", {
+    const result = await apiRequest("/api/authorize-exchange", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -435,8 +471,16 @@ async function submitAuthorization() {
       requireAdmin: true,
     })
     closeModal("authModal")
-    showToast(`档案 ${state.authProfile} 授权完成，现在可以同步数据。`)
+    showToast(result.warning || `档案 ${state.authProfile} 已连接 Google Health，现在可以同步数据。`, Boolean(result.warning))
     await refreshProfiles(state.authProfile)
+  } catch (error) {
+    if (['account_not_linked', 'account_mismatch', 'missing_permissions', 'oauth_exchange_failed',
+      'oauth_state_expired', 'oauth_consent_denied', 'oauth_network_error', 'identity_check_failed',
+      'refresh_token_missing'].includes(error.code)) {
+      // The server consumes a callback once. Offer a fresh consent request for retry.
+      try { await startAuthorization(state.authProfile) } catch { /* Keep the original actionable error. */ }
+    }
+    throw error
   } finally {
     setButtonState(refs.authExchangeSubmit, false, "提交授权结果")
   }
@@ -508,7 +552,7 @@ function pollFetchStatus() {
           clearInterval(state.fetchTimer)
           state.fetchTimer = null
           state.fetchJobId = null
-          setButtonState(refs.syncBtn, false, "同步 Fitbit")
+          setButtonState(refs.syncBtn, false, "同步健康数据")
           setStatus("同步任务状态已清理")
         }
         return
@@ -519,11 +563,11 @@ function pollFetchStatus() {
         clearInterval(state.fetchTimer)
         state.fetchTimer = null
         state.fetchJobId = null
-        setButtonState(refs.syncBtn, false, "同步 Fitbit")
+        setButtonState(refs.syncBtn, false, "同步健康数据")
         if (payload.status === "completed") {
           setStatus("同步完成，正在刷新缓存")
           await refreshProfiles(state.selectedProfile)
-          showToast("Fitbit 数据已同步完成。")
+          showToast("健康数据已同步完成。")
         } else {
           showToast(payload.error || "同步失败。", true)
           setStatus("同步失败")
@@ -533,7 +577,7 @@ function pollFetchStatus() {
       clearInterval(state.fetchTimer)
       state.fetchTimer = null
       state.fetchJobId = null
-      setButtonState(refs.syncBtn, false, "同步 Fitbit")
+      setButtonState(refs.syncBtn, false, "同步健康数据")
       showToast(error.message || "轮询同步状态失败。", true)
       setStatus("同步状态读取失败")
     }
@@ -548,7 +592,7 @@ function updateFetchStatus(payload) {
   if (payload.message) parts.push(payload.message)
   if (payload.current_csv) parts.push(payload.current_csv)
   if (payload.throttle_active) {
-    parts.push(payload.throttle_mmss ? `限流倒计时 ${payload.throttle_mmss}` : "Fitbit 限流中")
+    parts.push(payload.throttle_mmss ? `限流倒计时 ${payload.throttle_mmss}` : "数据服务限流中")
   }
   setStatus(parts.join(" · "))
 }
@@ -573,7 +617,7 @@ async function apiRequest(path, options = {}) {
   const contentType = response.headers.get("content-type") || ""
   const payload = contentType.includes("application/json") ? await response.json() : await response.text()
   if (!response.ok) {
-    if (requireAdmin && !skipAdminHandling && [401, 403, 503].includes(response.status) && typeof payload !== "string") {
+    if (requireAdmin && !skipAdminHandling && [401, 403, 503].includes(response.status) && typeof payload?.authenticated === 'boolean') {
       applyAdminSession(payload)
     }
     const message = typeof payload === "string" ? `请求失败 (${response.status})` : payload.error || payload.message || "请求失败"

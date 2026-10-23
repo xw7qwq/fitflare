@@ -133,6 +133,8 @@ def _prepare_fetch_env(profile_id: str) -> dict:
     env["FITBIT_PROFILE"] = profile_id
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUNBUFFERED"] = "1"
+    # These child processes run while the parent owns this profile's fetch lock.
+    env["FITBAUS_FETCH_LOCK_HELD"] = os.path.abspath(os.path.join("profiles", profile_id, "auth", "tokens.json"))
     return env
 
 

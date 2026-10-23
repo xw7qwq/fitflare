@@ -14,6 +14,9 @@ __pycache__/
 cache/
 csv/
 auth/client.json
+auth/google_client.json
+auth/google_oauth_pending.json
+auth/fitbit_revocation_pending.json
 auth/tokens.json
 auth/tokens.json.bak
 profiles/index.json

@@ -4,9 +4,15 @@ import json
 import subprocess
 import threading
 from datetime import datetime
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 from common.dashboard_cache import build_dashboard_cache
-from common.fitbit_scopes import FITBIT_DASHBOARD_SCOPE_TEXT
+from common.google_health_auth import (
+    GoogleHealthAuthError,
+    begin_google_authorization,
+    complete_google_authorization,
+    save_google_credentials,
+)
+from common.profile_paths import tokens_file_for
 from .security import require_admin
 from .sync import run_fetch_script
 from . import jobs
@@ -46,76 +52,51 @@ def list_fetch_jobs():
 @bp.route('/api/create-profile', methods=['POST'])
 @require_admin(csrf=True)
 def create_profile():
-    """Create a new profile with client credentials"""
+    """New profiles use a separate Google OAuth client, never Fitbit credentials."""
+    data = request.get_json() or {}
+    profile_name = str(data.get('profileName') or '').strip()
+    from .security import valid_profile_id
+    if not valid_profile_id(profile_name):
+        return jsonify(error='Invalid profile name'), 400
+    profile_dir = os.path.dirname(os.path.dirname(tokens_file_for(profile_name)))
+    if os.path.exists(profile_dir):
+        return jsonify(error=f'Profile "{profile_name}" already exists'), 400
     try:
-        data = request.get_json()
-        profile_name = data.get('profileName', '').strip()
-        client_id = data.get('clientId', '').strip()
-        client_secret = data.get('clientSecret', '').strip()
+        # Validate before creating a profile, so failed setup leaves no empty profile.
+        from common.google_health_auth import _validate_redirect_uri
+        client_id = str(data.get('clientId') or '').strip()
+        client_secret = str(data.get('clientSecret') or '').strip()
+        if not client_id.endswith('.apps.googleusercontent.com') or not client_secret:
+            return jsonify(error='请输入有效的 Google Cloud OAuth 客户端 ID 和密钥。', code='google_credentials_missing'), 400
+        redirect_uri = _validate_redirect_uri(data.get('redirectUri'))
+        os.makedirs(profile_dir)
+        for directory in ('auth', 'csv', 'cache'):
+            os.makedirs(os.path.join(profile_dir, directory))
+        save_google_credentials(profile_name, client_id, client_secret, redirect_uri)
+        return jsonify(message=f'Profile "{profile_name}" created. Connect Google Health to start syncing.',
+                       profileName=profile_name, oauth_type='google')
+    except GoogleHealthAuthError as exc:
+        return jsonify(exc.as_dict()), exc.status
+    except OSError:
+        return jsonify(error='无法保存档案，请确认 profiles 目录可写。'), 500
 
-        # Validate inputs
-        if not profile_name or not client_id or not client_secret:
-            return jsonify({'error': 'All fields are required'}), 400
 
-        # Validate profile name (alphanumeric, hyphens, underscores only)
-        import re
-        if not re.match(r'^[a-zA-Z0-9_-]+$', profile_name):
-            return jsonify({'error': 'Profile name can only contain letters, numbers, hyphens, and underscores'}), 400
-
-        # Check if profile already exists
-        profile_dir = f'profiles/{profile_name}'
-        if os.path.exists(profile_dir):
-            return jsonify({'error': f'Profile "{profile_name}" already exists'}), 400
-
-        # Create profile directory structure
-        try:
-            os.makedirs(f'{profile_dir}/auth', exist_ok=True)
-            os.makedirs(f'{profile_dir}/csv', exist_ok=True)
-            os.makedirs(f'{profile_dir}/cache', exist_ok=True)
-        except PermissionError as pe:
-            # Provide a helpful message for common Docker-on-Linux bind-mount issues
-            msg = (
-                "Permission denied creating profile directories. If running with Docker on Linux, "
-                "ensure the host 'profiles' directory is writable by the container user (uid 10001). "
-                "Try one of: `sudo chown -R 10001:10001 profiles`, or set `user: \"${UID:-10001}:${GID:-10001}\"` "
-                "in docker-compose.yml, or relax permissions: `chmod -R 775 profiles`."
-            )
-            print(f"Error creating profile (permissions): {pe}")
-            return jsonify({
-                'error': 'Failed to create profile: permission denied',
-                'hint': msg
-            }), 500
-
-        # Save client credentials with creation timestamp
-        client_creds = {
-            'client_id': client_id,
-            'client_secret': client_secret,
-            'created_at': datetime.now().isoformat()
-        }
-
-        with open(f'{profile_dir}/auth/client.json', 'w') as f:
-            json.dump(client_creds, f, indent=2)
-
-        # Create empty tokens file
-        with open(f'{profile_dir}/auth/tokens.json', 'w') as f:
-            json.dump({}, f)
-
-        print(f"Created profile: {profile_name}")
-        return jsonify({'message': f'Profile "{profile_name}" created successfully', 'profileName': profile_name})
-
-    except PermissionError as e:
-        # Catch any remaining permission errors (e.g., opening files)
-        print(f"Error creating profile (permissions): {e}")
-        return jsonify({
-            'error': 'Failed to create profile: permission denied',
-            'hint': (
-                "Ensure the 'profiles' directory is writable. On Docker/Linux: "
-                "`sudo chown -R 10001:10001 profiles` or set `user: \"${UID:-10001}:${GID:-10001}\"` in docker-compose.yml."
-            )
-        }), 500
-    except Exception as e:
-        print(f"Error creating profile: {e}")
-        return jsonify({'error': f'Failed to create profile: {str(e)}'}), 500
+@bp.post('/api/google-health-credentials')
+@require_admin(csrf=True)
+def google_health_credentials():
+    """Prepare a migration without changing the currently active connection."""
+    data = request.get_json() or {}
+    profile_name = str(data.get('profileName') or '').strip()
+    from .security import valid_profile_id
+    if not valid_profile_id(profile_name) or not os.path.isdir(os.path.dirname(os.path.dirname(tokens_file_for(profile_name)))):
+        return jsonify(error='Profile not found'), 404
+    try:
+        save_google_credentials(profile_name, data.get('clientId'), data.get('clientSecret'), data.get('redirectUri'))
+        return jsonify(message='Google OAuth 客户端已保存，请继续 Google Health 授权。')
+    except GoogleHealthAuthError as exc:
+        return jsonify(exc.as_dict()), exc.status
+    except OSError:
+        return jsonify(error='无法保存 Google OAuth 配置，请确认档案目录可写。'), 500
 
 
 @bp.route('/api/delete-profile', methods=['POST'])
@@ -292,202 +273,53 @@ def rebuild_dashboard(profile_id):
         return jsonify({'error': f'Failed to rebuild dashboard: {str(e)}'}), 500
 
 
-def run_authorize_script(profile_id, job_id):
-    """Run authorize_fitbit.py in background thread to complete OAuth flow"""
-    try:
-        jobs.auth_jobs[job_id]['status'] = 'running'
-        jobs.auth_jobs[job_id]['start_time'] = datetime.now().isoformat()
-
-        # Ensure profile directory exists (created during create-profile)
-        profile_dir = f'profiles/{profile_id}'
-        if not os.path.exists(profile_dir):
-            jobs.auth_jobs[job_id]['status'] = 'failed'
-            jobs.auth_jobs[job_id]['end_time'] = datetime.now().isoformat()
-            jobs.auth_jobs[job_id]['error'] = f'Profile {profile_id} not found. Create it first.'
-            return
-
-        # Run the authorization script (opens browser locally and saves tokens)
-        cmd = ['python', 'auth/authorize_fitbit.py', '--profile', profile_id]
-        result = subprocess.run(
-            cmd,
-            cwd=os.getcwd(),
-            capture_output=True,
-            text=True,
-            encoding='utf-8',
-            errors='replace',
-            timeout=900  # 15 minutes to allow user interaction
-        )
-
-        jobs.auth_jobs[job_id]['status'] = 'completed' if result.returncode == 0 else 'failed'
-        jobs.auth_jobs[job_id]['end_time'] = datetime.now().isoformat()
-        jobs.auth_jobs[job_id]['return_code'] = result.returncode
-        jobs.auth_jobs[job_id]['output'] = result.stdout
-        jobs.auth_jobs[job_id]['error'] = result.stderr
-    except subprocess.TimeoutExpired:
-        jobs.auth_jobs[job_id]['status'] = 'timeout'
-        jobs.auth_jobs[job_id]['end_time'] = datetime.now().isoformat()
-        jobs.auth_jobs[job_id]['error'] = 'Authorization timed out after 15 minutes'
-    except Exception as e:
-        jobs.auth_jobs[job_id]['status'] = 'error'
-        jobs.auth_jobs[job_id]['end_time'] = datetime.now().isoformat()
-        jobs.auth_jobs[job_id]['error'] = str(e)
-
-
 @bp.route('/api/authorize/<profile_id>', methods=['GET', 'POST'])
 @require_admin(csrf=True)
 def start_authorization(profile_id):
-    """
-    GET: Return recommended mode and authorization URL.
-         If HTTPS localhost redirect is configured but cert/key are missing, return manual mode with URL.
-    POST: Start background authorization job that opens a browser and captures the callback automatically.
-    """
+    """Start Google consent; hosted UIs complete by pasting the full redirect URL."""
+    if not os.path.isdir(os.path.dirname(os.path.dirname(tokens_file_for(profile_id)))):
+        return jsonify(error='Profile not found'), 404
     try:
-        import sys
-        sys.path.append('auth')
-        from authorize_fitbit import REDIRECT_URI as DEFAULT_REDIRECT_URI  # type: ignore
-        from authorize_fitbit import exchange_code_for_token  # noqa: F401 (used by other endpoint)
-
-        # Determine redirect URI and whether HTTPS localhost is usable
-        redirect_uri = os.getenv('FITBIT_REDIRECT_URI', DEFAULT_REDIRECT_URI).strip()
-        needs_https_local = redirect_uri.startswith('https://localhost:') or redirect_uri.startswith('https://127.0.0.1:')
-        cert = os.getenv('FITBIT_SSL_CERT', '').strip()
-        key = os.getenv('FITBIT_SSL_KEY', '').strip()
-        has_https_creds = bool(cert and key and os.path.exists(cert) and os.path.exists(key))
-
-        # Load client_id for auth URL
-        client_file = os.path.join('profiles', profile_id, 'auth', 'client.json')
-        if not os.path.exists(client_file):
-            return jsonify({'error': f'Client credentials not found for profile {profile_id}'}), 400
-        with open(client_file, 'r', encoding='utf-8') as f:
-            client_json = json.load(f)
-        client_id = client_json.get('client_id', '').strip()
-        if not client_id:
-            return jsonify({'error': 'Client ID missing in client.json'}), 400
-
-        # Build authorization URL
-        from urllib.parse import urlencode
-        params = {
-            'client_id': client_id,
-            'response_type': 'code',
-            'scope': FITBIT_DASHBOARD_SCOPE_TEXT,
-            'redirect_uri': redirect_uri,
-        }
-        auth_url = f"https://www.fitbit.com/oauth2/authorize?{urlencode(params)}"
-
-        if request.method == 'GET':
-            localhost_redirect = (
-                redirect_uri.startswith('http://localhost:')
-                or redirect_uri.startswith('http://127.0.0.1:')
-                or redirect_uri.startswith('https://localhost:')
-                or redirect_uri.startswith('https://127.0.0.1:')
-            )
-
-            # For the hosted web UI, localhost callbacks are best handled with the
-            # manual flow: open Fitbit in the user's browser, then paste the final
-            # redirected URL/code back into the app.
-            if localhost_redirect:
-                detail = 'Localhost redirect detected: use manual flow.'
-                if needs_https_local and not has_https_creds:
-                    detail = 'HTTPS localhost redirect without certs: use manual flow.'
-                return jsonify({
-                    'mode': 'manual',
-                    'auth_url': auth_url,
-                    'redirect_uri': redirect_uri,
-                    'message': detail
-                })
-
-            return jsonify({
-                'mode': 'background',
-                'auth_url': auth_url,
-                'redirect_uri': redirect_uri,
-                'message': 'Background authorization supported.'
-            })
-
-        # POST: start background job
-        job_id = jobs.new_id()
-
-        jobs.auth_jobs[job_id] = {
-            'id': job_id,
-            'profile': profile_id,
-            'status': 'queued',
-            'created_time': datetime.now().isoformat(),
-            'start_time': None,
-            'end_time': None,
-            'return_code': None,
-            'output': None,
-            'error': None
-        }
-
-        thread = threading.Thread(target=run_authorize_script, args=(profile_id, job_id))
-        thread.daemon = False  # Changed from True to False to prevent premature cleanup
-        thread.start()
-
-        return jsonify({
-            'job_id': job_id,
-            'status': 'queued',
-            'message': f'Authorization started for profile: {profile_id}'
-        })
-    except Exception as e:
-        return jsonify({'error': f'Failed to start or query authorization: {str(e)}'}), 500
+        return jsonify(begin_google_authorization(profile_id, session_binding=session.get('csrf_token', '')))
+    except GoogleHealthAuthError as exc:
+        return jsonify(exc.as_dict()), exc.status
+    except OSError:
+        return jsonify(error='无法保存授权请求，请确认档案目录可写。'), 500
 
 
 @bp.route('/api/authorize-status/<job_id>')
 @require_admin()
 def authorize_status(job_id):
-    """Get status of an authorization operation"""
     if job_id not in jobs.auth_jobs:
-        return jsonify({'error': 'Job not found'}), 404
+        return jsonify(error='Job not found'), 404
     return jsonify(jobs.auth_jobs[job_id])
 
 
 @bp.route('/api/authorize-exchange', methods=['POST'])
 @require_admin(csrf=True)
 def authorize_exchange():
-    """Exchange a pasted redirect URL or code for tokens (manual flow)"""
+    """Validate state, granted permissions and account before switching providers."""
+    data = request.get_json() or {}
+    profile_name = str(data.get('profileName') or '').strip()
+    from .security import valid_profile_id
+    if not valid_profile_id(profile_name) or not os.path.isdir(os.path.dirname(os.path.dirname(tokens_file_for(profile_name)))):
+        return jsonify(error='Profile not found'), 404
     try:
-        data = request.get_json() or {}
-        profile_name = (data.get('profileName') or '').strip()
-        pasted_url = (data.get('redirectUrl') or '').strip()
-        pasted_code = (data.get('code') or '').strip()
-
-        if not profile_name:
-            return jsonify({'error': 'Profile name is required'}), 400
-
-        import sys
-        sys.path.append('auth')
-        from authorize_fitbit import (
-            extract_code_from_url,
-            exchange_code_for_token,
-            client_credentials_file_for,
-            get_active_profile,
-            REDIRECT_URI as DEFAULT_REDIRECT_URI,
+        result = complete_google_authorization(
+            profile_name, data.get('redirectUrl'), session_binding=session.get('csrf_token', ''),
         )
-
-        # Determine code
-        code = pasted_code
-        if not code:
-            code = extract_code_from_url(pasted_url) or ''
-        code = code.strip()
-        if not code:
-            return jsonify({'error': 'Authorization code not found. Paste the full redirected URL or the code.'}), 400
-
-        # Load client credentials
-        cred_path = os.path.join('profiles', profile_name, 'auth', 'client.json')
-        if not os.path.exists(cred_path):
-            return jsonify({'error': 'Client credentials file not found for this profile'}), 400
-        with open(cred_path, 'r', encoding='utf-8') as f:
-            cj = json.load(f)
-        client_id = (cj.get('client_id') or '').strip()
-        client_secret = (cj.get('client_secret') or '').strip()
-        if not client_id or not client_secret:
-            return jsonify({'error': 'Client credentials are incomplete'}), 400
-
-        redirect_uri = os.getenv('FITBIT_REDIRECT_URI', DEFAULT_REDIRECT_URI).strip()
-
-        # Exchange and save tokens
-        ok = exchange_code_for_token(code, redirect_uri, client_id, client_secret, profile_id=profile_name)
-        if ok:
-            return jsonify({'message': 'Authorization complete and tokens saved.'})
-        return jsonify({'error': 'Token exchange failed'}), 500
-    except Exception as e:
-        return jsonify({'error': f'Failed to exchange code: {str(e)}'}), 500
+        # Refresh provider and permission metadata from local tokens immediately.
+        # OAuth has already completed; a cache failure must not suggest repeating
+        # consent or hide a successful provider transition.
+        try:
+            build_dashboard_cache(profile_name)
+        except Exception:
+            result['warning'] = ' '.join(filter(None, (
+                result.get('warning'),
+                '授权已完成，但仪表盘缓存刷新失败；请稍后同步数据或重建缓存。',
+            )))
+        return jsonify(result)
+    except GoogleHealthAuthError as exc:
+        return jsonify(exc.as_dict()), exc.status
+    except OSError:
+        return jsonify(error='无法保存授权信息，请检查档案目录权限后重新授权。'), 500

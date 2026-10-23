@@ -2,9 +2,9 @@
 
 ![FitBaus Dashboard](https://img.shields.io/badge/FitBaus-blue)
 ![Python](https://img.shields.io/badge/Python-3.7+-green)
-![Fitbit API](https://img.shields.io/badge/Fitbit-API-orange)
+![Google Health API](https://img.shields.io/badge/Google_Health-API_v4-orange)
 
-## a comprehensive data analytics dashboard for Fitbit
+## a data analytics dashboard for Google Health and Fitbit history
 
 FitBaus is web-based dashboard for analyzing your Fitbit health and fitness data with beautiful visualizations, trend analysis, and comprehensive analytics. This project is not affiliated with Fitbit® or Google®
 
@@ -39,371 +39,30 @@ Key endpoints:
 - `/api/public/v1/profiles/<profile_id>/series/<granularity>`
 - `/api/public/v1/profiles/<profile_id>/charts/overview-trend.svg`
 
-## 📋 Prerequisites
+## Google Health API v4 setup
 
-Before you begin, ensure you have:
+New connections use Google OAuth and Google Health API v4. Existing Fitbit connections remain active until that profile completes Google authorization; historical CSVs are retained. Legacy Fitbit tokens cannot be reused with Google Health.
 
-1. **Docker Desktop** installed on your system (recommended) OR **Python 3.7+** for local setup
-2. **A Fitbit account** with a compatible device
-3. **A Fitbit Developer App** (you'll create this in Step 1)
+1. Follow [Google Cloud setup](https://developers.google.com/health/setup): create a project, enable Google Health API, configure an external OAuth consent screen, and add your own Google account as a test user.
+2. Create a **Web application** OAuth client and register `http://localhost:8080/callback` as an authorized redirect URI. FitBaus accepts a manually pasted full redirect URL, so localhost does not need to serve a page.
+3. Enable the read-only scopes listed in [GOOGLE_HEALTH.md](GOOGLE_HEALTH.md). Save the Google Client ID and Client Secret privately.
+4. Start FitBaus with `docker compose up -d --build`. Configure the existing administrator password and production HTTPS reverse proxy as described in [DEPLOYMENT.md](DEPLOYMENT.md).
+5. Open the dashboard → administrator login → **档案管理**. For an existing profile select **连接 Google Health** and enter the Google client configuration; for a new profile fill in the new-profile form.
+6. Open Google consent, using the Google account linked to your original Fitbit data, then paste the **entire final callback URL including `code` and `state`** into FitBaus. First sign into the Google Health mobile app if the account is not linked yet.
+7. Select **同步健康数据**. Manual and scheduled syncs now use Google Health for this profile.
 
-## 🔧 Setup Instructions
+The app validates identity before changing providers, disables legacy fetching for migrated profiles, and revokes the legacy Fitbit token. If linking fails, the previous connection and historical data remain intact. Missing permissions are reported; only permitted datasets are updated.
 
-### Option A: Docker Setup (Recommended)
-
-**Prerequisites:**
-- Docker Desktop installed on your system
-- A Fitbit Developer App (see Step 1 below)
-
-**Quick Start with Docker:**
-
-1. **Create a Fitbit Developer App:**
-   - Go to [https://www.fitbit.com/dev](https://www.fitbit.com/dev)
-   - Sign in with your Fitbit account
-   - Click **"Register an App"**
-   - Fill in the required information:
-     - **Application Name**: `FitBaus` (or any name you prefer)
-     - **Application Type**: `Personal`
-     - **OAuth 2.0 Application Type**: `Client`
-     - **Redirect URL**: `http://localhost:8080/callback`
-     - **Default Access Type**: `Read-Only`
-   - Click **"Register"**
-   - **Important**: Copy and save your **Client ID** and **Client Secret** - you'll need these in the next step
-
-2. **Clone and navigate to the project:**
-   ```bash
-   git clone <your-repo-url>
-   cd fitbaus
-   ```
-
-3. **Build and run with Docker Compose:**
-   ```bash
-   docker-compose up --build
-   ```
-   **Note**: This will start the web server automatically. You'll need to open a **new terminal window/tab** for the next step.
-
-4. **Access the container** (in a new terminal):
-   ```bash
-   docker exec -it fitbaus-app bash
-   ```
-   You should now see a prompt like: `root@cf3bf4c0e3e0:/app#`
-
-5. **Create a profile and authenticate:**
-   ```bash
-   # Create a profile (replace 'myprofile' with your desired name)
-   python auth/authorize_fitbit.py --profile myprofile
-   ```
-   
-   **Alternative - Run without parameters for guidance:**
-   ```bash
-   # Run without parameters to see usage guidance and options
-   python auth/authorize_fitbit.py
-   ```
-   This will show you the correct syntax and offer to continue with a "default" profile for single-user setups.
-   
-   **Note**: In Docker, the browser won't open automatically. You'll see instructions like:
-   ```
-   Opening browser for Fitbit login...
-   
-   Instructions:
-   1. Complete the login process in your browser
-   2. You'll be redirected to a URL that looks like:
-      https://localhost:8080/callback?code=XXXXX
-   3. Copy the ENTIRE redirected URL and paste it below
-   ```
-   
-   **What to do:**
-   1. **Look for the authorization URL** in the terminal output (it will be displayed after "Opening browser for Fitbit login...")
-   2. **Copy and paste** that URL into your browser's address bar
-   3. **Complete** the login and authorization process
-   4. **Important**: The Fitbit page will ask you to approve permissions for:
-      - Sleep data
-      - Heart rate data  
-      - Activity and exercise data
-      - Profile information
-   **Make sure to click "Allow All" to grant all permissions**
-   5. **Copy the entire redirected URL** from your browser's address bar (including `?code=XXXXX`)
-   6. **Paste it** back into the terminal when prompted
-
-6. **Fetch your data:**
-   ```bash
-   # Fetch data for your profile
-   python fetch/fetch_all.py --profile myprofile
-   ```
-   
-   **Note**: The fetch process may take several minutes and will show progress indicators. You'll see:
-   - `[1/4] Starting fetch_steps.py...`
-   - `[2/4] Starting fetch_rhr_data.py...`
-   - `[3/4] Starting fetch_hrv_data.py...`
-   - `[4/4] Starting fetch_sleep_data.py...`
-   
-   Each script will fetch data from your Fitbit account and save it to CSV files.
-
-7. **Access the dashboard:**
-   - Open http://localhost:9155 in your browser (Docker default)
-   - Your data will be persisted in the `profiles/myprofile/csv/` directory
-
-**Troubleshooting**: If you see your local machine's data instead of the Docker container's data, try:
-   - Check if you have a local web server running on port 8080: `netstat -an | findstr :8080`
-   - Verify the container is serving the right content: `docker exec -it fitbaus-app curl http://localhost:9000`
-   - Check what's actually running in the container: `docker exec -it fitbaus-app ps aux`
-   - Verify the web server is running: `docker exec -it fitbaus-app netstat -tlnp | grep :9000`
-
-#### Linux: Fix bind mount permissions (profiles/ not writable)
-If profile creation fails with a "Permission denied" error, it's usually the host `profiles/` directory not being writable by the non-root user inside the container (uid 10001).
-
-Quick fixes (run on the host):
+For headless use:
 
 ```bash
-mkdir -p profiles
-sudo chown -R 10001:10001 profiles   # match container uid/gid
-sudo chmod -R u+rwX,go+rX profiles   # allow directory traversal
-
-# Restart the app
-docker compose down
-docker compose up -d --build
-```
-
-Alternative: run the container as your host user (Linux). In `docker-compose.yml` under the `fitbaus` service, uncomment and set:
-
-```yaml
-# user: "${UID:-10001}:${GID:-10001}"
-```
-
-Then export your UID/GID before starting (or put them in a `.env` file):
-
-```bash
-export UID=$(id -u)
-export GID=$(id -g)
-docker compose up -d
-```
-
-SELinux users: add `:Z` to the volume in `docker-compose.yml` (e.g., `- ./profiles:/app/profiles:Z`).
-
-**Docker Benefits:**
-- ✅ **Isolated environment** - no Python version conflicts
-- ✅ **Easy deployment** - works on any system with Docker
-- ✅ **Data persistence** - your data survives container restarts
-- ✅ **Consistent setup** - same environment for everyone
-
-### Option B: Local Python Setup
-
-### Step 1: Create a Fitbit Developer App
-
-1. Go to [https://www.fitbit.com/dev](https://www.fitbit.com/dev)
-2. Sign in with your Fitbit account
-3. Click **"Register an App"**
-4. Fill in the required information:
-   - **Application Name**: `FitBaus` (or any name you prefer)
-   - **Application Type**: `Personal`
-   - **OAuth 2.0 Application Type**: `Client`
-   - **Redirect URL**: `http://localhost:8080/callback`
-   - **Default Access Type**: `Read-Only`
-5. Click **"Register"**
-6. **Important**: Copy and save your **Client ID** and **Client Secret** - you'll need these in the next step
-
-### Step 2: Install Dependencies
-
-Install the required Python packages:
-
-```bash
-pip install requests pandas
-```
-
-### Step 3: Create a Profile and Authenticate
-
-**Create a profile** (this organizes your data and tokens):
-
-```bash
-# Create a profile (replace 'myprofile' with your desired name)
-python auth/authorize_fitbit.py --profile myprofile
-```
-
-**Alternative - Run without parameters for guidance:**
-```bash
-# Run without parameters to see usage guidance and options
-python auth/authorize_fitbit.py
-```
-This will show you the correct syntax and offer to continue with a "default" profile for single-user setups.
-
-**What happens during authentication:**
-1. The script will prompt you for your **Client ID** and **Client Secret** from Step 1
-2. Your browser will open to Fitbit's authorization page
-3. Log in with your Fitbit credentials and authorize the app
-4. **Important**: The Fitbit page will ask you to approve permissions for:
-   - Sleep data
-   - Heart rate data  
-   - Activity and exercise data
-   - Profile information
-   **Make sure to click "Allow All" to grant all permissions**
-5. You'll be automatically redirected back to the application
-6. The script will save your access tokens to `profiles/myprofile/auth/tokens.json`
-
-**Note**: The first time you run this, you'll need to enter your credentials. They'll be saved for future use.
-
-### Step 4: Fetch Your Data
-
-Once authenticated, fetch your Fitbit data for your profile:
-
-```bash
-# Fetch data for your specific profile
+python auth/authorize_google_health.py --profile myprofile
 python fetch/fetch_all.py --profile myprofile
 ```
 
-This will download:
-- **Steps data** (daily step counts)
-- **Sleep data** (sleep scores, minutes asleep, sleep stages)
-- **Heart Rate data** (HRV and resting heart rate)
+Google client configuration can also be supplied using `GOOGLE_HEALTH_CLIENT_ID`, `GOOGLE_HEALTH_CLIENT_SECRET`, and optional `GOOGLE_HEALTH_REDIRECT_URI`. Per-profile credentials are saved separately in `profiles/<id>/auth/google_client.json`; the old `client.json` is reserved for legacy Fitbit.
 
-**Data Storage**: Your data is saved as CSV files in the `profiles/myprofile/csv/` directory (profile-scoped storage).
-
-### Step 5: Launch the Dashboard
-
-**Start the Flask web server** (required for loading CSV files and API functionality):
-
-```bash
-# Start the Flask server
-python server.py
-```
-
-**Access the dashboard:**
-- Open http://localhost:9000 in your web browser
-- The dashboard will load your Fitbit data from the CSV files
-
-**Note**: The app listens on port 9000 by default. When running with Docker, the container still listens on 9000, but the host port is mapped to 9155 by default via `docker-compose.override.yml`. You can change the host port by editing the `ports` mapping, and change the app's internal port by setting the `PORT` environment variable.
-
-**Note**: You cannot simply open `index.html` directly in your browser because the JavaScript needs to fetch CSV files, which requires a web server due to browser security restrictions.
-
-## 🔄 Daily Usage
-
-### Restarting the Container (Without Losing Data)
-
-If you need to restart the container, your data will be preserved:
-
-```bash
-# Stop the container
-docker-compose down
-
-# Start it again (your data is preserved)
-docker-compose up
-```
-
-**If you made changes to docker-compose.yml or Dockerfile**, you need to rebuild:
-
-```bash
-# Stop the container
-docker-compose down
-
-# Rebuild and start (your data is still preserved)
-docker-compose up --build
-```
-
-**Your data is safe** because it's stored in the `csv/` and `profiles/` directories on your host machine, which are mounted into the container.
-
-### Refreshing Data
-
-#### **Web Interface (Recommended)**
-The easiest way to refresh your data is using the web interface:
-
-1. **Open the dashboard** at http://localhost:9155 (Docker) or http://localhost:9000 (local)
-2. **Select your profile** from the dropdown
-3. **Click the reload icon (🔄)** to the left of the profile dropdown
-4. **Wait for completion** - the interface will show real-time progress
-5. **Data automatically refreshes** when the fetch completes
-
-#### **Command Line (Alternative)**
-You can also fetch data manually via command line:
-
-```bash
-# Access the container
-docker exec -it fitbaus-app bash
-
-# Fetch new data
-python fetch/fetch_all.py --profile myprofile
-```
-
-### Multi-Profile Support
-
-**Profile Management** is a key feature that allows you to manage multiple Fitbit accounts or different time periods:
-
-#### **Creating Profiles:**
-```bash
-# Create a new profile (replace 'profile_name' with your desired name)
-python auth/authorize_fitbit.py --profile "profile_name"
-```
-
-#### **Profile CLI Options:**
-```bash
-# Fetch data for a specific profile
-python fetch/fetch_all.py --profile "profile_name"
-
-# Fetch data for multiple specific profiles
-python fetch/fetch_all.py --profiles "profile1" "profile2" "profile3"
-
-# Fetch data for ALL discovered profiles
-python fetch/fetch_all.py --all-profiles
-
-# Use environment variable for default profile
-export FITBIT_PROFILE="myprofile"
-python fetch/fetch_all.py  # Uses the environment variable
-```
-
-#### **Profile Structure:**
-Each profile creates its own directory structure:
-```
-profiles/
-├── myprofile/
-│   ├── auth/
-│   │   ├── tokens.json          # Your access tokens
-│   │   └── client.json          # Your app credentials
-│   └── csv/                     # Your data files
-│       ├── fitbit_activity.csv
-│       ├── fitbit_sleep.csv
-│       ├── fitbit_hrv.csv
-│       └── fitbit_rhr.csv
-└── another_profile/
-    ├── auth/
-    └── csv/
-```
-
-**Legacy Mode (Default Profile):**
-If you use the "default" profile mode, data is stored in:
-```
-profiles/
-└── default/
-    ├── auth/
-    └── csv/
-```
-
-#### **Profile Benefits:**
-- ✅ **Multiple accounts** - manage family members' Fitbit data
-- ✅ **Data isolation** - each profile has separate data and tokens
-- ✅ **Easy switching** - use different profiles for different time periods
-- ✅ **Backup friendly** - each profile is self-contained
-
-### Data Management
-
-#### **Resetting Application Data:**
-If you need to start fresh or clean up your data:
-
-```bash
-# Reset all user data and return to clean state
-python reset.py
-```
-
-**What gets reset:**
-- All profile data (tokens, credentials, CSV files)
-- All user-generated content
-- Returns application to initial state
-
-**What's preserved:**
-- Application code and configuration files
-- Docker setup and requirements
-
-**Safety features:**
-- Confirmation prompt before deletion
-- Clear warning about data loss
-- Usage instructions when run without parameters
+See [GOOGLE_HEALTH.md](GOOGLE_HEALTH.md) for migration details, supported data, and troubleshooting. CSV filenames retain the `fitbit_` prefix so the public read API and existing charts stay compatible.
 
 ## 📊 Dashboard Features
 
@@ -487,16 +146,14 @@ The Life Events feature allows you to track personal events and correlate them w
 
 ### Common Issues
 
-**Authentication Problems:**
-- Ensure your redirect URL in the Fitbit app matches exactly: `https://localhost:8080/callback`
-- Check that your Client ID and Client Secret are correct
-- Make sure you've authorized the app in your Fitbit account
-- If authorizing secondary user, the authorization script may have to be run a second time for it to succeed. 
+**Authentication and data fetching:**
 
-**Data Fetching Issues:**
-- Verify your Fitbit device has synced recent data
-- Check your internet connection
-- Ensure your access tokens haven't expired (run authentication again if needed)
+- The Google client redirect URI must exactly match the URI used in FitBaus.
+- Add the Google account to the consent screen's test users while the project is in Testing.
+- Use the same account as the historical Fitbit profile. Identity mismatch is rejected to prevent mixing different people's data.
+- If Google reports an unlinked account, sign into the Google Health mobile app and complete Fitbit account migration before trying again.
+- If a refresh token expires, use **重新授权**. OAuth projects in Testing can require renewed consent; see Google's OAuth documentation.
+- Missing data stays empty, rather than being stored as zero. Check the account page's per-dataset status for missing permissions and API errors.
 
 **Dashboard Not Loading:**
 - Make sure you've fetched data first using `fetch_all.py`
@@ -560,26 +217,15 @@ fitbaus/
 ## 🔒 Privacy & Security
 
 - **Local Data**: All your data is stored locally on your computer
-- **No Cloud Storage**: Your Fitbit data never leaves your device
+- **Local cache**: Health data is retrieved from Google Health and cached on your server; access follows your configured dashboard visibility
 - **Secure Authentication**: Uses OAuth 2.0 for secure API access
 - **Token Management**: Access tokens are stored securely and can be refreshed automatically
 
-## 📈 Data Retention & API Limits
+## 📈 Data retention and API behavior
 
-- **Historical Data Access**: The Fitbit API provides access to your historical data without strict time limitations (varies by data type and device)
-- **Rate Limiting**: 150 API requests per hour per user 
-- **Rate Limit Headers**: The API includes helpful headers to monitor usage:
-  - `Fitbit-Rate-Limit-Limit`: Total requests allowed per hour
-  - `Fitbit-Rate-Limit-Remaining`: Requests remaining before hitting the limit
-  - `Fitbit-Rate-Limit-Reset`: Seconds until the limit resets
-- **Automatic backoff (what you’ll see during fetches)**:
-  - The fetch scripts automatically respect Fitbit’s rate-limit headers. When the headers indicate you’re at the limit, the scripts pause and show a live countdown (mm:ss), then resume.
-  - On HTTP 429 responses, the scripts wait for the header-provided reset time if present; otherwise they wait until the next top of the hour (plus a small buffer) before retrying.
-  - Even when a request succeeds, the scripts may still throttle briefly if the response headers suggest a reset is imminent. This avoids hitting the limit on subsequent requests.
-  - Token refresh requests also use exponential backoff and honor `Retry-After` if provided.
-  - Seeing “Retrying in mm:ss” or “Waiting until HH:00:SS” is expected behavior, not a hang.
-- **Data Backup**: Consider backing up your `csv/` directory to preserve your data
-- **Regular Fetching**: Run fetch scripts regularly to build up your historical dataset
+Google Health daily totals use reconciled daily rollups. Historical records are fetched in bounded windows with pagination; successful datasets keep independent progress. Recent dates are fetched again to pick up delayed wearable syncs, and CSVs are merged by date without dropping older history. Google requests use bounded retries and token refresh. Legacy Fitbit rate-limit behavior applies only to profiles that have not migrated.
+
+Keep private backups of `profiles/`. Sleep scores are local estimates, not official Google Health or Fitbit scores. Some legacy metadata has no v4 equivalent; it is retained as historical cache and labelled accordingly, without making unsupported requests.
 
 ## 🎯 Tips for Best Results
 
@@ -592,37 +238,6 @@ fitbaus/
 
 This project is for personal use. Please respect Fitbit's API terms of service and data usage policies.
 
-## Self-Hosting with Docker (Quick Guide)
+## Self-hosting
 
-The repository includes a Dockerfile and docker-compose.yml for running FitBaus locally on your server.
-
-- Build and run
-  - `docker compose up -d` (serves the UI on http://localhost:9155)
-  - Data persists in `./profiles` (tokens, per‑profile data) and `./csv`.
-
-- Authorize a profile
-  - Open the app (http://localhost:9155) → Profile Management → Create a profile.
-  - Use the built‑in authorization flow. Manual mode works everywhere (open URL, paste code). Background capture is optional (see below).
-
-- Fetch and explore
-  - Press ↻ to fetch data, then switch charts and ranges.
-
-- Container health & user
-  - The image runs as a non‑root `app` user.
-  - A Docker `HEALTHCHECK` hits `/api/health` for status.
-
-- Optional background OAuth
-  - Requires a local HTTPS redirect such as `https://localhost:8080/callback`.
-  - In compose, uncomment `8080:8080` and set `FITBIT_REDIRECT_URI`, `FITBIT_SSL_CERT`, `FITBIT_SSL_KEY`; mount your `./certs` directory accordingly.
-
-- Production Deployment
-  - The Docker image uses Gunicorn WSGI server (not Flask dev server) for production.
-  - Configured with 2 workers, proper timeouts, and request limits for stability.
-  - Uses UTC timezone by default; set `TZ` environment variable to match your timezone.
-  - Health check endpoint available at `/api/health` for monitoring.
-  - For high-traffic deployments, consider using a reverse proxy (Nginx/Caddy) with load balancing.
-
-- Security
-  - Do not expose the service directly to the internet without a reverse proxy and authentication.
-  - Recommended: Proxy with HTTPS (Caddy/Traefik/Nginx) and basic auth or IP allowlisting.
-  - Tokens are stored in `profiles/<id>/auth/tokens.json`; keep this directory private and backed up.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for runtime settings and [GOOGLE_HEALTH.md](GOOGLE_HEALTH.md) for current authorization. The container runs as non-root, serves `/api/health`, and stores data under the mounted `profiles/` directory. Run `bash scripts/check.sh` before releasing a new image.

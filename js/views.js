@@ -44,7 +44,7 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
           },
           {
             type: "line",
-            label: "睡眠得分",
+            label: "睡眠估算得分",
             data: daily.map((row) => row.sleep_score ?? null),
             borderColor: "#FFB020",
             backgroundColor: "rgba(255, 176, 32, 0.18)",
@@ -57,7 +57,7 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
       },
       options: dualAxisOptions({
         y: { title: { display: true, text: "步数" } },
-        y1: { position: "right", title: { display: true, text: "睡眠得分" }, min: 0, max: 100, grid: { drawOnChartArea: false } },
+        y1: { position: "right", title: { display: true, text: "睡眠估算得分" }, min: 0, max: 100, grid: { drawOnChartArea: false } },
       }),
     })
 
@@ -106,7 +106,7 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
         labels: daily.map((row) => formatDate(row.date, "short")),
         datasets: [
           {
-            label: "睡眠得分",
+            label: "睡眠估算得分",
             data: daily.map((row) => row.sleep_score ?? null),
             borderColor: "#7C8CFF",
             backgroundColor: "rgba(124, 140, 255, 0.16)",
@@ -128,7 +128,7 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
         ],
       },
       options: dualAxisOptions({
-        y: { min: 0, max: 100, title: { display: true, text: "睡眠得分" } },
+        y: { min: 0, max: 100, title: { display: true, text: "睡眠估算得分" } },
         y1: { position: "right", title: { display: true, text: "小时" }, grid: { drawOnChartArea: false } },
       }),
     })
@@ -163,7 +163,7 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
 
     renderTable(refs.sleepTableWrap, [
       { key: "date", label: "日期" },
-      { key: "score", label: "睡眠得分" },
+      { key: "score", label: "睡眠估算得分" },
       { key: "hours", label: "时长" },
       { key: "deep", label: "深睡" },
       { key: "rem", label: "REM" },
@@ -318,7 +318,7 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
       data: {
         datasets: [
           {
-            label: "睡眠得分 / HRV",
+            label: "睡眠估算得分 / HRV",
             data: daily
               .filter((row) => row.sleep_score != null && row.hrv != null)
               .map((row) => ({ x: row.sleep_score, y: row.hrv })),
@@ -330,7 +330,7 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
       },
       options: {
         scales: {
-          x: { title: { display: true, text: "睡眠得分" }, min: 0, max: 100 },
+          x: { title: { display: true, text: "睡眠估算得分" }, min: 0, max: 100 },
           y: { title: { display: true, text: "HRV (ms)" } },
         },
       },
@@ -519,7 +519,7 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
             </div>
             <div class="family-kpis">
               <div class="family-kpi">
-                <span>睡眠得分</span>
+                <span>睡眠估算得分</span>
                 <strong>${card.sleep_score == null ? "--" : formatNumber(card.sleep_score, 1)}</strong>
               </div>
               <div class="family-kpi">
@@ -543,7 +543,7 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
 
   function renderRecoverySummary() {
     const rows = state.dashboard.charts?.daily || [];
-    const metrics = [['hrv', 'HRV', 'ms'], ['rhr', '静息心率', 'bpm'], ['sleep_score', '睡眠得分', '分']];
+    const metrics = [['hrv', 'HRV', 'ms'], ['rhr', '静息心率', 'bpm'], ['sleep_score', '睡眠估算得分', '分']];
     refs.recoverySummary.innerHTML = metrics.map(([key, label, unit]) => {
       const metric = metricWindow(rows, key);
       return `<article class="detail-card"><div class="detail-label">${label} · 7 天均值</div>

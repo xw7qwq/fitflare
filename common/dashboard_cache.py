@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any
 
 from common.fitbit_scopes import FITBIT_DASHBOARD_SCOPES, FITBIT_SCOPE_LABELS
+from common.google_health_auth import GOOGLE_HEALTH_SCOPES
 from common.profile_paths import (
     cache_path_for,
     client_credentials_file_for,
@@ -484,6 +485,8 @@ def _token_metadata(profile_id: str | None) -> dict[str, Any]:
     return {
         "scopes": [part for part in scope_text.split() if part],
         "user_id": tokens.get("user_id"),
+        "oauth_type": tokens.get("oauth_type", "fitbit"),
+        "requested_scopes": list(GOOGLE_HEALTH_SCOPES) if tokens.get("oauth_type") == "google" else FITBIT_DASHBOARD_SCOPES,
     }
 
 
@@ -906,9 +909,13 @@ def _build_lifestyle_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], l
     water_log_payload = _endpoint_data(snapshot, "water_log_today") or {}
 
     calorie_goal = _parse_goal_value(food_goal_payload, ("calories",))
-    calorie_summary = _pick_numeric_leaf(food_log_payload, ("summary.calories", "calories", "summary.caloriesConsumed"))[1]
+    food_summary = food_log_payload.get("summary")
+    calorie_summary = (_to_float(food_summary.get("calories")) if isinstance(food_summary, dict)
+                       else _pick_numeric_leaf(food_log_payload, ("calories", "summary.caloriesConsumed"))[1])
     water_goal = _parse_goal_value(water_goal_payload, ("goal", "water", "amount"))
-    water_value = _pick_numeric_leaf(water_log_payload, ("summary.water", "water", "summary.amount"))[1]
+    water_summary = water_log_payload.get("summary")
+    water_value = (_to_float(water_summary.get("water")) if isinstance(water_summary, dict)
+                   else _pick_numeric_leaf(water_log_payload, ("water", "summary.amount"))[1])
 
     metrics = [
         _value_card("热量目标", _round(calorie_goal, 0), "kcal", "读取 Fitbit 营养目标。", "amber"),
@@ -951,7 +958,7 @@ def _build_account_tables(
     alarm_groups = _endpoint_data(snapshot, "device_alarms")
     alarm_groups = [row for row in (alarm_groups or []) if isinstance(row, dict)]
 
-    requested_scopes = snapshot.get("requested_scopes") or FITBIT_DASHBOARD_SCOPES
+    requested_scopes = profile.get("requested_scopes") or FITBIT_DASHBOARD_SCOPES
     granted_scopes = profile.get("scopes") or []
     missing_scopes = [scope for scope in requested_scopes if scope not in granted_scopes]
     endpoint_summary = snapshot.get("fetch_summary") or {}
@@ -1012,11 +1019,15 @@ def _build_account_tables(
             if reason.startswith("missing_scope:"):
                 scope_key = reason.split(":", 1)[1]
                 status = f"缺少 {FITBIT_SCOPE_LABELS.get(scope_key, scope_key)} scope"
+            elif reason == "unavailable_in_google_health_v4":
+                status = "新接口不提供，保留历史缓存" if entry.get("stale") else "新接口不提供"
             else:
                 status = "已跳过"
         else:
             code = entry.get("status")
             status = f"失败 ({code})" if code else "失败"
+        if entry.get("stale") and entry.get("reason") != "unavailable_in_google_health_v4":
+            status += "（历史缓存未更新）"
         endpoint_rows.append({
             "dataset": entry.get("label") or key,
             "group": GROUP_LABELS.get(str(entry.get("group")), str(entry.get("group"))),
@@ -1054,7 +1065,7 @@ def _profile_from_snapshot(profile_id: str | None, snapshot: dict[str, Any]) -> 
 
     activity_goals = activity_daily_goal.get("goals") or activity_daily_goal
     weekly_goals = activity_weekly_goal.get("goals") or activity_weekly_goal
-    scopes = snapshot.get("token_scope") or token_meta.get("scopes") or []
+    scopes = token_meta.get("scopes") or snapshot.get("token_scope") or []
 
     return {
         "id": profile_id,
@@ -1075,7 +1086,8 @@ def _profile_from_snapshot(profile_id: str | None, snapshot: dict[str, Any]) -> 
         "device_count": len(devices) if isinstance(devices, list) else 0,
         "badge_count": len(badges),
         "scopes": scopes,
-        "requested_scopes": snapshot.get("requested_scopes") or FITBIT_DASHBOARD_SCOPES,
+        "requested_scopes": token_meta.get("requested_scopes") or FITBIT_DASHBOARD_SCOPES,
+        "oauth_type": token_meta.get("oauth_type"),
         "user_id": snapshot.get("token_user_id") or token_meta.get("user_id"),
         "last_snapshot_at": snapshot.get("saved_at"),
     }
@@ -1083,7 +1095,7 @@ def _profile_from_snapshot(profile_id: str | None, snapshot: dict[str, Any]) -> 
 
 def _metric_cards(rows: list[dict[str, Any]], profile: dict[str, Any]) -> list[dict[str, Any]]:
     specs = [
-        ("sleep_score", "睡眠得分", "分", True, 1.0, "blue"),
+        ("sleep_score", "睡眠估算得分", "分", True, 1.0, "blue"),
         ("sleep_hours", "睡眠时长", "小时", True, 0.2, "amber"),
         ("steps", "步数", "步", True, 300.0, "green"),
         ("active_minutes", "活跃分钟", "分钟", True, 10.0, "teal"),
@@ -1198,7 +1210,7 @@ def _build_data_catalog(
             "label": "睡眠",
             "view": "sleep",
             "tone": "blue",
-            "summary": "睡眠得分、时长、阶段结构和小睡记录。",
+            "summary": "睡眠估算得分、时长、阶段结构和小睡记录。",
             "coverage": coverage.get("sleep") or {},
             "metrics": _catalog_metric_entries(metric_cards, ["sleep_score", "sleep_hours"]),
             "sources": [
@@ -1443,9 +1455,9 @@ def build_dashboard_cache(profile_id: str | None) -> dict[str, Any]:
     }
 
     correlations = [
-        _build_correlation(daily_rows, "sleep_score", "hrv", "睡眠得分 vs HRV"),
-        _build_correlation(daily_rows, "steps", "sleep_score", "步数 vs 睡眠得分"),
-        _build_correlation(daily_rows, "sleep_score", "rhr", "睡眠得分 vs 静息心率"),
+        _build_correlation(daily_rows, "sleep_score", "hrv", "睡眠估算得分 vs HRV"),
+        _build_correlation(daily_rows, "steps", "sleep_score", "步数 vs 睡眠估算得分"),
+        _build_correlation(daily_rows, "sleep_score", "rhr", "睡眠估算得分 vs 静息心率"),
     ]
 
     overview_payload = {
@@ -1482,6 +1494,8 @@ def build_dashboard_cache(profile_id: str | None) -> dict[str, Any]:
         "account": account_section,
     }
     snapshot_status_payload = {
+        "provider": snapshot.get("provider", "fitbit"),
+        "sync_status": snapshot.get("sync_status"),
         "has_snapshot": bool(snapshot),
         "saved_at": snapshot.get("saved_at"),
         "has_profile": bool(_endpoint_entry(snapshot, "profile").get("ok")),

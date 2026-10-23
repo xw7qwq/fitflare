@@ -19,9 +19,12 @@ def list_profiles():
     if os.path.exists(profiles_dir):
         for entry in visible_profile_ids():
             profile_path = os.path.join(profiles_dir, entry)
-            if os.path.isdir(profile_path) and os.path.exists(os.path.join(profile_path, 'auth', 'tokens.json')):
+            if os.path.isdir(profile_path) and any(os.path.exists(os.path.join(profile_path, 'auth', name))
+                                                  for name in ('tokens.json', 'google_client.json')):
                 # Try to get creation date from client.json
-                client_file = os.path.join(profile_path, 'auth', 'client.json')
+                client_file = os.path.join(profile_path, 'auth', 'google_client.json')
+                if not os.path.exists(client_file):
+                    client_file = os.path.join(profile_path, 'auth', 'client.json')
                 creation_date = 'Unknown'
 
                 if os.path.exists(client_file):
@@ -35,10 +38,19 @@ def list_profiles():
                     except Exception as e:
                         print(f"Error reading creation date for {entry}: {e}")
 
-                profiles.append({
+                profile = {
                     'name': entry,
                     'created': creation_date
-                })
+                }
+                if is_admin():
+                    try:
+                        with open(os.path.join(profile_path, 'auth', 'tokens.json'), encoding='utf-8') as handle:
+                            tokens = json.load(handle)
+                        profile['oauth_type'] = tokens.get('oauth_type', 'fitbit')
+                        profile['connected'] = bool(tokens.get('refresh_token'))
+                    except (OSError, ValueError):
+                        profile.update(oauth_type='fitbit', connected=False)
+                profiles.append(profile)
 
     # Sort by profile name
     profiles.sort(key=lambda x: x['name'])

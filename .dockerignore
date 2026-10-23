@@ -60,6 +60,9 @@ docker-compose.yml
 # Runtime data and credentials are mounted, never baked into an image.
 profiles/
 **/client.json
+**/google_client.json
+**/google_oauth_pending.json
+**/fitbit_revocation_pending.json
 **/tokens*.json
 **/tokens*.json.bak
 .env.*
