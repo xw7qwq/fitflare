@@ -105,11 +105,23 @@ Fitflare 不会删除其他目录，但不会枚举、访问或同步它们，�
 
 ## 更新与回滚
 
-部署主机需要 Python 3、Node.js 24、npm、Chromium 系统依赖和 `flock`。先确认当前没有正在运行的同步，也没有其他终端在抓取数据。
+部署主机需要 Python 3、Node.js 24、npm、Chromium 系统依赖和 `flock`。门禁中的文档检查也会导入 Python 应用模块，不能只在镜像中安装依赖。首次在部署主机准备检查环境：
+
+```bash
+cd /home/lucius7/fitflare
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.lock
+npm ci --ignore-scripts
+npx playwright install --with-deps chromium
+```
+
+每次更新时激活虚拟环境；锁文件有变化时重新安装对应依赖。先确认当前没有正在运行的同步，也没有其他终端在抓取数据。
 
 ```bash
 cd /home/lucius7/fitflare
 git switch main && git pull --ff-only
+. .venv/bin/activate
 bash scripts/deploy.sh
 ```
 
