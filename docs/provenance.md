@@ -16,6 +16,14 @@ fitflare 整理自 `lucius7` 服务器 `/home/lucius7/fitbaus` 的部署源码�
 
 `docs/history/` 保存有日期的原始改造记录，旧提交、镜像标签、服务器路径和验证结论属于当时的上下文。当前安装与维护以根目录 README、DEPLOYMENT 和 API 文档为准。
 
+## 2026-10-23 分支整合收尾
+
+[PR #1](https://github.com/xw7qwq/fitflare/pull/1) 将 Google Health API v4 的线上实现与私有单账户重构合并到 `main`，合并提交为 `948992d977c4c874813e4c857054210369a978da`。新仓库原有提交仍在历史中，没有强推。该提交的 Release checks 已通过。
+
+收尾时核对远端只保留 `main`，没有待合并 PR 或远端标签。服务器本地残留的三个 2026-09-23 标签仍指向净化前历史；已在仓库外做权限受限的私有 bundle 备份并移除这些本地标签。新仓库的 `main` 不包含已知的旧凭据对象。发布门禁现包含历史审计，防止旧标签或分支误推后再次混入。
+
+上述处理没有更改旧公开仓库 `theLucius7/fitbaus`，也不能证明旧 Fitbit 密钥已撤销。旧凭据仍需在提供方后台撤销或重置。
+
 ## 许可与第三方组件
 
 继承源码没有标准 `LICENSE`、`COPYING` 或 `NOTICE` 文件，原 README 仅说明：

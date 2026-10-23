@@ -115,10 +115,18 @@ bash scripts/deploy.sh
 
 脚本依次执行：
 
-1. 构建 `fitflare:release-<UTC 时间>`（存在 `Dockerfile.host` 时自动使用它），用合成数据跑完整发布门禁。
-2. 检查同步锁，以及 Compose 的非 root、只读根文件系统配置。
-3. 保留当前镜像为 `fitflare:rollback`，替换应用容器。
-4. 等待健康检查，再验证线上数据访问边界；成功后标记为 `fitflare:latest`。
+1. 获取远端 `main`，确认当前是干净的 `main`，且提交与 `origin/main` 一致；不满足则停止。部署锁放在 Git 公共目录，避免多个工作树同时发布。
+2. 审计源文件和完整 Git 历史，构建 `fitflare:release-<UTC 时间>`（存在 `Dockerfile.host` 时自动使用它），用合成数据跑完整发布门禁。
+3. 再次核对源码提交和镜像标签，检查同步锁，以及 Compose 的非 root、只读根文件系统配置。
+4. 保留当前镜像为 `fitflare:rollback`，替换应用容器。
+5. 等待健康检查，再验证线上数据访问边界；成功后标记为 `fitflare:latest` 并写入 `test-results/deployment.json`。
+
+镜像的 `org.opencontainers.image.revision` 标签记录完整源码提交，`dev.fitflare.source-dirty` 记录构建时是否有未提交改动。`test-results/release-gate.json` 关联提交、镜像 ID 和合成测试结果；`deployment.json` 另记录发布时间与前一镜像 ID。这些文件不含运行配置或健康数据，不进入 Git。`test-results/` 的记录会被后续运行更新，需要长期保留时另存至仓库外的发布记录目录。查看当前运行版本：
+
+```bash
+docker inspect fitflare-app --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+cat test-results/deployment.json
+```
 
 切换后的健康或访问检查失败时，脚本自动恢复前一镜像。回滚只恢复应用镜像，**不会恢复 `.env`、Compose 文件或数据**。手工回滚：
 
