@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from common import dashboard_cache, profile_paths
-from common.dashboard_cache import _build_activity_tables, _merge_daily_rows, _aggregate_rows
+from common.dashboard_cache import _build_activity_tables, _build_trend, _merge_daily_rows, _aggregate_rows, _window_values
 from fetch.fetch_google_health import exercise_rows
 
 
@@ -49,6 +49,22 @@ class DashboardDerivationTests(unittest.TestCase):
         self.assertEqual(section["metrics"][4]["value"], 2286594)
         self.assertEqual(section["lifetime"]["best"]["steps"], {"value": 27274, "date": "2026-02-20"})
         self.assertEqual(section["lifetime"]["cached_at"], "2026-10-23T08:05:43")
+
+    def test_trend_windows_count_recorded_values_and_never_overlap(self):
+        rows = [{"v": value} for value in (1, 2, 3, 4, 5, 6, 7)] + [{"v": None}, {"v": None}] + [{"v": value} for value in range(10, 17)]
+        self.assertEqual(_window_values(rows, "v", 7), [10, 11, 12, 13, 14, 15, 16])
+        self.assertEqual(_window_values(rows, "v", 7, offset=7), [1, 2, 3, 4, 5, 6, 7])
+        self.assertEqual(_window_values(rows, "v", 7, offset=20), [])
+
+    def test_trend_direction_is_numeric_and_assessment_applies_polarity(self):
+        rising = [{"rhr": 60}] * 7 + [{"rhr": 63}] * 7
+        trend = _build_trend(rising, "rhr", higher_is_better=False, tolerance=1)
+        self.assertEqual((trend["direction"], trend["assessment"], trend["delta"]), ("up", "worsening", 3.0))
+        trend = _build_trend(rising, "rhr", higher_is_better=True, tolerance=1)
+        self.assertEqual((trend["direction"], trend["assessment"]), ("up", "improving"))
+        flat = _build_trend(rising, "rhr", higher_is_better=False, tolerance=5)
+        self.assertEqual((flat["direction"], flat["assessment"]), ("flat", "stable"))
+        self.assertEqual(_build_trend([{"rhr": 60}], "rhr", False, 1)["assessment"], "stable")
 
     def test_outdated_cache_schema_is_rebuilt(self):
         with tempfile.TemporaryDirectory() as root, patch.object(profile_paths, "ROOT_DIR", root):

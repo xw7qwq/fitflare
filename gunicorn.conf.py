@@ -10,6 +10,10 @@ try:
 except ValueError:
     _port_int = 9000
 bind = f"0.0.0.0:{_port_int}"
+# The published port is bound to the host loopback and only the local reverse
+# proxy reaches it (via the Docker bridge, not 127.0.0.1). Trust its
+# X-Forwarded-Proto so absolute API links use https.
+forwarded_allow_ips = os.getenv("FITFLARE_FORWARDED_ALLOW_IPS", "*")
 backlog = 2048
 
 # Worker processes

@@ -28,7 +28,7 @@ def make_fixture(profiles_dir):
         tables['sleep'] = [dict(date=row['date'], score=row['sleep_score'], hours=row['sleep_hours'], deep=70, rem=90, light=260, awake=10) for row in reversed(daily)]
         tables['activity'] = list(reversed(daily))
         tables['recovery'] = list(reversed(daily))
-        payload = dict(schema_version=2, generated_at='2026-09-23T12:00:00', profile=dict(id=profile, display_name=profile),
+        payload = dict(schema_version=3, generated_at='2026-09-23T12:00:00', profile=dict(id=profile, display_name=profile),
                        overview=dict(latest_date=daily[-1]['date'], latest_sync_at='2026-09-23T12:00:00', recovery_score=70),
                        coverage={}, stats=stats, correlations=[], charts=dict(daily=daily,weekly=[],monthly=monthly),
                        sections={key: {'metrics': []} for key in ('activity','body','vitals','lifestyle','account')},

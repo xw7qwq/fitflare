@@ -86,6 +86,11 @@ class AssetRouteTests(unittest.TestCase):
         revalidated = self.client.get('/js/format.js', headers={'If-None-Match': f'"{self.assets.version("js/format.js")}"'})
         self.assertEqual(revalidated.status_code, 304)
 
+    def test_section_items_expose_key_like_other_catalogs(self):
+        from common.public_api import build_section_payload
+        payload = build_section_payload({'sections': {'activity': {'metrics': []}}}, 'activity')
+        self.assertEqual((payload['key'], payload['section']), ('activity', 'activity'))
+
     def test_docs_page_uses_fingerprinted_assets(self):
         html = self.client.get('/api/public/v1/docs').get_data(as_text=True)
         self.assertIn(self.assets.url('docs.css'), html)

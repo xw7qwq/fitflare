@@ -16,9 +16,9 @@ curl -fsS 'https://YOUR_HOST/api/public/v1/me'
 
 public/v1 只提供 GET 读取，不会主动发起 Google Health 同步。缺失或过期的派生缓存可能在读取时本地重建。
 
-所有 /me 接口始终读取本站唯一账户，不需要选择或填写档案 ID。默认私有模式要求本站管理员会话；只有部署者显式开启公开模式才允许匿名读取。文档始终可读。
+所有 /me 接口始终读取本站唯一账户，不需要选择或填写档案 ID。公开模式下任何人可匿名读取，无需登录；私有模式要求本站登录会话。文档页顶部标注当前部署的模式，文档始终可读。
 
-私有模式请先在仪表盘登录，再使用同源浏览器请求。这里不提供 API Key 或 Bearer Token，也不收集、保存或展示管理员密码。cURL 与 Python 示例默认不带会话。
+这里不提供 API Key 或 Bearer Token。私有模式请先在仪表盘登录，再使用同源浏览器请求；cURL 与 Python 示例默认不带会话。
 
 匿名公开版 API 允许跨域读取；私有模式和管理员会话响应不开放 CORS。所有 API 响应使用 private, no-store，不应在共享缓存中保存健康数据。
 
@@ -37,6 +37,14 @@ datasets 从完整本地结构化数据集的 offset 开始取 limit 条，默�
 metrics 按逗号分隔，只选择当前数据中存在的数值指标。省略时取全部可用指标；全部名称都不匹配时也回退到全部可用指标，不返回 400。
 
 SVG 对各指标分别归一化，适合比较走势，不适合读取绝对值。需要绝对值请使用 series JSON。
+
+## 指标与趋势
+
+指标卡的 latest 为最近一次有效记录（latest_date 为其日期）；avg7 / avg30 为最近 7 / 30 条有效记录的均值，按记录计数而非日历天，缺失的日子不计入。未佩戴设备的日子（无步数、无睡眠和心率）记为缺失。
+
+trend 比较最近 7 条有效记录与再往前 7 条有效记录的均值（两段不重叠）：delta 与 percent 为差值和百分比；direction 是数值方向 up / down / flat；assessment 结合指标好坏方向给出 improving / worsening / stable，例如静息心率下降为 improving。变化幅度在指标容差内时为 flat / stable。
+
+睡眠估算得分由 Fitflare 本地按时长、效率、睡眠结构与清醒时间计算，不是 Google 或 Fitbit 官方分数。
 
 ## 响应与错误
 
@@ -293,7 +301,7 @@ curl -fsS 'https://YOUR_HOST/api/public/v1/me/sections'
 
 返回指定分区的指标摘要。
 
-返回：`application/json`；data.section、data.label、data.summary。
+返回：`application/json`；data.key（与 data.section 相同）、data.label、data.summary。
 
 | 参数 | 位置 | 约束 | 说明 |
 | --- | --- | --- | --- |

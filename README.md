@@ -2,15 +2,15 @@
 
 [![Release checks](https://github.com/xw7qwq/fitflare/actions/workflows/check.yml/badge.svg)](https://github.com/xw7qwq/fitflare/actions/workflows/check.yml)
 
-一个给自己使用的健康数据仪表盘：通过 Google Health API 同步自己的数据，保留 Fitbit 历史记录，在中文界面查看睡眠、活动、HRV、静息心率和长期趋势。默认私有访问。
+一个给自己使用的健康数据仪表盘：通过 Google Health API 同步自己的数据，保留 Fitbit 历史记录，在中文界面查看睡眠、活动、HRV、静息心率和长期趋势。可以公开展示，也可以设为仅自己登录可见（新安装默认私有）。
 
 ## 一个账户，一份记录
 
 - 六个视图：总览、睡眠、活动、恢复、体征与营养、设备与数据。
 - 总览给出恢复估算、本期要点、带迷你趋势的核心指标、近 7 天对比和月度趋势。
 - 睡眠结构与作息、活动强度与一周规律、步数日历、HRV / 静息心率个人基线等图表；未佩戴设备的日子留空并不计入均值。
-- 连接或重新授权 Google Health，手动或定时同步，查看同步进度。
-- 登录后读取健康数据，管理操作校验会话与 CSRF。
+- 定时自动同步；连接、重新授权和手动同步可在网页“账户设置”中完成，也可以完全通过服务器命令行完成（不开放网页登录）。
+- 公开模式任何人可读、无需登录；私有模式需登录。管理操作始终校验会话与 CSRF。
 - `/api/public/v1/me` 提供个人只读 API、SVG 趋势图和 OpenAPI 文档。
 
 没有档案切换、家庭比较、创建多个档案或网页删除健康记录的功能。后端、定时任务和旧接口也只能访问配置的唯一账户。已有 `profiles/<id>` 目录可以继续使用，不需要重命名或重新导入历史记录。
@@ -38,7 +38,12 @@ docker compose up -d --build
 curl -fsS http://127.0.0.1:9000/api/health
 ```
 
-配置 HTTPS 反向代理后登录页面，在“账户设置”填写 Google OAuth 客户端、完成授权并首次同步。生产样例默认私有、仅监听 `127.0.0.1:9000`，未填写管理员密码会拒绝启动。
+配置 HTTPS 反向代理后，用以下任一方式连接 Google Health 并首次同步：
+
+- 网页：设置管理员密码，登录后在“账户设置”填写 Google OAuth 客户端并授权。
+- 命令行：`docker exec -it fitflare-app python auth/authorize_google_health.py --configure --no-browser`，完成后执行 `docker exec fitflare-app python fetch/fetch_all.py`。
+
+生产样例默认私有、仅监听 `127.0.0.1:9000`，私有模式未填写管理员密码会拒绝启动。想公开展示时设置 `FITFLARE_DATA_ACCESS=public` 与 `FITFLARE_PUBLIC_PROFILES=<账户 ID>`；公开模式可不设管理员密码，此时页面不提供登录，运维全部通过命令行，见 [DEPLOYMENT.md](DEPLOYMENT.md#运维命令)。
 
 完整步骤、已有数据迁移、备份和回滚见 [DEPLOYMENT.md](DEPLOYMENT.md)；Google Cloud 配置与权限范围见 [GOOGLE_HEALTH.md](GOOGLE_HEALTH.md)。
 
@@ -56,7 +61,17 @@ curl -fsS http://127.0.0.1:9000/api/health
 
 - [API.md](API.md)：单账户只读接口，统一通过 `/me` 访问，无需档案 ID。
 - `/api/public/v1/docs`：交互文档；`/api/public/v1/openapi.json`：OpenAPI。
-- 文档本身可匿名访问；默认私有模式的数据请求仍需登录。
+- 文档本身可匿名访问；私有模式的数据请求仍需登录。
+
+公开模式下可直接调用（把域名换成自己的部署）：
+
+```bash
+curl -s https://fitflare.example.com/api/public/v1/me                                  # 账户概览与链接
+curl -s 'https://fitflare.example.com/api/public/v1/me/series/daily?metrics=steps,hrv&limit=30'
+curl -s 'https://fitflare.example.com/api/public/v1/me/tables/activity_logs?limit=10'    # 最近运动记录
+```
+
+SVG 趋势图可以直接嵌入网页或 README：`<img src="https://fitflare.example.com/api/public/v1/me/charts/overview-trend.svg?theme=light">`。
 
 ```bash
 python3 -m venv .venv

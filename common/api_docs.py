@@ -20,8 +20,8 @@ GROUPS = {
 GUIDE = (
     ('access', '访问与隐私', (
         'public/v1 只提供 GET 读取，不会主动发起 Google Health 同步。缺失或过期的派生缓存可能在读取时本地重建。',
-        '所有 /me 接口始终读取本站唯一账户，不需要选择或填写档案 ID。默认私有模式要求本站管理员会话；只有部署者显式开启公开模式才允许匿名读取。文档始终可读。',
-        '私有模式请先在仪表盘登录，再使用同源浏览器请求。这里不提供 API Key 或 Bearer Token，也不收集、保存或展示管理员密码。cURL 与 Python 示例默认不带会话。',
+        '所有 /me 接口始终读取本站唯一账户，不需要选择或填写档案 ID。公开模式下任何人可匿名读取，无需登录；私有模式要求本站登录会话。文档页顶部标注当前部署的模式，文档始终可读。',
+        '这里不提供 API Key 或 Bearer Token。私有模式请先在仪表盘登录，再使用同源浏览器请求；cURL 与 Python 示例默认不带会话。',
         '匿名公开版 API 允许跨域读取；私有模式和管理员会话响应不开放 CORS。所有 API 响应使用 private, no-store，不应在共享缓存中保存健康数据。',
         '公开响应不包含内部 files 路径及 OAuth 凭据文件，但账户快照仍可能包含个人资料、设备和饮食记录；这不是匿名化数据。',
     )),
@@ -32,6 +32,11 @@ GUIDE = (
         '整数参数的空值或无法解析值回退到默认值，超出边界会被截到允许范围。未知查询参数被忽略；具体边界见接口参数表。',
         'metrics 按逗号分隔，只选择当前数据中存在的数值指标。省略时取全部可用指标；全部名称都不匹配时也回退到全部可用指标，不返回 400。',
         'SVG 对各指标分别归一化，适合比较走势，不适合读取绝对值。需要绝对值请使用 series JSON。',
+    )),
+    ('metrics', '指标与趋势', (
+        '指标卡的 latest 为最近一次有效记录（latest_date 为其日期）；avg7 / avg30 为最近 7 / 30 条有效记录的均值，按记录计数而非日历天，缺失的日子不计入。未佩戴设备的日子（无步数、无睡眠和心率）记为缺失。',
+        'trend 比较最近 7 条有效记录与再往前 7 条有效记录的均值（两段不重叠）：delta 与 percent 为差值和百分比；direction 是数值方向 up / down / flat；assessment 结合指标好坏方向给出 improving / worsening / stable，例如静息心率下降为 improving。变化幅度在指标容差内时为 flat / stable。',
+        '睡眠估算得分由 Fitflare 本地按时长、效率、睡眠结构与清醒时间计算，不是 Google 或 Fitbit 官方分数。',
     )),
     ('responses', '响应与错误', (
         '成功 JSON 使用 api_version、resource、generated_at、data 包装，profile_id、meta、links 按接口出现。generated_at 是派生缓存生成时间，不保证每个上游数据源同一时刻更新；空值表示缺失，不应当作 0。',
@@ -108,7 +113,7 @@ ENDPOINTS = (
     endpoint('datasets', 'records', PROFILE+'/datasets', '数据集目录', '列出支持的完整结构化数据集和覆盖信息。', 'datasets', 'array'),
     endpoint('dataset', 'records', PROFILE+'/datasets/{dataset}', '读取数据集', '读取由 CSV 解析或聚合的完整历史，并从 offset 起分页。', 'dataset', 'Dataset', (OFFSET, page_limit(200)), result='data.rows[]：当前页；data.columns[]：列名提示；meta：分页信息'),
     endpoint('sections', 'records', PROFILE+'/sections', '摘要分区列表', '读取 activity、body、vitals、lifestyle、account 摘要。', 'sections', 'array'),
-    endpoint('section', 'records', PROFILE+'/sections/{section_key}', '单个摘要分区', '返回指定分区的指标摘要。', 'section', 'Section', result='data.section、data.label、data.summary'),
+    endpoint('section', 'records', PROFILE+'/sections/{section_key}', '单个摘要分区', '返回指定分区的指标摘要。', 'section', 'Section', result='data.key（与 data.section 相同）、data.label、data.summary'),
     endpoint('tables', 'records', PROFILE+'/tables', '记录表目录', '返回仪表盘记录表的 key、条数和链接。', 'tables', 'array'),
     endpoint('table', 'records', PROFILE+'/tables/{table_key}', '读取记录表', '对仪表盘缓存中已有的记录分页；缓存可能只保留最近记录，与完整 datasets 不同。', 'table', 'Table', (OFFSET, page_limit(100)), result='data.rows[]：当前页；meta.total、offset、limit、count：分页信息'),
     endpoint('snapshot-status', 'snapshots', PROFILE+'/snapshot-status', '快照状态', '权限范围、缓存时间和接口抓取概况。', 'snapshot-status'),
@@ -142,7 +147,7 @@ SCHEMAS = {
     'Dataset': object_schema({'dataset': {'type': 'string'}, 'label': {'type': 'string'},
         'columns': {'type': 'array', 'items': {'type': 'string'}}, 'rows': ROW_ARRAY}, ('dataset','label','columns','rows')),
     'Table': object_schema({'table': {'type': 'string'}, 'label': {'type': 'string'}, 'rows': ROW_ARRAY}, ('table','label','rows')),
-    'Section': object_schema({'section': {'type': 'string'}, 'label': {'type': 'string'}, 'summary': {}}, ('section','label','summary')),
+    'Section': object_schema({'key': {'type': 'string'}, 'section': {'type': 'string'}, 'label': {'type': 'string'}, 'summary': {}}, ('key','section','label','summary')),
     'Dashboard': {'type': 'object', 'not': {'required': ['files']}, 'description': '公开仪表盘缓存；上游分区和记录字段随可用数据变化，不含内部 files。'},
     'OpenAPI': object_schema({'openapi': {'const': '3.1.0'}, 'info': {'type': 'object'}, 'paths': {'type': 'object'}}, ('openapi','info','paths')),
 }
@@ -180,12 +185,14 @@ def build_openapi_spec(base_url='/', access_mode='public'):
             operation['responses']['200']['headers'] = {'X-Fitflare-Chart-Meta': {'description': 'JSON 编码的图表元数据', 'schema': {'type': 'string'}}}
         paths[item['path']] = {'get': operation}
     return {'openapi': '3.1.0', 'info': {'title': 'Fitflare Personal API', 'version': PUBLIC_API_VERSION,
-             'description': '单人只读本地缓存 API。/me 始终对应配置的唯一账户；默认使用本站私有会话。字段不承诺匿名化。'},
+             'description': ('单人只读本地缓存 API。/me 始终对应配置的唯一账户。'
+                             + ('本部署为公开模式，无需登录即可读取。' if access_mode == 'public' else '本部署为私有模式，需要本站登录会话。')
+                             + '字段不承诺匿名化。')},
             'servers': [{'url': base_url or '/'}], 'tags': [{'name': label} for label in GROUPS.values()],
             'security': [{'SessionCookie': []}] if access_mode == 'private' else [{}, {'SessionCookie': []}],
             'paths': paths, 'components': {'schemas': deepcopy(SCHEMAS), 'securitySchemes': {
                 'SessionCookie': {'type': 'apiKey', 'in': 'cookie', 'name': 'fitflare_session',
-                                  'description': '在本站仪表盘登录后由浏览器管理；不是 Google Health OAuth 令牌；Cookie 名称为旧版兼容标识。'}}}}
+                                  'description': '仅私有模式需要：在本站仪表盘登录后由浏览器管理；不是 Google Health OAuth 令牌。'}}}}
 
 
 def example_path(item):

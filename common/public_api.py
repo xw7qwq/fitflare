@@ -368,6 +368,7 @@ def build_section_payload(dashboard: dict[str, Any], section_key: str) -> dict[s
     if section_key not in sections:
         raise KeyError(section_key)
     return {
+        "key": section_key,
         "section": section_key,
         "label": SECTION_LABELS.get(section_key, section_key),
         "summary": sections.get(section_key),

@@ -154,19 +154,14 @@ def _window_values(
     size: int,
     offset: int = 0,
 ) -> list[float]:
-    values: list[float] = []
-    for row in reversed(rows):
-        if offset > 0:
-            offset -= 1
-            continue
-        value = row.get(field)
-        if value is None:
-            continue
-        values.append(float(value))
-        if len(values) >= size:
-            break
-    values.reverse()
-    return values
+    """The `size` most recent recorded values, skipping the latest `offset` recorded values.
+
+    Both size and offset count recorded values, so consecutive windows never
+    overlap even when some days are missing.
+    """
+    values = [float(row[field]) for row in rows if row.get(field) is not None]
+    end = max(0, len(values) - offset)
+    return values[max(0, end - size):end]
 
 
 def _build_trend(
@@ -180,18 +175,21 @@ def _build_trend(
     if current is None or previous is None:
         return {
             "direction": "flat",
+            "assessment": "stable",
             "delta": None,
             "percent": None,
         }
     delta = current - previous
+    # direction is the numeric movement of the 7-day mean; assessment applies the
+    # metric's polarity (a falling resting heart rate is an improvement).
     if abs(delta) <= tolerance:
-        direction = "flat"
-    elif delta > 0:
-        direction = "up" if higher_is_better else "down"
+        direction, assessment = "flat", "stable"
     else:
-        direction = "down" if higher_is_better else "up"
+        direction = "up" if delta > 0 else "down"
+        assessment = "improving" if (delta > 0) == higher_is_better else "worsening"
     return {
         "direction": direction,
+        "assessment": assessment,
         "delta": _round(delta, 1),
         "percent": _round(_safe_percent(delta, previous), 1),
     }
@@ -1453,7 +1451,7 @@ def _latest_source_mtime(profile_id: str | None) -> float:
 
 
 # Bump when the cached payload shape or derivation changes so old caches rebuild.
-CACHE_SCHEMA_VERSION = 2
+CACHE_SCHEMA_VERSION = 3
 
 
 def _needs_rebuild(profile_id: str | None, dashboard_path: str) -> bool:
