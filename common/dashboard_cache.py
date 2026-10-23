@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any
 
 from common.fitbit_scopes import FITBIT_DASHBOARD_SCOPES, FITBIT_SCOPE_LABELS
+from common.google_health_auth import GOOGLE_HEALTH_SCOPES
 from common.profile_paths import (
     cache_path_for,
     client_credentials_file_for,
@@ -310,6 +311,25 @@ def _parse_rhr_rows(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
     return parsed
 
 
+_WEAR_FIELDS = ("steps", "active_minutes", "very_active_minutes", "fairly_active_minutes", "lightly_active_minutes", "active_zone_minutes")
+_NON_WEAR_CLEARED = _WEAR_FIELDS + ("calories_out", "activity_calories", "sedentary_minutes")
+
+
+def _mark_non_wear(row: dict[str, Any]) -> None:
+    """A day with zero movement and no sleep/heart data means the tracker was off-wrist.
+
+    Its zero steps and BMR-only calories would otherwise drag averages down,
+    so the derived row stores them as missing and flags the day.
+    """
+    if row.get("steps") != 0 or any(row.get(field) for field in _WEAR_FIELDS):
+        return
+    if any(row.get(field) is not None for field in ("minutes_asleep", "hrv", "rhr")):
+        return
+    for field in _NON_WEAR_CLEARED:
+        row[field] = None
+    row["non_wear"] = True
+
+
 def _merge_daily_rows(
     activity_rows: list[dict[str, Any]],
     sleep_rows: list[dict[str, Any]],
@@ -330,6 +350,7 @@ def _merge_daily_rows(
 
     combined = [merged[key] for key in sorted(merged.keys())]
     for row in combined:
+        _mark_non_wear(row)
         minutes_asleep = row.get("minutes_asleep")
         if minutes_asleep is not None:
             row["sleep_hours"] = _round(minutes_asleep / 60.0, 1)
@@ -478,12 +499,24 @@ def _endpoint_data(snapshot: dict[str, Any], key: str) -> Any:
     return entry.get("data")
 
 
+def _endpoint_cached_data(snapshot: dict[str, Any], key: str) -> tuple[Any, str | None]:
+    """Return live data, or data retained from an earlier provider plus its cache time."""
+    entry = _endpoint_entry(snapshot, key)
+    if entry.get("ok"):
+        return entry.get("data"), None
+    if entry.get("stale") and entry.get("data") is not None:
+        return entry.get("data"), entry.get("cached_at") or entry.get("fetched_at") or ""
+    return None, None
+
+
 def _token_metadata(profile_id: str | None) -> dict[str, Any]:
     tokens = _read_json(tokens_file_for(profile_id))
     scope_text = str(tokens.get("scope", "")).strip()
     return {
         "scopes": [part for part in scope_text.split() if part],
         "user_id": tokens.get("user_id"),
+        "oauth_type": tokens.get("oauth_type", "fitbit"),
+        "requested_scopes": list(GOOGLE_HEALTH_SCOPES) if tokens.get("oauth_type") == "google" else FITBIT_DASHBOARD_SCOPES,
     }
 
 
@@ -710,7 +743,7 @@ def _build_body_tables(profile: dict[str, Any], snapshot: dict[str, Any]) -> tup
             "体重目标",
             _round(weight_goal, 1),
             "kg",
-            "读取 Fitbit 体重目标设置。",
+            "来自本地保存的体重目标。",
             "green",
         ),
         _value_card(
@@ -729,7 +762,7 @@ def _build_body_tables(profile: dict[str, Any], snapshot: dict[str, Any]) -> tup
             "type": "体重",
             "value": _round(_to_float(row.get("weight")), 1),
             "unit": "kg",
-            "detail": f"BMI {_round(_to_float(row.get('bmi')), 1) or '--'} · 来源 {row.get('source') or 'Fitbit'}",
+            "detail": f"BMI {_round(_to_float(row.get('bmi')), 1) or '--'} · 来源 {row.get('source') or '未标注'}",
         })
     for row in reversed(fat_records[-8:]):
         rows.append({
@@ -737,7 +770,7 @@ def _build_body_tables(profile: dict[str, Any], snapshot: dict[str, Any]) -> tup
             "type": "体脂",
             "value": _round(_to_float(row.get("fat")) or _to_float(row.get("value")), 1),
             "unit": "%",
-            "detail": f"来源 {row.get('source') or 'Fitbit'}",
+            "detail": f"来源 {row.get('source') or '未标注'}",
         })
     rows.sort(key=lambda row: (row.get("date") or "", row.get("type") or ""), reverse=True)
     return {"metrics": metrics}, rows[:12]
@@ -755,7 +788,8 @@ def _build_activity_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], li
     today_payload = _endpoint_data(snapshot, "today_activity_summary") or {}
     summary = today_payload.get("summary") or {}
     goals = today_payload.get("goals") or {}
-    lifetime_payload = _endpoint_data(snapshot, "lifetime_stats") or {}
+    lifetime_payload, lifetime_cached_at = _endpoint_cached_data(snapshot, "lifetime_stats")
+    lifetime_payload = lifetime_payload or {}
     activity_logs = _collect_records(_endpoint_data(snapshot, "activity_log_list"), ("activities",))
     recent_types = _collect_records(_endpoint_data(snapshot, "recent_activity_types"), ("recentActivities", "activities"))
     frequent_types = _collect_records(_endpoint_data(snapshot, "frequent_activity_types"), ("activities",))
@@ -789,15 +823,15 @@ def _build_activity_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], li
             "今日步数达成",
             steps_progress,
             "%",
-            f"{steps or 0} / {steps_goal or 0} 步",
+            f"{steps} / {steps_goal} 步" if steps is not None and steps_goal else f"今日 {steps if steps is not None else '--'} 步 · 未设置目标",
             "green",
-            "优先读取 Fitbit 今日活动摘要和目标设置。",
+            "读取最新活动摘要及本地保存的目标。",
         ),
         _value_card(
             "今日距离",
             total_distance,
             "km",
-            f"静息心率 {resting_hr if resting_hr is not None else '--'} bpm",
+            f"静息心率 {resting_hr} bpm" if resting_hr is not None else "今日活动摘要",
             "blue",
             "来自今日活动摘要 summary.distances.total。",
         ),
@@ -823,9 +857,23 @@ def _build_activity_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], li
             "步",
             f"终身距离 {lifetime_distance if lifetime_distance is not None else '--'} km",
             "red",
-            "来自 Fitbit lifetime stats。",
+            "来自历史累计统计，Google Health 暂不更新此项。",
         ),
     ]
+    best_total = _deep_get(lifetime_payload, "best", "total")
+    best = {}
+    if isinstance(best_total, dict):
+        for key in ("steps", "distance", "floors"):
+            entry = best_total.get(key)
+            if isinstance(entry, dict) and _to_float(entry.get("value")) is not None:
+                best[key] = {"value": _round(_to_float(entry.get("value")), 2), "date": _date_only(entry.get("date"))}
+    lifetime = {
+        "steps": lifetime_steps,
+        "distance": lifetime_distance,
+        "floors": _to_int(_lifetime_total_value(lifetime_payload, "floors")),
+        "best": best,
+        "cached_at": lifetime_cached_at,
+    } if lifetime_payload else None
 
     rows: list[dict[str, Any]] = []
     for record in sorted(
@@ -854,10 +902,10 @@ def _build_activity_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], li
                 "duration": duration,
                 "calories": calories,
                 "distance": distance,
-                "detail": detail or "Fitbit activity log",
+                "detail": detail or "活动记录",
             }
         )
-    return {"metrics": metrics}, rows
+    return {"metrics": metrics, "lifetime": lifetime}, rows
 
 
 def _build_vitals_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -906,18 +954,22 @@ def _build_lifestyle_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], l
     water_log_payload = _endpoint_data(snapshot, "water_log_today") or {}
 
     calorie_goal = _parse_goal_value(food_goal_payload, ("calories",))
-    calorie_summary = _pick_numeric_leaf(food_log_payload, ("summary.calories", "calories", "summary.caloriesConsumed"))[1]
+    food_summary = food_log_payload.get("summary")
+    calorie_summary = (_to_float(food_summary.get("calories")) if isinstance(food_summary, dict)
+                       else _pick_numeric_leaf(food_log_payload, ("calories", "summary.caloriesConsumed"))[1])
     water_goal = _parse_goal_value(water_goal_payload, ("goal", "water", "amount"))
-    water_value = _pick_numeric_leaf(water_log_payload, ("summary.water", "water", "summary.amount"))[1]
+    water_summary = water_log_payload.get("summary")
+    water_value = (_to_float(water_summary.get("water")) if isinstance(water_summary, dict)
+                   else _pick_numeric_leaf(water_log_payload, ("water", "summary.amount"))[1])
 
     metrics = [
-        _value_card("热量目标", _round(calorie_goal, 0), "kcal", "读取 Fitbit 营养目标。", "amber"),
+        _value_card("热量目标", _round(calorie_goal, 0), "kcal", "本地保存的营养目标，Google Health 暂不更新此项。", "amber"),
         _value_card("今日摄入", _round(calorie_summary, 0), "kcal", "来自今日饮食日志摘要。", "red"),
-        _value_card("饮水目标", _round(water_goal, 0), "ml", "读取 Fitbit 饮水目标。", "blue"),
+        _value_card("饮水目标", _round(water_goal, 0), "ml", "本地保存的饮水目标，Google Health 暂不更新此项。", "blue"),
         _value_card("今日饮水", _round(water_value, 0), "ml", f"近期食物 {len(recent_foods)} 条。", "teal"),
-        _value_card("常吃食物", len(frequent_foods), "项", "Fitbit frequent foods 缓存。", "green"),
-        _value_card("收藏食物", len(favorite_foods), "项", "Fitbit favorite foods 缓存。", "blue"),
-        _value_card("餐食模板", len(meals), "个", "Fitbit meals 缓存。", "teal"),
+        _value_card("常吃食物", len(frequent_foods), "项", "常吃食物历史缓存。", "green"),
+        _value_card("收藏食物", len(favorite_foods), "项", "收藏食物历史缓存。", "blue"),
+        _value_card("餐食模板", len(meals), "个", "餐食模板历史缓存。", "teal"),
     ]
 
     rows = [
@@ -951,15 +1003,15 @@ def _build_account_tables(
     alarm_groups = _endpoint_data(snapshot, "device_alarms")
     alarm_groups = [row for row in (alarm_groups or []) if isinstance(row, dict)]
 
-    requested_scopes = snapshot.get("requested_scopes") or FITBIT_DASHBOARD_SCOPES
+    requested_scopes = profile.get("requested_scopes") or FITBIT_DASHBOARD_SCOPES
     granted_scopes = profile.get("scopes") or []
     missing_scopes = [scope for scope in requested_scopes if scope not in granted_scopes]
     endpoint_summary = snapshot.get("fetch_summary") or {}
     alarms_count = sum(len(group.get("alarms") or []) for group in alarm_groups)
 
     metrics = [
-        _value_card("已配对设备", len(device_rows), "台", "读取 Fitbit 设备列表。", "blue"),
-        _value_card("徽章数量", len(badges), "枚", "读取 Fitbit badge 资料。", "amber"),
+        _value_card("已配对设备", len(device_rows), "台", "来自已授权健康账户的设备列表。", "blue"),
+        _value_card("徽章数量", len(badges), "枚", "迁移前保存的徽章，Google Health 暂不更新此项。", "amber"),
         _value_card(
             "快照完成度",
             endpoint_summary.get("ok"),
@@ -1012,11 +1064,15 @@ def _build_account_tables(
             if reason.startswith("missing_scope:"):
                 scope_key = reason.split(":", 1)[1]
                 status = f"缺少 {FITBIT_SCOPE_LABELS.get(scope_key, scope_key)} scope"
+            elif reason == "unavailable_in_google_health_v4":
+                status = "新接口不提供，保留历史缓存" if entry.get("stale") else "新接口不提供"
             else:
                 status = "已跳过"
         else:
             code = entry.get("status")
             status = f"失败 ({code})" if code else "失败"
+        if entry.get("stale") and entry.get("reason") != "unavailable_in_google_health_v4":
+            status += "（历史缓存未更新）"
         endpoint_rows.append({
             "dataset": entry.get("label") or key,
             "group": GROUP_LABELS.get(str(entry.get("group")), str(entry.get("group"))),
@@ -1054,7 +1110,7 @@ def _profile_from_snapshot(profile_id: str | None, snapshot: dict[str, Any]) -> 
 
     activity_goals = activity_daily_goal.get("goals") or activity_daily_goal
     weekly_goals = activity_weekly_goal.get("goals") or activity_weekly_goal
-    scopes = snapshot.get("token_scope") or token_meta.get("scopes") or []
+    scopes = token_meta.get("scopes") or snapshot.get("token_scope") or []
 
     return {
         "id": profile_id,
@@ -1075,7 +1131,8 @@ def _profile_from_snapshot(profile_id: str | None, snapshot: dict[str, Any]) -> 
         "device_count": len(devices) if isinstance(devices, list) else 0,
         "badge_count": len(badges),
         "scopes": scopes,
-        "requested_scopes": snapshot.get("requested_scopes") or FITBIT_DASHBOARD_SCOPES,
+        "requested_scopes": token_meta.get("requested_scopes") or FITBIT_DASHBOARD_SCOPES,
+        "oauth_type": token_meta.get("oauth_type"),
         "user_id": snapshot.get("token_user_id") or token_meta.get("user_id"),
         "last_snapshot_at": snapshot.get("saved_at"),
     }
@@ -1083,7 +1140,7 @@ def _profile_from_snapshot(profile_id: str | None, snapshot: dict[str, Any]) -> 
 
 def _metric_cards(rows: list[dict[str, Any]], profile: dict[str, Any]) -> list[dict[str, Any]]:
     specs = [
-        ("sleep_score", "睡眠得分", "分", True, 1.0, "blue"),
+        ("sleep_score", "睡眠估算得分", "分", True, 1.0, "blue"),
         ("sleep_hours", "睡眠时长", "小时", True, 0.2, "amber"),
         ("steps", "步数", "步", True, 300.0, "green"),
         ("active_minutes", "活跃分钟", "分钟", True, 10.0, "teal"),
@@ -1198,7 +1255,7 @@ def _build_data_catalog(
             "label": "睡眠",
             "view": "sleep",
             "tone": "blue",
-            "summary": "睡眠得分、时长、阶段结构和小睡记录。",
+            "summary": "睡眠估算得分、时长、阶段结构和小睡记录。",
             "coverage": coverage.get("sleep") or {},
             "metrics": _catalog_metric_entries(metric_cards, ["sleep_score", "sleep_hours"]),
             "sources": [
@@ -1212,13 +1269,13 @@ def _build_data_catalog(
             "label": "活动",
             "view": "activity",
             "tone": "green",
-            "summary": "步数、活跃分钟、燃脂区、热量和 Fitbit 活动日志。",
+            "summary": "步数、活跃分钟、燃脂区、热量和活动日志。",
             "coverage": coverage.get("activity") or {},
             "metrics": _catalog_metric_entries(metric_cards, ["steps", "active_minutes", "active_zone_minutes", "calories_out"]),
             "sources": [
                 _source_entry("dataset", "activity", "活动 CSV", (coverage.get("activity") or {}).get("count")),
                 _source_entry("table", "activity", "按日活动表", len(tables.get("activity") or [])),
-                _source_entry("table", "activity_logs", "Fitbit 活动日志", len(tables.get("activity_logs") or [])),
+                _source_entry("table", "activity_logs", "活动日志", len(tables.get("activity_logs") or [])),
             ],
         },
         {
@@ -1274,7 +1331,7 @@ def _build_data_catalog(
             "coverage": {"count": snapshot_ok, "start_date": (coverage.get("snapshot") or {}).get("start_date"), "end_date": snapshot_status.get("saved_at")},
             "metrics": _section_catalog_metrics(sections.get("account") or {}, limit=4),
             "sources": [
-                _source_entry("snapshot", "profile_snapshot", "Fitbit 快照", snapshot_ok),
+                _source_entry("snapshot", "profile_snapshot", "健康数据快照", snapshot_ok),
                 _source_entry("table", "devices", "设备表", len(tables.get("devices") or [])),
                 _source_entry("table", "endpoints", "端点状态", endpoint_count),
             ],
@@ -1395,6 +1452,10 @@ def _latest_source_mtime(profile_id: str | None) -> float:
     return max(mtimes) if mtimes else 0.0
 
 
+# Bump when the cached payload shape or derivation changes so old caches rebuild.
+CACHE_SCHEMA_VERSION = 2
+
+
 def _needs_rebuild(profile_id: str | None, dashboard_path: str) -> bool:
     if not os.path.exists(dashboard_path):
         return True
@@ -1443,9 +1504,9 @@ def build_dashboard_cache(profile_id: str | None) -> dict[str, Any]:
     }
 
     correlations = [
-        _build_correlation(daily_rows, "sleep_score", "hrv", "睡眠得分 vs HRV"),
-        _build_correlation(daily_rows, "steps", "sleep_score", "步数 vs 睡眠得分"),
-        _build_correlation(daily_rows, "sleep_score", "rhr", "睡眠得分 vs 静息心率"),
+        _build_correlation(daily_rows, "sleep_score", "hrv", "睡眠估算得分 vs HRV"),
+        _build_correlation(daily_rows, "steps", "sleep_score", "步数 vs 睡眠估算得分"),
+        _build_correlation(daily_rows, "sleep_score", "rhr", "睡眠估算得分 vs 静息心率"),
     ]
 
     overview_payload = {
@@ -1482,6 +1543,8 @@ def build_dashboard_cache(profile_id: str | None) -> dict[str, Any]:
         "account": account_section,
     }
     snapshot_status_payload = {
+        "provider": snapshot.get("provider", "fitbit"),
+        "sync_status": snapshot.get("sync_status"),
         "has_snapshot": bool(snapshot),
         "saved_at": snapshot.get("saved_at"),
         "has_profile": bool(_endpoint_entry(snapshot, "profile").get("ok")),
@@ -1493,6 +1556,7 @@ def build_dashboard_cache(profile_id: str | None) -> dict[str, Any]:
     }
 
     payload = {
+        "schema_version": CACHE_SCHEMA_VERSION,
         "generated_at": _now_iso(),
         "profile": profile,
         "overview": overview_payload,
@@ -1528,8 +1592,14 @@ def load_dashboard_cache(profile_id: str | None, rebuild_if_missing: bool = True
     if rebuild_if_missing and _needs_rebuild(profile_id, dashboard_path):
         return build_dashboard_cache(profile_id)
     payload = _read_json(dashboard_path)
-    if payload:
+    if payload and (payload.get("schema_version") == CACHE_SCHEMA_VERSION or not rebuild_if_missing):
         return payload
+    if payload:
+        try:
+            return build_dashboard_cache(profile_id)
+        except OSError:
+            # A read-only volume keeps serving the older cache instead of failing.
+            return payload
     if rebuild_if_missing:
         return build_dashboard_cache(profile_id)
     return {}

@@ -3,7 +3,7 @@ import { escapeHtml } from './format.js';
 const TABLE_KEYS = {
   sleepTableWrap: 'sleep', activityTableWrap: 'activity', activityLogTableWrap: 'activity_logs',
   recoveryTableWrap: 'recovery', bodyTableWrap: 'body', vitalTableWrap: 'vitals',
-  foodTableWrap: 'foods', deviceTableWrap: 'devices', badgeTableWrap: 'badges',
+  foodTableWrap: 'foods', deviceList: 'devices', badgeTableWrap: 'badges',
   alarmTableWrap: 'alarms', endpointTableWrap: 'endpoints',
 };
 export function pageBounds(total, offset = 0, size = 20) {
@@ -14,7 +14,8 @@ export function pageBounds(total, offset = 0, size = 20) {
 
 export function createTableRenderer({ getContext, apiRequest }) {
   const tables = new WeakMap();
-  return function renderTable(container, columns, unusedRows, formatters = {}) {
+  // options.render(rows) replaces the default table markup; options.empty customizes the empty message.
+  return function renderTable(container, columns, unusedRows, formatters = {}, options = {}) {
     if (!container) return;
     const context = getContext();
     const key = `${context.revision}:${context.version}:${context.authenticated}`;
@@ -44,12 +45,14 @@ export function createTableRenderer({ getContext, apiRequest }) {
         if (!current()) return;
         const rows = Array.isArray(result.rows) ? result.rows : [];
         const page = pageBounds(result.meta?.total, table.offset);
-        const head = columns.map(column => `<th scope="col">${escapeHtml(column.label)}</th>`).join('');
+        const cell = column => column.numeric ? ' class="num"' : '';
+        const head = columns.map(column => `<th scope="col"${cell(column)}>${escapeHtml(column.label)}</th>`).join('');
         const body = rows.map(row => `<tr>${columns.map(column => {
           const value = formatters[column.key] ? formatters[column.key](row[column.key], row) : row[column.key];
-          return `<td>${escapeHtml(value == null || value === '' ? '--' : String(value))}</td>`;
+          return `<td${cell(column)}>${escapeHtml(value == null || value === '' ? '--' : String(value))}</td>`;
         }).join('')}</tr>`).join('');
-        container.innerHTML = rows.length ? `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` : '<div class="empty-state">当前没有可显示的数据。</div>';
+        const empty = `<div class="empty-state empty-compact">${escapeHtml(options.empty || '暂无记录。')}</div>`;
+        container.innerHTML = !rows.length ? empty : options.render ? options.render(rows) : `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
         if (result.meta?.total > 20) {
           container.insertAdjacentHTML('beforeend', `<nav class="table-pagination" aria-label="${escapeHtml(columns[0]?.label || '记录')}分页">
             <button type="button" class="button" data-page="previous" ${page.previous ? '' : 'disabled'}>上一页</button>

@@ -7,6 +7,7 @@ import requests
 
 # Allow relative imports when executed from scripts in sibling folders
 from common.profile_paths import activate_profile_context
+from common.google_health import require_legacy_fitbit_tokens
 
 
 def _load_access_token(tokens_path: str) -> Optional[str]:
@@ -39,6 +40,7 @@ def get_member_since_date(profile_id: Optional[str]) -> Optional[datetime]:
     from auth.refresh_token import refresh_token  # type: ignore
 
     tokens_path = _ensure_env_for_profile(profile_id)
+    require_legacy_fitbit_tokens(tokens_path)
 
     # Try with the current access token first to avoid unnecessary refreshes
     token = _load_access_token(tokens_path)

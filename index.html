@@ -3,14 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <meta name="description" content="自己的 Fitbit 健康记录：睡眠、活动、恢复与生活趋势。">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="Fitflare 私人健康看板：同步 Google Health，保留 Fitbit 历史，查看睡眠、活动与恢复趋势。">
   <title>Fitflare · 健康记录</title>
+  <link rel="canonical" href="https://fitflare.lucius7.dev/">
   <link rel="icon" href="/assets/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
-  <link rel="stylesheet" href="/style.css?v=20260924-1">
+  <link rel="stylesheet" href="/style.css?v=20261023-2">
   <script defer src="/vendor/chart.umd-4.4.1.min.js"></script>
-  <script type="module" src="/app.js?v=20260924-1"></script>
+  <script type="module" src="/app.js?v=20261023-2"></script>
 </head>
 <body>
   <a class="skip-link" href="#mainContent">跳到主内容</a>
@@ -18,192 +19,157 @@
     <header class="topbar">
       <a class="brand" href="/" aria-label="Fitflare 首页"><span class="brand-icon" aria-hidden="true">F</span><strong>Fitflare</strong><span class="brand-caption">健康记录</span></a>
       <div class="topbar-actions">
-        <span class="mode-chip" id="adminModeChip">健康记录</span>
+        <span class="mode-chip" id="adminModeChip">私有健康记录</span>
         <button class="button" id="adminLoginBtn" type="button">登录</button>
-        <button class="button hidden" id="openAccountBtn" type="button">连接 Fitbit</button>
+        <button class="button hidden" id="openAccountBtn" type="button">连接 Google Health</button>
         <button class="button hidden" id="reloadBtn" type="button">刷新视图</button>
-        <button class="button button-primary hidden" id="syncBtn" type="button">同步 Fitbit</button>
+        <button class="button button-primary hidden" id="syncBtn" type="button">同步数据</button>
         <button class="button button-light hidden" id="adminLogoutBtn" type="button">退出登录</button>
       </div>
     </header>
-    <section class="toolbar" aria-label="趋势范围">
-      <div class="toolbar-fields">
-        <label class="field"><span class="field-label">趋势范围</span><select id="rangeSelect" aria-label="选择趋势范围"><option value="14">最近 14 天</option><option value="30" selected>最近 30 天</option><option value="90">最近 90 天</option></select></label>
-      </div>
-      <div class="sync-meta"><span>最近记录 <strong id="latestRecordText">暂无</strong></span><span>最近同步 <strong id="lastSyncText">暂无</strong></span></div>
-    </section>
-    <nav class="tab-strip" aria-label="健康视图"><div class="tab-buttons" role="tablist" aria-label="仪表盘视图"><button class="tab-button" id="tab-overview" role="tab" aria-selected="true" aria-controls="panel-overview" tabindex="0" data-view="overview" type="button">总览</button>
+    <div class="nav-bar">
+      <section class="toolbar" aria-label="统计范围">
+        <div class="toolbar-fields">
+          <label class="field"><span class="field-label">统计范围</span><select id="rangeSelect" aria-label="选择统计范围"><option value="14">最近 14 天</option><option value="30" selected>最近 30 天</option><option value="90">最近 90 天</option></select></label>
+        </div>
+        <div class="sync-meta"><span>最近记录 <strong id="latestRecordText">暂无</strong></span><span>最近同步 <strong id="lastSyncText">暂无</strong></span></div>
+      </section>
+      <nav class="tab-strip" aria-label="健康视图"><div class="tab-buttons" role="tablist" aria-label="仪表盘视图"><button class="tab-button" id="tab-overview" role="tab" aria-selected="true" aria-controls="panel-overview" tabindex="0" data-view="overview" type="button">总览</button>
 <button class="tab-button" id="tab-sleep" role="tab" aria-selected="false" aria-controls="panel-sleep" tabindex="-1" data-view="sleep" type="button">睡眠</button>
 <button class="tab-button" id="tab-activity" role="tab" aria-selected="false" aria-controls="panel-activity" tabindex="-1" data-view="activity" type="button">活动</button>
 <button class="tab-button" id="tab-recovery" role="tab" aria-selected="false" aria-controls="panel-recovery" tabindex="-1" data-view="recovery" type="button">恢复</button>
-<button class="tab-button" id="tab-body" role="tab" aria-selected="false" aria-controls="panel-body" tabindex="-1" data-view="body" type="button">体征</button>
-<button class="tab-button" id="tab-lifestyle" role="tab" aria-selected="false" aria-controls="panel-lifestyle" tabindex="-1" data-view="lifestyle" type="button">生活</button>
-<button class="tab-button" id="tab-account" role="tab" aria-selected="false" aria-controls="panel-account" tabindex="-1" data-view="account" type="button">账户</button>
-</div></nav>
+<button class="tab-button" id="tab-body" role="tab" aria-selected="false" aria-controls="panel-body" tabindex="-1" data-view="body" type="button">体征与营养</button>
+<button class="tab-button" id="tab-account" role="tab" aria-selected="false" aria-controls="panel-account" tabindex="-1" data-view="account" type="button">设备与数据</button></div></nav>
+    </div>
     <main id="mainContent" tabindex="-1" aria-busy="true">
-      <header class="page-heading"><div><h1 id="pageTitle">总览</h1><p id="pageDescription">睡眠、活动与恢复趋势。</p></div><span id="statusText" class="status-text" role="status">正在加载</span></header>
+      <header class="page-heading"><div><h1 id="pageTitle">总览</h1><p id="pageDescription">睡眠、活动与恢复的整体状态。</p></div><span id="statusText" class="status-text" role="status">正在加载</span></header>
       <section class="surface empty-state" id="dashboardNotice"><p id="dashboardNoticeText">正在读取健康记录…</p><button class="button" id="retryBtn" type="button" hidden>重试</button></section>
-      <section id="overviewMetrics" aria-label="核心指标" hidden>
+      <p class="data-note" id="dataQualityNote" hidden></p>
+
+      <section id="overviewMetrics" class="overview-metrics" aria-label="核心指标" hidden>
+        <div class="hero-grid">
+          <article class="surface hero-status">
+            <div class="ring" id="recoveryRing" aria-hidden="true"></div>
+            <div class="hero-copy">
+              <span class="eyebrow" id="heroDate">最近记录</span>
+              <strong class="hero-title" id="heroLabel">--</strong>
+              <p class="muted" id="heroNote">本地恢复估算，综合 HRV、静息心率与睡眠，仅供趋势参考。</p>
+            </div>
+          </article>
+          <article class="surface hero-insights">
+            <div class="section-head"><h3>本期要点</h3><p id="insightRange">与所选范围的均值相比。</p></div>
+            <ul class="insight-list" id="insightList"></ul>
+          </article>
+        </div>
         <div class="stats-grid" id="statsGrid"></div>
-        <details class="more-metrics" id="moreMetrics"><summary>更多指标</summary><div class="stats-grid" id="moreStatsGrid"></div></details>
       </section>
+
 <section class="view-panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="-1" data-view-panel="overview" hidden>
-<div class="panel-grid panel-grid-two">
-<article class="surface chart-card"><div class="section-head"><h3>日常趋势</h3><p>步数与睡眠得分，分别对应左右轴。</p></div><div class="chart-frame"><canvas id="overviewTrendChart" role="img" aria-label="日常趋势"></canvas></div></article>
-<article class="surface chart-card"><div class="section-head"><h3>周平均变化</h3><p>所选范围内的睡眠时长与 HRV 周均值。</p></div><div class="chart-frame"><canvas id="weeklyTrendChart" role="img" aria-label="周平均变化"></canvas></div></article>
-</div>
-<details class="surface"><summary>相关性 · 补充参考</summary><p class="muted">基于全部记录计算，相关性不代表因果关系。</p><div class="narrative-grid" id="correlationCards"></div></details>
+  <div class="panel-grid panel-grid-two">
+    <article class="surface chart-card"><div class="section-head"><h3>睡眠时长</h3><p>每晚主睡眠，虚线为区间均值。</p></div><div class="chart-frame chart-frame-sm"><canvas id="overviewSleepChart" role="img" aria-label="每晚睡眠时长"></canvas></div></article>
+    <article class="surface chart-card"><div class="section-head"><h3>步数</h3><p>每日步数，虚线为区间均值，实线为一万步。</p></div><div class="chart-frame chart-frame-sm"><canvas id="overviewStepsChart" role="img" aria-label="每日步数"></canvas></div></article>
+    <article class="surface chart-card"><div class="section-head"><h3>HRV</h3><p>点为每日值，曲线为 7 天滚动均值；越高通常恢复越好。</p></div><div class="chart-frame chart-frame-sm"><canvas id="overviewHrvChart" role="img" aria-label="HRV 趋势"></canvas></div></article>
+    <article class="surface chart-card"><div class="section-head"><h3>静息心率</h3><p>点为每日值，曲线为 7 天滚动均值；越低通常恢复越好。</p></div><div class="chart-frame chart-frame-sm"><canvas id="overviewRhrChart" role="img" aria-label="静息心率趋势"></canvas></div></article>
+  </div>
+  <div class="panel-grid panel-grid-wide">
+    <article class="surface table-card">
+      <div class="section-head"><h3>近 7 天 vs 前 7 天</h3><p>按最近记录往前推算的两个自然周期，缺测日不计入。</p></div>
+      <div class="table-wrap compare-wrap" id="weekCompare"></div>
+    </article>
+    <article class="surface chart-card">
+      <div class="section-head section-head-row"><div><h3>月度趋势</h3><p>每月日均值，覆盖全部本地历史。</p></div><div class="segmented" id="monthlyMetricPicker" role="group" aria-label="选择月度指标"></div></div>
+      <div class="chart-frame chart-frame-sm"><canvas id="monthlyChart" role="img" aria-label="月度趋势"></canvas></div>
+    </article>
+  </div>
+  <details class="surface"><summary>指标相关性</summary><p class="muted">基于全部本地历史计算的皮尔逊系数，-1 到 1；相关不代表因果。</p><div class="correlation-list" id="correlationCards"></div></details>
 </section>
+
 <section class="view-panel" id="panel-sleep" role="tabpanel" aria-labelledby="tab-sleep" tabindex="-1" data-view-panel="sleep" hidden>
-        <div class="panel-grid panel-grid-two">
-          <article class="surface chart-card">
-            <div class="section-head"><h3>睡眠得分与时长</h3><p>对照每晚的睡眠得分和总时长。</p></div>
-            <div class="chart-frame">
-              <canvas id="sleepTrendChart" role="img" aria-label="睡眠趋势图"></canvas>
-            </div>
-          </article>
-
-          <article class="surface chart-card">
-            <div class="section-head"><h3>深睡 / REM / 浅睡</h3><p>最近两周的睡眠结构，直接看质量变化。</p></div>
-            <div class="chart-frame">
-              <canvas id="sleepStageChart" role="img" aria-label="睡眠趋势图"></canvas>
-            </div>
-          </article>
-        </div>
-
-        <article class="surface table-card">
-          <div class="section-head"><h3>最近睡眠记录</h3><p>这里只显示主睡眠，避免表格被小睡刷屏。</p></div>
-          <div class="table-wrap" id="sleepTableWrap"></div>
-        </article>
-      </section>
-<section class="view-panel" id="panel-activity" role="tabpanel" aria-labelledby="tab-activity" tabindex="-1" data-view-panel="activity" hidden>
-        <div class="panel-grid panel-grid-two">
-          <article class="surface chart-card">
-            <div class="section-head"><h3>步数与活跃分钟</h3><p>同时看步数规模和真正的活跃时间。</p></div>
-            <div class="chart-frame">
-              <canvas id="activityTrendChart" role="img" aria-label="活动趋势图"></canvas>
-            </div>
-          </article>
-
-          <article class="surface chart-card">
-            <div class="section-head"><h3>活跃区间分钟与热量</h3><p>更接近训练强度，而不只是走了多少步。</p></div>
-            <div class="chart-frame">
-              <canvas id="activityBurnChart" role="img" aria-label="活动趋势图"></canvas>
-            </div>
-          </article>
-        </div>
-
-        <div class="panel-grid panel-grid-two">
-          <article class="surface narrative-card">
-            <div class="section-head"><h3>补充活动摘要</h3><p>今日活动与累计活动摘要。</p></div>
-            <div class="detail-grid" id="activityContextGrid"></div>
-          </article>
-
-          <article class="surface table-card">
-            <div class="section-head"><h3>近期活动日志</h3><p>查看运动、训练和手动添加的活动。</p></div>
-            <div class="table-wrap" id="activityLogTableWrap"></div>
-          </article>
-        </div>
-
-        <article class="surface table-card">
-          <div class="section-head"><h3>按日活动记录</h3><p>按天查看活动量的变化。</p></div>
-          <div class="table-wrap" id="activityTableWrap"></div>
-        </article>
-      </section>
-<section class="view-panel" id="panel-recovery" role="tabpanel" aria-labelledby="tab-recovery" tabindex="-1" data-view-panel="recovery" hidden>
-<div class="detail-grid recovery-metrics" id="recoverySummary"></div>
-<p class="muted" id="recoveryEstimate"></p>
-<div class="panel-grid panel-grid-two">
-<article class="surface chart-card"><div class="section-head"><h3>HRV 与静息心率</h3><p>展示当前范围内的原始波动。</p></div><div class="chart-frame"><canvas id="recoveryTrendChart" role="img" aria-label="HRV 与静息心率"></canvas></div></article>
-<article class="surface chart-card"><div class="section-head"><h3>睡眠得分与 HRV</h3><p>每个点对应一条同时包含两项指标的记录。</p></div><div class="chart-frame"><canvas id="recoveryScatterChart" role="img" aria-label="睡眠得分与 HRV"></canvas></div></article>
-</div>
-<details class="surface"><summary>最近恢复记录</summary><div class="table-wrap" id="recoveryTableWrap"></div></details>
+  <div class="kpi-row" id="sleepSummary"></div>
+  <article class="surface chart-card">
+    <div class="section-head"><h3>每晚睡眠结构</h3><p>深睡、REM、浅睡与夜间清醒，单位小时；实线为 7 小时参考线。</p></div>
+    <div class="chart-frame chart-frame-lg"><canvas id="sleepStageChart" role="img" aria-label="每晚睡眠结构"></canvas></div>
+  </article>
+  <div class="panel-grid panel-grid-two">
+    <article class="surface chart-card"><div class="section-head"><h3>作息时间</h3><p>每条柱从入睡到起床，越整齐说明作息越规律。</p></div><div class="chart-frame"><canvas id="sleepScheduleChart" role="img" aria-label="入睡与起床时间"></canvas></div></article>
+    <article class="surface chart-card"><div class="section-head"><h3>睡眠估算得分</h3><p>本地按时长、效率、结构与清醒时间估算，曲线为 7 天滚动均值。</p></div><div class="chart-frame"><canvas id="sleepTrendChart" role="img" aria-label="睡眠估算得分"></canvas></div></article>
+  </div>
+  <details class="surface table-card"><summary>每晚睡眠记录</summary><p class="muted">只列主睡眠；小睡单独计数。</p><div class="table-wrap" id="sleepTableWrap"></div></details>
 </section>
+
+<section class="view-panel" id="panel-activity" role="tabpanel" aria-labelledby="tab-activity" tabindex="-1" data-view-panel="activity" hidden>
+  <div class="kpi-row" id="activitySummary"></div>
+  <article class="surface chart-card">
+    <div class="section-head"><h3>每日步数</h3><p>虚线为区间均值，实线为一万步；空白表示当天未佩戴设备。</p></div>
+    <div class="chart-frame"><canvas id="activityTrendChart" role="img" aria-label="每日步数"></canvas></div>
+  </article>
+  <div class="panel-grid panel-grid-two">
+    <article class="surface chart-card"><div class="section-head"><h3>活动强度</h3><p>每日高强度、中等强度与轻度活动分钟。</p></div><div class="chart-frame"><canvas id="activityIntensityChart" role="img" aria-label="活动强度分钟"></canvas></div></article>
+    <article class="surface chart-card"><div class="section-head"><h3>一周规律</h3><p>按星期统计的日均步数（所选范围）。</p></div><div class="chart-frame"><canvas id="activityWeekdayChart" role="img" aria-label="按星期的日均步数"></canvas></div></article>
+  </div>
+  <div class="panel-grid panel-grid-two">
+    <article class="surface chart-card"><div class="section-head"><h3>燃脂区分钟</h3><p>心率进入燃脂及以上区间的分钟数。</p></div><div class="chart-frame chart-frame-sm"><canvas id="activityZoneChart" role="img" aria-label="燃脂区分钟"></canvas></div></article>
+    <article class="surface chart-card"><div class="section-head"><h3>每日消耗热量</h3><p>含基础代谢的总消耗。</p></div><div class="chart-frame chart-frame-sm"><canvas id="activityBurnChart" role="img" aria-label="每日消耗热量"></canvas></div></article>
+  </div>
+  <div class="panel-grid panel-grid-two">
+    <article class="surface">
+      <div class="section-head"><h3>步数日历</h3><p>最近 13 周，颜色越深步数越多；斜纹表示未佩戴。</p></div>
+      <div class="calendar" id="stepsCalendar"></div>
+    </article>
+    <article class="surface"><div class="section-head"><h3>累计与最佳</h3><p id="lifetimeNote">今日摘要与历史最佳纪录。</p></div><div class="record-grid" id="activityRecords"></div></article>
+  </div>
+  <article class="surface table-card"><div class="section-head"><h3>最近运动记录</h3><p>展示 Google Health 返回的训练与活动记录。</p></div><div class="table-wrap" id="activityLogTableWrap"></div></article>
+  <details class="surface table-card"><summary>按日活动记录</summary><div class="table-wrap" id="activityTableWrap"></div></details>
+</section>
+
+<section class="view-panel" id="panel-recovery" role="tabpanel" aria-labelledby="tab-recovery" tabindex="-1" data-view-panel="recovery" hidden>
+  <div class="kpi-row" id="recoverySummary"></div>
+  <p class="muted" id="recoveryEstimate"></p>
+  <div class="panel-grid panel-grid-two">
+    <article class="surface chart-card"><div class="section-head"><h3>HRV 与个人基线</h3><p>阴影为 30 天均值 ±1 个标准差，落在下方说明恢复偏弱。</p></div><div class="chart-frame"><canvas id="recoveryTrendChart" role="img" aria-label="HRV 与个人基线"></canvas></div></article>
+    <article class="surface chart-card"><div class="section-head"><h3>静息心率与个人基线</h3><p>阴影为 30 天均值 ±1 个标准差，高于上沿常见于疲劳或生病。</p></div><div class="chart-frame"><canvas id="recoveryRhrChart" role="img" aria-label="静息心率与个人基线"></canvas></div></article>
+  </div>
+  <article class="surface chart-card"><div class="section-head"><h3>睡眠时长与当晚 HRV</h3><p>每个点为一晚；看睡得更久时 HRV 是否更高。</p></div><div class="chart-frame"><canvas id="recoveryScatterChart" role="img" aria-label="睡眠时长与 HRV"></canvas></div></article>
+  <details class="surface table-card"><summary>每日恢复记录</summary><div class="table-wrap" id="recoveryTableWrap"></div></details>
+</section>
+
 <section class="view-panel" id="panel-body" role="tabpanel" aria-labelledby="tab-body" tabindex="-1" data-view-panel="body" hidden>
-        <div class="panel-grid panel-grid-two">
-          <article class="surface narrative-card">
-            <div class="section-head"><h3>体重、BMI 与体脂</h3><p>查看当前体征、近期记录与体重目标。</p></div>
-            <div class="detail-grid" id="bodyMetricGrid"></div>
-          </article>
+  <div class="kpi-row" id="bodySummary"></div>
+  <div class="panel-grid panel-grid-two">
+    <article class="surface table-card"><div class="section-head"><h3>夜间体征</h3><p>来自 Google Health 的血氧、呼吸率与相对皮温，设备支持且已授权时同步。</p></div><div class="table-wrap" id="vitalTableWrap"></div></article>
+    <article class="surface table-card"><div class="section-head"><h3>体重与体脂记录</h3><p>Google Health 体重与体脂记录，含手动与智能秤上传。</p></div><div class="table-wrap" id="bodyTableWrap"></div></article>
+  </div>
+  <article class="surface">
+    <div class="section-head"><h3>营养与饮水</h3><p>在 Google Health 中记录饮食或饮水后显示。</p></div>
+    <div class="detail-grid detail-grid-4" id="lifestyleMetricGrid"></div>
+    <div class="table-wrap" id="foodTableWrap"></div>
+  </article>
+  <p class="muted" id="bodyMissingNote" hidden></p>
+</section>
 
-          <article class="surface narrative-card">
-            <div class="section-head"><h3>血氧、呼吸率与皮温</h3><p>由支持这些指标的 Fitbit 设备提供。</p></div>
-            <div class="detail-grid" id="vitalMetricGrid"></div>
-          </article>
-        </div>
-
-        <div class="panel-grid panel-grid-two">
-          <article class="surface table-card">
-            <div class="section-head"><h3>近期体重 / 体脂记录</h3><p>同步后展示你在 Fitbit 中记录的体重与体脂。</p></div>
-            <div class="table-wrap" id="bodyTableWrap"></div>
-          </article>
-
-          <article class="surface table-card">
-            <div class="section-head"><h3>近期体征摘要</h3><p>查看各项体征最近一次的测量结果。</p></div>
-            <div class="table-wrap" id="vitalTableWrap"></div>
-          </article>
-        </div>
-      </section>
-<section class="view-panel" id="panel-lifestyle" role="tabpanel" aria-labelledby="tab-lifestyle" tabindex="-1" data-view-panel="lifestyle" hidden>
-        <div class="panel-grid panel-grid-two">
-          <article class="surface narrative-card">
-            <div class="section-head"><h3>营养与饮水</h3><p>查看每日摄入和饮水目标。</p></div>
-            <div class="detail-grid" id="lifestyleMetricGrid"></div>
-          </article>
-
-          <article class="surface table-card">
-            <div class="section-head"><h3>近期食物记录</h3><p>查看你在 Fitbit 中记录的食物。</p></div>
-            <div class="table-wrap" id="foodTableWrap"></div>
-          </article>
-        </div>
-      </section>
 <section class="view-panel" id="panel-account" role="tabpanel" aria-labelledby="tab-account" tabindex="-1" data-view-panel="account" hidden>
-        <div class="panel-grid panel-grid-two">
-          <article class="surface narrative-card">
-            <div class="section-head"><h3>账户、设备与权限</h3><p>查看账户信息、设备与同步状态。</p></div>
-            <div class="detail-grid" id="accountMetricGrid"></div>
-          </article>
+  <div class="kpi-row" id="accountSummary"></div>
+  <div class="panel-grid panel-grid-two">
+    <article class="surface"><div class="section-head"><h3>设备</h3><p>电量与最近同步时间。</p></div><div class="device-list" id="deviceList"></div></article>
+    <article class="surface"><div class="section-head"><h3>数据覆盖</h3><p>各类数据的本地历史范围与条数。</p></div><div class="coverage-list" id="coverageList"></div></article>
+  </div>
+  <div class="panel-grid panel-grid-two">
+    <article class="surface"><div class="section-head"><h3>授权范围</h3><p>已授予的 Google Health 读取权限。</p></div><div class="scope-list" id="scopeList"></div></article>
+    <article class="surface table-card"><div class="section-head"><h3>历史徽章</h3><p>迁移前保存的徽章；Google Health 暂不提供徽章接口。</p></div><div class="table-wrap" id="badgeTableWrap"></div></article>
+  </div>
+  <details class="surface table-card"><summary>接口同步状态</summary><p class="muted">每个数据接口最近一次同步的结果。</p><div class="table-wrap" id="endpointTableWrap"></div></details>
+  <details class="surface table-card"><summary>设备闹钟</summary><div class="table-wrap" id="alarmTableWrap"></div></details>
+</section>
 
-          <article class="surface data-card">
-            <div class="section-head"><h3>授权与同步状态</h3><p>如缺少数据权限，可在账户设置中重新授权。</p></div>
-            <div class="scope-list" id="scopeList"></div>
-          </article>
-        </div>
-
-        <div class="panel-grid panel-grid-two">
-          <article class="surface table-card">
-            <div class="section-head"><h3>Fitbit 设备</h3><p>显示设备电量、同步时间和基础标识信息。</p></div>
-            <div class="table-wrap" id="deviceTableWrap"></div>
-          </article>
-
-          <article class="surface table-card">
-            <div class="section-head"><h3>最近徽章</h3><p>查看 Fitbit 中获得的成就。</p></div>
-            <div class="table-wrap" id="badgeTableWrap"></div>
-          </article>
-        </div>
-
-        <div class="panel-grid panel-grid-two">
-          <article class="surface table-card">
-            <div class="section-head"><h3>设备闹钟</h3><p>查看设备上的闹钟设置。</p></div>
-            <div class="table-wrap" id="alarmTableWrap"></div>
-          </article>
-
-          <article class="surface table-card">
-            <div class="section-head"><h3>数据同步状态</h3><p>查看各类数据的同步进度和所需权限。</p></div>
-            <div class="table-wrap" id="endpointTableWrap"></div>
-          </article>
-        </div>
-
-      </section>
     </main>
-    <footer class="footer"><span>Fitflare · 我的健康记录</span><span>趋势范围以最近记录为终点。 <a href="/api/public/v1/docs">API 文档</a></span></footer>
+    <footer class="footer"><span>Fitflare · 我的健康记录 · <a href="/api/public/v1/docs">API 文档</a> · <a href="/about.html">关于 Fitflare</a> · <a href="/privacy.html">隐私政策</a> · <a href="/terms.html">使用条款</a></span><span>统计范围以最近记录为终点；未佩戴设备的日子不计入均值。</span></footer>
   </div>
   <noscript><p class="empty-state">此仪表盘需要 JavaScript。也可通过 <a href="/api/public/v1/docs">API 文档</a> 查看数据接口。</p></noscript>
   <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
   <dialog class="modal modal-narrow" id="adminModal" aria-labelledby="adminModalTitle">
     <div class="modal-dialog">
       <div class="modal-head"><h2 id="adminModalTitle">登录</h2><button class="icon-button" data-close-modal="adminModal" type="button" aria-label="关闭登录窗口">×</button></div>
-      <p class="muted">登录后可以连接 Fitbit、同步数据和管理账户设置。</p>
+      <p class="muted">登录后查看健康记录，并可连接 Google Health、同步数据。</p>
       <form id="adminPasswordForm" class="form-stack">
         <label class="field"><span class="field-label">登录口令</span><input id="adminPasswordInput" type="password" autocomplete="current-password" required autofocus></label>
         <button class="button button-primary" id="adminLoginSubmit" type="submit">登录</button>
@@ -213,24 +179,26 @@
   <dialog class="modal modal-narrow" id="accountModal" aria-labelledby="accountModalTitle">
     <div class="modal-dialog">
       <div class="modal-head"><h2 id="accountModalTitle">账户设置</h2><button class="icon-button" data-close-modal="accountModal" type="button" aria-label="关闭账户设置">×</button></div>
-      <p class="connection-status" id="accountConnectionStatus" role="status">尚未连接 Fitbit</p>
-      <button class="button" id="reauthorizeBtn" type="button" hidden>重新授权 Fitbit</button>
-      <p class="muted account-settings-hint" id="accountSettingsHint">填写 Fitbit 个人应用信息，然后完成授权。</p>
+      <p class="connection-status" id="accountConnectionStatus" role="status">尚未连接 Google Health</p>
+      <button class="button" id="reauthorizeBtn" type="button" hidden>重新授权 Google Health</button>
+      <p class="muted" id="accountSettingsHint">填写 Google Cloud 中启用了 Google Health API 的 Web OAuth 客户端，然后完成授权。</p>
+      <p><a href="https://developers.google.com/health/get-started" target="_blank" rel="noreferrer noopener">Google Health 接入说明</a></p>
       <form id="accountSetupForm" class="form-stack">
-        <label class="field"><span class="field-label">Client ID</span><input id="clientId" type="text" autocomplete="off" required></label>
-        <label class="field"><span class="field-label">Client Secret</span><input id="clientSecret" type="password" autocomplete="new-password" required></label>
-        <button class="button button-primary" id="accountSetupSubmit" type="submit">连接并授权</button>
+        <label class="field"><span class="field-label">Google Client ID</span><input id="clientId" type="text" autocomplete="off" required></label>
+        <label class="field"><span class="field-label">Google Client Secret</span><input id="clientSecret" type="password" autocomplete="new-password" required></label>
+        <label class="field"><span class="field-label">已注册的回调 URI</span><input id="redirectUri" type="url" value="http://localhost:8080/callback" required></label>
+        <button class="button button-primary" id="accountSetupSubmit" type="submit">保存并授权</button>
       </form>
     </div>
   </dialog>
   <dialog class="modal modal-narrow" id="authModal" aria-labelledby="authModalTitle">
     <div class="modal-dialog">
-      <div class="modal-head"><h2 id="authModalTitle">连接 Fitbit</h2><button class="icon-button" data-close-modal="authModal" type="button" aria-label="关闭授权窗口">×</button></div>
-      <p class="muted">打开 Fitbit 授权页，完成后粘贴最终回调 URL 或授权码。</p>
-      <a class="button" id="authOpenLink" href="#" rel="noreferrer noopener" target="_blank">打开 Fitbit 授权页</a>
+      <div class="modal-head"><h2 id="authModalTitle">连接 Google Health</h2><button class="icon-button" data-close-modal="authModal" type="button" aria-label="关闭授权窗口">×</button></div>
+      <p class="muted">授权读取活动、健康指标和睡眠，以更新图表；营养权限用于饮食与饮水记录，个人资料和设置权限用于账户及设备信息。可只同意需要的数据类别。请使用已关联原 Fitbit 账户的 Google 账号；首次使用需先登录 Google Health 手机应用。完成后粘贴完整回调 URL，即使 localhost 页面无法打开也可复制地址栏。</p>
+      <a class="button" id="authOpenLink" href="#" rel="noreferrer noopener" target="_blank">打开 Google 授权页</a>
       <form id="authExchangeForm" class="form-stack">
-        <label class="field"><span class="field-label">回调 URL 或授权码</span><textarea id="authRedirectValue" rows="4" required></textarea></label>
-        <button class="button button-primary" id="authExchangeSubmit" type="submit">完成授权</button>
+        <label class="field"><span class="field-label">完整回调 URL（含 code 和 state）</span><textarea id="authRedirectValue" rows="4" required></textarea></label>
+        <button class="button button-primary" id="authExchangeSubmit" type="submit">提交授权结果</button>
       </form>
     </div>
   </dialog>

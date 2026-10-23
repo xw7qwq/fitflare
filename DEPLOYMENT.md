@@ -1,6 +1,17 @@
-# fitflare 生产部署指南
+# Fitflare 生产部署指南
 
-本文适用于 Linux 上的 Docker Compose 部署。仓库名称为 fitflare，兼容名称保持为 Compose 服务 `fitbaus`、容器 `fitbaus-app`、环境变量 `FITBAUS_*`。应用只处理 `FITFLARE_PROFILE_ID` 指定的唯一账户。宿主机只监听 `127.0.0.1:9000`，由 Caddy 提供 HTTPS。
+本文适用于 Linux 上的 Docker Compose 部署。Compose 项目和服务名为 `fitflare`，容器为 `fitflare-app`，配置变量统一使用 `FITFLARE_*`。应用只处理 `FITFLARE_PROFILE_ID` 指定的唯一账户。宿主机只监听 `127.0.0.1:9000`，由反向代理提供 HTTPS。
+
+## 当前部署（lucius7 服务器）
+
+- 正式地址：`https://fitflare.lucius7.dev/`；旧地址 `https://fitbit.lucius7.dev/` 保留路径和查询参数跳转至新地址。
+- 部署目录：`/home/lucius7/fitflare`，即本仓库的 `main` 检出；持久数据在其中的 `profiles/`。
+- 账户目录：`FITFLARE_PROFILE_ID=Lucius7`；访问模式：私有，需登录。
+- Caddy 主配置：`/home/lucius7/server-ops/caddy/Caddyfile`，用 `caddyctl check` / `caddyctl apply` 检查并原子加载；服务登记在 `/home/lucius7/server-ops/services.json`。
+- Google OAuth 应用名称 `Fitflare`，正式版（个人自用）；自动同步每 21600 秒（6 小时）。
+- 服务器专用的两个文件不进入 Git（已列入 `.gitignore` 与 `.dockerignore`）：
+  - `Dockerfile.host`：基于本机安全修补的运行时基底 `local/cpython-pip-security-20261022:fitflare`，只复制应用代码。不要换回上游原始镜像。
+  - `docker-compose.override.yml`：让 Compose 使用 `Dockerfile.host` 构建。
 
 ## 1. 准备源码与配置
 
@@ -17,15 +28,16 @@ chmod 600 .env
 
 | 变量 | 建议值或用途 |
 | --- | --- |
-| `FITBAUS_UID` / `FITBAUS_GID` | `10001` / `10001`，与数据目录属主一致 |
-| `FITBAUS_BIND_HOST` / `FITBAUS_PORT` | `127.0.0.1` / `9000` |
+| `FITFLARE_UID` / `FITFLARE_GID` | `10001` / `10001`，与数据目录属主一致 |
+| `FITFLARE_BIND_HOST` / `FITFLARE_PORT` | `127.0.0.1` / `9000` |
 | `FITFLARE_PROFILE_ID` | 新安装为 `me`；迁移时填原数据目录名，不是网页可切换的账户 |
-| `FITBAUS_DATA_ACCESS` | `private`，数据读取需要管理员登录 |
-| `FITBAUS_PUBLIC_PROFILES` | 兼容公开模式的允许列表；自用私有模式可留空，公开模式只允许填唯一账户 ID（其他目录始终不可见） |
-| `FITBAUS_ADMIN_PASSWORD` | 必须自行生成；也支持用 `FITBAUS_ADMIN_PASSWORD_HASH` 提供 Werkzeug 兼容哈希 |
-| `FITBAUS_SESSION_SECRET` | 独立生成并持久保存的随机密钥，建议至少 32 字符 |
-| `FITBAUS_SESSION_COOKIE_SECURE` | `true`，管理员通过 HTTPS 登录 |
-| `FITBAUS_AUTO_SYNC_ENABLED` | 首次部署设为 `false`，授权并验证手动同步后再决定是否开启 |
+| `FITFLARE_DATA_ACCESS` | `private`，数据读取需要登录 |
+| `FITFLARE_PUBLIC_PROFILES` | 仅公开模式使用，只能填唯一账户 ID；私有模式留空 |
+| `FITFLARE_ADMIN_PASSWORD` | 必须自行生成；也支持用 `FITFLARE_ADMIN_PASSWORD_HASH` 提供 Werkzeug 兼容哈希 |
+| `FITFLARE_SESSION_SECRET` | 独立生成并持久保存的随机密钥，至少 32 字符；也可用 `FITFLARE_SESSION_SECRET_FILE` |
+| `FITFLARE_SESSION_COOKIE_SECURE` | `true`，通过 HTTPS 登录 |
+| `FITFLARE_AUTO_SYNC_ENABLED` | 首次部署设为 `false`，授权并验证手动同步后再开启 |
+| `GOOGLE_HEALTH_CLIENT_ID` / `_SECRET` | 可选；不填则在网页“账户设置”中保存 |
 | `TZ` | 按需要设置容器时区 |
 
 分别执行以下命令两次，为密码与会话密钥生成不同的随机值，并填入 `.env`：
@@ -47,135 +59,100 @@ docker compose ps
 curl -fsS http://127.0.0.1:9000/api/health
 ```
 
-若迁入已有数据，应先备份，再使整个 `profiles/` 归配置的 UID/GID 所有；目录权限设为 `700`、文件权限设为 `600`。不要删除已有档案或通过开放所有用户写权限来修复问题。
+若迁入已有数据，应先备份，再使整个 `profiles/` 归配置的 UID/GID 所有；目录权限设为 `700`、文件权限设为 `600`。不要删除已有目录或通过开放所有用户写权限来修复问题。
 
-Docker 镜像使用固定的 Python 基础镜像摘要和 `requirements.lock`，以非 root 用户运行。Compose 启用只读根文件系统，运行时可写区域为 `profiles/` 与临时目录。Gunicorn 保持单 worker、多线程，因为后台任务状态保存在单个进程中。
+镜像使用固定的 Python 基础镜像摘要和 `requirements.lock`，以非 root 用户运行。Compose 启用只读根文件系统，移除 capabilities 并启用 no-new-privileges，可写区域只有 `profiles/` 与临时目录。Gunicorn 保持单 worker、多线程，因为后台任务状态保存在单个进程中。
 
 首次启动使用上述 `docker compose up -d --build`。`scripts/deploy.sh` 会读取已有容器和镜像，**不能用于首次安装**。
 
-## 3. 配置 Caddy 与 HTTPS
+## 3. 配置 HTTPS 反向代理
 
-将自有域名解析到服务器，并让 Caddy 能接收 80/443 请求。把以下站点块合并进 Caddy 配置，示例中的 `fitbit.example.com` 必须换成自己的域名：
+将自有域名解析到服务器，并让反向代理接收 80/443 请求。Caddy 示例：
 
 ```caddy
-fitbit.example.com {
+fitflare.example.com {
     reverse_proxy 127.0.0.1:9000
 }
 ```
 
-参考文件：[deploy/caddy-fitbaus.example.caddy](deploy/caddy-fitbaus.example.caddy)。不要用示例覆盖已有服务器的其他站点配置。采用系统服务安装的 Caddy 可执行：
+参考文件：[deploy/caddy-fitflare.example.caddy](deploy/caddy-fitflare.example.caddy)。不要用示例覆盖已有服务器的其他站点配置；本服务器使用 `server-ops` 的 `caddyctl`。随后在 HTTPS 页面登录，确认能读取健康记录。未登录访问数据接口应返回 `401`；首页和 API 文档可以正常展示。
+
+生产保持 `FITFLARE_SESSION_COOKIE_SECURE=true`。在 HTTP 地址登录时浏览器不会发送 Secure Cookie；只有隔离的本机开发环境才应设为 `false`。不要将业务端口直接暴露公网来绕过代理问题。
+
+## 4. 连接 Google Health 与首次同步
+
+在 Google Cloud 创建启用 Google Health API 的 Web OAuth 客户端，回调 URI 登记为 `http://localhost:8080/callback`。完整步骤与权限范围见 [GOOGLE_HEALTH.md](GOOGLE_HEALTH.md)。
+
+1. 在 HTTPS 页面登录，点击顶部“连接 Google Health”，填写 Client ID、Client Secret 与回调 URI 并保存。
+2. 打开 Google 授权页，用关联原 Fitbit 账户的 Google 账号同意所需权限。
+3. 浏览器跳转到 `http://localhost:8080/callback?code=...&state=...`。localhost 指浏览器所在电脑，页面打不开也没关系，从地址栏复制**完整 URL**，粘贴回授权窗口提交。
+4. 点击“同步数据”完成首次同步。确认数据正常后再开启自动同步。
+
+命令行维护入口（同一账户，无需 `--profile`）：
 
 ```bash
-sudo caddy validate --config /etc/caddy/Caddyfile
-sudo systemctl reload caddy
-curl -fsS https://fitbit.example.com/api/health
+docker exec -it fitflare-app python auth/authorize_google_health.py --configure --no-browser
+docker exec -it fitflare-app python fetch/fetch_all.py
 ```
 
-首次启用 Caddy 时先启动其服务。随后在 HTTPS 页面点击管理员登录，确认私有档案能够正常读取。未登录访问数据接口应返回 `401`；首页和 API 文档可以正常展示。
-
-生产保持 `FITBAUS_SESSION_COOKIE_SECURE=true`。在 HTTP 地址登录时浏览器不会发送 Secure Cookie；只有隔离的本机开发环境才应设为 `false`。不要将业务端口直接暴露公网来绕过代理问题。
+`profiles/<FITFLARE_PROFILE_ID>/auth/google_client.json` 保存客户端配置，`tokens.json` 保存授权；不要打印、提交或上传这些文件。授权 URL、回调 URL 和令牌都不要公开。同步包含网络请求、限流等待和令牌刷新，首次抓取可能耗时较长。
 
 ## 从多档案部署迁移
 
-先备份现有 `.env` 和 `profiles/`，记录自己原有的数据目录名，例如 `profiles/myprofile`。设置 `FITFLARE_PROFILE_ID=myprofile`，保留原凭据、CSV、缓存和文件权限。不要将目录改名为 `me`，也不要合并多个目录。
+先备份现有 `.env` 和 `profiles/`，记录原有数据目录名，例如 `profiles/myprofile`。设置 `FITFLARE_PROFILE_ID=myprofile`，保留原凭据、CSV、缓存和文件权限。不要将目录改名为 `me`，也不要合并多个目录。
 
-单人版不会删除其他目录，但不会枚举、访问或同步它们，管理员也不例外。旧只读 URL 仅兼容配置的账户；创建/删除档案接口已经移除。`FITBAUS_DATA_ACCESS` 默认改为 `private`，因此升级时必须配置管理员密码；若原 `.env` 显式为 `public`，请主动改为 `private`。
-
-从原始服务器 Git 历史迁移时不要直接合并到净化后的仓库。先在新目录 clone 本仓库，停写并备份后，将原 `.env` 与 `profiles/` 按上述步骤恢复；不要在同一端口同时启动两个容器。现有已经基于本仓库的部署可按“更新与回滚”执行。
-
-## Fitbit 授权与首次同步
-
-当前实现仍接入旧 Fitbit Web API。Google 公告它于 2026 年 9 月下线；新 Google Health API 需要单独适配及重新授权，不能直接复用旧 token。以下是现有适配器的操作说明，不承诺旧接口仍可用。已有本地记录仍可查看。详见 [迁移研究](docs/cloudflare-workers.md)。
-
-在 HTTPS 页面登录后打开“账户设置”，填写 Client ID/Secret 并点击连接，再用授权窗口完成手工回调。已经连接的账户可以重新授权。页面不要求填写档案名，也不提供删除健康数据的按钮。
-
-下面的命令行是同一账户的维护入口：
-
-先在 Fitbit 开发者平台创建适合自己账户使用的应用，保存 Client ID / Client Secret，并登记与脚本一致的 Redirect URI。下面采用 SSH/Docker 下的手工回调流程，不需要向公网开放 8080 端口。
-
-在 `.env` 中设置以下两项为同一个已登记地址：
-
-```dotenv
-FITBIT_REDIRECT_URI=http://localhost:8080/callback
-FITBIT_FALLBACK_REDIRECT=http://localhost:8080/callback
-```
-
-修改 `.env` 后应用配置并启动授权：
-
-```bash
-docker compose up -d
-docker compose exec -e FITBIT_AUTH_TIMEOUT=1 fitbaus \
-  python auth/authorize_fitbit.py
-```
-
-`FITFLARE_PROFILE_ID` 使用英文字母、数字、下划线或连字符。脚本默认使用这一目录，不会自动扫描并同步其他目录；显式 `--profile` 只保留给本机维护。脚本优先读取 `FITBIT_CLIENT_ID` / `FITBIT_CLIENT_SECRET`，其次读取该档案保存的凭据；缺少凭据时会提示输入。不要将凭据直接写进源码或命令参数。
-
-1. 脚本尝试本地回调，短暂超时后显示手工授权提示。使用手工流程输出的授权链接，在自己的浏览器完成 Fitbit 登录与权限确认。
-2. 浏览器跳转到已登记的 `http://localhost:8080/callback?code=...`。此处的 localhost 指浏览器所在电脑，即使页面无法连接，也可以从地址栏复制完整 URL。
-3. 将完整回调 URL 粘贴回仍在运行的终端。脚本交换令牌，并保存到 `profiles/<FITFLARE_PROFILE_ID>/auth/`。
-4. 首次同步：
-
-```bash
-docker compose exec fitbaus python fetch/fetch_all.py
-```
-
-回到网页查看档案和数据；没有数据的指标取决于 Fitbit 的返回结果。授权 URL、回调 URL、令牌和授权日志都不要公开。保持 `FITBIT_FALLBACK_REDIRECT` 与登记地址一致，避免 HTTP 本地回调超时后使用空地址。
-
-后续可在管理员界面手动同步。若开启定时同步，将 `.env` 中 `FITBAUS_AUTO_SYNC_ENABLED=true` 后运行 `docker compose up -d`；默认档案同步间隔为 21600 秒、扫描间隔为 300 秒。同步包含网络请求、限流等待和令牌刷新，首次抓取可能耗时较长。
+Fitflare 不会删除其他目录，但不会枚举、访问或同步它们，登录用户也不例外。创建/删除档案接口已经移除。`FITFLARE_DATA_ACCESS` 默认是 `private`，升级时必须配置管理员密码。旧版 `FITBAUS_*` 变量不再读取，升级时需把 `.env` 中的变量名改为 `FITFLARE_*`；会话 Cookie 改名后需要重新登录一次。
 
 ## 更新与回滚
 
-部署主机需要 Python 3、Node.js 24、npm、Chromium 系统依赖和 `flock`。以下命令面向已安装的 Linux 部署；先按下节备份，并确认当前没有正在运行的 Fitbit 同步，也没有其他终端在抓取数据。
+部署主机需要 Python 3、Node.js 24、npm、Chromium 系统依赖和 `flock`。先确认当前没有正在运行的同步，也没有其他终端在抓取数据。
 
 ```bash
-git pull --ff-only origin main
-npm ci --ignore-scripts
-npx playwright install --with-deps chromium
+cd /home/lucius7/fitflare
+git switch main && git pull --ff-only
 bash scripts/deploy.sh
 ```
 
-部署脚本依次执行：
+脚本依次执行：
 
-1. 用合成数据执行完整检查，构建并验证带时间戳的发布镜像。
-2. 检查现有档案的同步锁，以及 Compose 的非 root、只读根文件系统配置。
-3. 保留旧镜像为 `fitbaus-fitbaus:rollback`，替换应用容器。
-4. 等待 Docker 健康检查，再验证生产数据访问边界；成功后更新 `fitbaus-fitbaus:latest` 标签。
+1. 构建 `fitflare:release-<UTC 时间>`（存在 `Dockerfile.host` 时自动使用它），用合成数据跑完整发布门禁。
+2. 检查同步锁，以及 Compose 的非 root、只读根文件系统配置。
+3. 保留当前镜像为 `fitflare:rollback`，替换应用容器。
+4. 等待健康检查，再验证线上数据访问边界；成功后标记为 `fitflare:latest`。
 
-切换后的健康或访问检查失败时，脚本尝试恢复前一镜像。回滚只恢复应用镜像，**不会恢复 `.env`、Compose 文件或数据**；仍需检查命令退出状态与容器状态。手工恢复已有回滚标签可执行：
+切换后的健康或访问检查失败时，脚本自动恢复前一镜像。回滚只恢复应用镜像，**不会恢复 `.env`、Compose 文件或数据**。手工回滚：
 
 ```bash
-FITBAUS_IMAGE=fitbaus-fitbaus:rollback docker compose up -d --no-deps --no-build fitbaus
+FITFLARE_IMAGE=fitflare:rollback docker compose up -d --no-deps --no-build fitflare
 docker compose ps
 curl -fsS http://127.0.0.1:9000/api/health
 ```
 
-通常让 `FITBAUS_IMAGE` 使用 Compose 的 `latest` 默认值。如果在 `.env` 固定了旧镜像，下次普通 `docker compose up` 会重新采用该值，更新时必须同步维护。脚本不检查 Caddy/DNS，因此发布后还要验证 HTTPS 域名和浏览器登录。
+通常让 `FITFLARE_IMAGE` 使用默认的 `fitflare:latest`。不要在其他目录构建或手工修改 Compose 的 `image`/`build`，以免线上代码与仓库不一致。缓存结构版本变化时，首个请求会自动重建 `profiles/*/cache/dashboard.json`。脚本不检查 DNS 和代理，发布后还要验证 HTTPS 域名和浏览器登录。
 
 ## 备份与恢复
 
-备份必须保存在仓库之外。`profiles/` 包含令牌、凭据、原始记录与缓存；`.env` 包含部署密钥，应与档案一起限制访问。不要将这些文件上传到 GitHub、CI 产物或公开网盘。
+备份必须保存在仓库之外。`profiles/` 包含令牌、凭据、原始记录与缓存；`.env` 包含部署密钥，应与数据一起限制访问。不要上传到 GitHub、CI 产物或公开网盘。
 
-先关闭自动同步、等待现有同步完成，并确保没有额外的命令行抓取进程，再停止容器创建一致备份。例如：
+先关闭自动同步、等待现有同步完成，再停止容器创建一致备份：
 
 ```bash
-docker compose stop fitbaus
+docker compose stop fitflare
 sudo install -d -o root -g root -m 700 /var/backups/fitflare
 backup_file=/var/backups/fitflare/$(date -u +%Y%m%dT%H%M%SZ).tar.gz
 sudo tar -czf "$backup_file" profiles .env
 sudo chmod 600 "$backup_file"
-docker compose start fitbaus
+docker compose start fitflare
 ```
 
-停止容器会短暂中断站点，等待已有同步完成可避免中途打断写入。备份成功后再按需恢复自动同步。保留多个备份版本，复制到其他机器时使用受控、加密的存储。
-
-恢复时先停止同步与容器，将备份解压到仓库外的暂存目录并检查内容；保留当前 `profiles/` 的副本，再恢复 `.env` 与档案，修复到配置的 UID/GID 和私有权限后启动。确认健康接口、管理员登录与档案数据均正常，再恢复同步。
+恢复时先停止同步与容器，将备份解压到仓库外的暂存目录并检查内容；保留当前 `profiles/` 的副本，再恢复 `.env` 与数据，修复到配置的 UID/GID 和私有权限后启动。确认健康接口、登录与数据均正常，再恢复同步。
 
 ## 日常检查
 
 ```bash
 docker compose ps
-docker compose logs --tail 100 fitbaus
+docker compose logs --tail 100 fitflare
 curl -fsS http://127.0.0.1:9000/api/health
 ```
 
-容器健康只说明应用响应正常；公网访问还取决于 DNS、代理和 HTTPS。排查时先比较本机健康接口与域名健康接口。日志可能包含档案标识或授权上下文，对外分享前先脱敏。API 使用方式见 [API.md](API.md)，安全事项见 [SECURITY.md](SECURITY.md)。
+容器健康只说明应用响应正常；公网访问还取决于 DNS、代理和 HTTPS。排查时先比较本机健康接口与域名健康接口。日志可能包含账户标识或授权上下文，对外分享前先脱敏。API 用法见 [API.md](API.md)，安全事项见 [SECURITY.md](SECURITY.md)。

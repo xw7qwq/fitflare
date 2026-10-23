@@ -43,7 +43,7 @@ SECTION_LABELS = {
 TABLE_LABELS = {
     "sleep": "睡眠表",
     "activity": "活动表",
-    "activity_logs": "Fitbit 活动日志表",
+    "activity_logs": "活动日志表",
     "recovery": "恢复表",
     "body": "体征表",
     "vitals": "生命体征表",

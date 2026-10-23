@@ -19,7 +19,7 @@ GROUPS = {
 }
 GUIDE = (
     ('access', '访问与隐私', (
-        'public/v1 只提供 GET 读取，不会主动发起 Fitbit 同步。缺失或过期的派生缓存可能在读取时本地重建。',
+        'public/v1 只提供 GET 读取，不会主动发起 Google Health 同步。缺失或过期的派生缓存可能在读取时本地重建。',
         '所有 /me 接口始终读取本站唯一账户，不需要选择或填写档案 ID。默认私有模式要求本站管理员会话；只有部署者显式开启公开模式才允许匿名读取。文档始终可读。',
         '私有模式请先在仪表盘登录，再使用同源浏览器请求。这里不提供 API Key 或 Bearer Token，也不收集、保存或展示管理员密码。cURL 与 Python 示例默认不带会话。',
         '匿名公开版 API 允许跨域读取；私有模式和管理员会话响应不开放 CORS。所有 API 响应使用 private, no-store，不应在共享缓存中保存健康数据。',
@@ -104,7 +104,7 @@ ENDPOINTS = (
     endpoint('metric', 'profiles', PROFILE+'/metrics/{metric_key}', '单项指标', '按 key 读取一张指标卡；不存在的指标返回 404。', 'metric'),
     endpoint('correlations', 'profiles', PROFILE+'/correlations', '相关性', '缓存中的相关系数、强度和重叠点数，仅供描述性参考。', 'correlations', 'array'),
     endpoint('series', 'series', PROFILE+'/series/{granularity}', '趋势序列', '从完整本地数据聚合序列，按指标选择列，按 limit 截取最后若干点。', 'series', 'Series', (METRICS, SERIES_LIMIT), result='data.points[]：序列点；data.metrics[]：单位等元数据；meta.available_metrics[]：可选指标'),
-    endpoint('chart', 'series', PROFILE+'/charts/{chart_key}.svg', 'SVG 趋势图', '返回可嵌入的 SVG；各指标独立归一化。缺少数据时仍返回带空状态文字的 SVG。', query=SVG_PARAMS, media='image/svg+xml', result='SVG 文本；X-FitBaus-Chart-Meta 响应头包含图表元数据'),
+    endpoint('chart', 'series', PROFILE+'/charts/{chart_key}.svg', 'SVG 趋势图', '返回可嵌入的 SVG；各指标独立归一化。缺少数据时仍返回带空状态文字的 SVG。', query=SVG_PARAMS, media='image/svg+xml', result='SVG 文本；X-Fitflare-Chart-Meta 响应头包含图表元数据'),
     endpoint('datasets', 'records', PROFILE+'/datasets', '数据集目录', '列出支持的完整结构化数据集和覆盖信息。', 'datasets', 'array'),
     endpoint('dataset', 'records', PROFILE+'/datasets/{dataset}', '读取数据集', '读取由 CSV 解析或聚合的完整历史，并从 offset 起分页。', 'dataset', 'Dataset', (OFFSET, page_limit(200)), result='data.rows[]：当前页；data.columns[]：列名提示；meta：分页信息'),
     endpoint('sections', 'records', PROFILE+'/sections', '摘要分区列表', '读取 activity、body、vitals、lifestyle、account 摘要。', 'sections', 'array'),
@@ -177,15 +177,15 @@ def build_openapi_spec(base_url='/', access_mode='public'):
                 operation['responses'][code] = {'description': message, 'content': {'application/json': {'schema': {'$ref': '#/components/schemas/Error'}}}}
             operation['responses']['500'] = {'description': '服务异常；可能为文本响应', 'content': {'text/html': {'schema': {'type': 'string'}}}}
         if item['id'] == 'chart':
-            operation['responses']['200']['headers'] = {'X-FitBaus-Chart-Meta': {'description': 'JSON 编码的图表元数据', 'schema': {'type': 'string'}}}
+            operation['responses']['200']['headers'] = {'X-Fitflare-Chart-Meta': {'description': 'JSON 编码的图表元数据', 'schema': {'type': 'string'}}}
         paths[item['path']] = {'get': operation}
     return {'openapi': '3.1.0', 'info': {'title': 'Fitflare Personal API', 'version': PUBLIC_API_VERSION,
              'description': '单人只读本地缓存 API。/me 始终对应配置的唯一账户；默认使用本站私有会话。字段不承诺匿名化。'},
             'servers': [{'url': base_url or '/'}], 'tags': [{'name': label} for label in GROUPS.values()],
             'security': [{'SessionCookie': []}] if access_mode == 'private' else [{}, {'SessionCookie': []}],
             'paths': paths, 'components': {'schemas': deepcopy(SCHEMAS), 'securitySchemes': {
-                'SessionCookie': {'type': 'apiKey', 'in': 'cookie', 'name': 'fitbaus_admin_session',
-                                  'description': '在本站仪表盘登录后由浏览器管理；不是 Fitbit OAuth token。'}}}}
+                'SessionCookie': {'type': 'apiKey', 'in': 'cookie', 'name': 'fitflare_session',
+                                  'description': '在本站仪表盘登录后由浏览器管理；不是 Google Health OAuth 令牌；Cookie 名称为旧版兼容标识。'}}}}
 
 
 def example_path(item):

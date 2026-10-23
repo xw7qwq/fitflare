@@ -2,15 +2,30 @@
 import contextlib
 import io
 import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
+from common import profile_paths
 from fetch import fetch_all
 
 
 class PersonalCliTests(unittest.TestCase):
+    def setUp(self):
+        # The sync holds the account's shared fetch lock, so it needs a writable data root.
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        patcher = patch.object(profile_paths, 'ROOT_DIR', temp.name)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        for account in ('Demo', 'Archive'):
+            auth = os.path.join(temp.name, 'profiles', account, 'auth')
+            os.makedirs(auth)
+            with open(os.path.join(auth, 'tokens.json'), 'w', encoding='utf-8') as handle:
+                handle.write('{"access_token": "synthetic-legacy"}')
+
     def run_sync(self, arguments=(), return_code=0):
-        with patch.dict(os.environ, {'FITFLARE_PROFILE_ID': 'Demo', 'FITBIT_PROFILE': 'Hidden'}), \
+        with patch.dict(os.environ, {'FITFLARE_PROFILE_ID': 'Demo', 'FITBIT_PROFILE': 'Hidden', 'FITFLARE_FETCH_LOCK_HELD': ''}), \
              patch('sys.argv', ['fetch_all.py', *arguments]), \
              patch.object(fetch_all, 'run_script', return_value=(return_code, None)) as runner, \
              patch.object(fetch_all, 'build_dashboard_cache') as cache, \
@@ -43,3 +58,14 @@ class PersonalCliTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertTrue(all(call.kwargs['extra_args'] == ['--profile', 'Archive'] for call in calls))
         self.assertEqual(caches[0].args, ('Archive',))
+
+
+class UnauthorizedCliTests(unittest.TestCase):
+    def test_account_without_tokens_stops_before_running_fetches(self):
+        with tempfile.TemporaryDirectory() as root, patch.object(profile_paths, 'ROOT_DIR', root), \
+             patch.dict(os.environ, {'FITFLARE_PROFILE_ID': 'Demo', 'FITFLARE_FETCH_LOCK_HELD': ''}), \
+             patch('sys.argv', ['fetch_all.py']), patch.object(fetch_all, 'run_script') as runner, \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(fetch_all.main(), 1)
+        runner.assert_not_called()
+        self.assertIn('Cannot determine account provider', output.getvalue())

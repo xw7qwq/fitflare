@@ -14,7 +14,7 @@ curl -fsS 'https://YOUR_HOST/api/public/v1/me'
 
 ## 访问与隐私
 
-public/v1 只提供 GET 读取，不会主动发起 Fitbit 同步。缺失或过期的派生缓存可能在读取时本地重建。
+public/v1 只提供 GET 读取，不会主动发起 Google Health 同步。缺失或过期的派生缓存可能在读取时本地重建。
 
 所有 /me 接口始终读取本站唯一账户，不需要选择或填写档案 ID。默认私有模式要求本站管理员会话；只有部署者显式开启公开模式才允许匿名读取。文档始终可读。
 
@@ -227,7 +227,7 @@ curl -fsS 'https://YOUR_HOST/api/public/v1/me/series/daily?metrics=sleep_hours,s
 
 返回可嵌入的 SVG；各指标独立归一化。缺少数据时仍返回带空状态文字的 SVG。
 
-返回：`image/svg+xml`；SVG 文本；X-FitBaus-Chart-Meta 响应头包含图表元数据。
+返回：`image/svg+xml`；SVG 文本；X-Fitflare-Chart-Meta 响应头包含图表元数据。
 
 | 参数 | 位置 | 约束 | 说明 |
 | --- | --- | --- | --- |

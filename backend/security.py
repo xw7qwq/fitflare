@@ -56,7 +56,7 @@ def require_admin(csrf=False):
                 return auth_error('需要管理员登录。', 401, 'admin_auth_required')
             if csrf and request.method not in {'GET', 'HEAD', 'OPTIONS'}:
                 expected = str(session.get('csrf_token') or '')
-                supplied = request.headers.get('X-FitBaus-CSRF', '')
+                supplied = request.headers.get('X-Fitflare-CSRF', '')
                 if not expected or not hmac.compare_digest(supplied, expected):
                     return auth_error('管理员会话已失效，请重新登录。', 403, 'invalid_admin_csrf')
             return function(*args, **kwargs)
@@ -68,7 +68,7 @@ def install_security(app):
     validate_profile_id(app.config['OWNER_PROFILE_ID'])
     app.config['ADMIN_AUTH_CONFIGURED'] = bool(app.config['ADMIN_PASSWORD'] or app.config['ADMIN_PASSWORD_HASH'])
     if app.config['DATA_ACCESS_MODE'] not in {'public', 'private'}:
-        raise RuntimeError('FITBAUS_DATA_ACCESS must be public or private')
+        raise RuntimeError('FITFLARE_DATA_ACCESS must be public or private')
     if app.config['DATA_ACCESS_MODE'] == 'private' and not app.config['ADMIN_AUTH_CONFIGURED']:
         raise RuntimeError('Private mode requires an administrator password or hash')
     app.extensions['login_attempts'] = OrderedDict()

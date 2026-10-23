@@ -1,5 +1,5 @@
 import { escapeHtml, formatDate, formatDateTime, statusLabel } from './js/format.js';
-import { VIEWS, normalizeDashboard, selectDateWindow } from './js/data.js';
+import { VIEWS, VIEW_ALIASES, normalizeDashboard } from './js/data.js';
 import { destroyAllCharts, resizeVisibleCharts } from './js/charts.js';
 import { createViews } from './js/views.js';
 import { createTableRenderer } from './js/table.js';
@@ -7,11 +7,11 @@ import { createTableRenderer } from './js/table.js';
 const state = {
   account: { profile_id: null, configured: false, authorized: false, has_data: false }, dashboard: null, viewModel: null, revision: 0,
   admin: { configured: false, authenticated: false, csrfToken: null, private: true },
-  activeView: 'overview', authorizationOpen: false, fetchJobId: null, fetchTimer: null, fetchNotFoundCount: 0,
+  activeView: 'overview', monthlyMetric: 'steps', authorizationOpen: false, fetchJobId: null, fetchTimer: null, fetchNotFoundCount: 0,
 };
 const refs = Object.fromEntries([...document.querySelectorAll('[id]')].map(element => [element.id, element]));
 const renderTable = createTableRenderer({ apiRequest, getContext: () => ({ revision: state.revision, version: state.dashboard?.generated_at, authenticated: state.admin.authenticated }) });
-const views = createViews({ state, refs, getDailySeries, renderTable });
+const views = createViews({ state, refs, renderTable });
 const VALID_RANGES = new Set(['14', '30', '90']);
 let dashboardRequest = 0;
 let dashboardAbort;
@@ -59,6 +59,8 @@ function bindEvents() {
     dialog.addEventListener('close', () => dialog.querySelectorAll('input[type=password], textarea').forEach(input => { input.value = ''; }));
   });
   window.addEventListener('popstate', () => applyRouteState().catch(handleAsyncError));
+  // Chart colors come from theme tokens, so a system theme switch needs a redraw.
+  window.matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change', () => { if (state.dashboard) { destroyAllCharts(); renderDashboard(); } });
 }
 function invalidateDashboard() {
   dashboardRequest++;
@@ -79,12 +81,12 @@ async function refreshAccount() {
   try {
     const payload = await apiRequest('/api/account', { signal: accountAbort.signal });
     if (requestId !== accountRequest) return;
-    state.account = { profile_id: payload.profile_id || null, configured: Boolean(payload.configured), authorized: Boolean(payload.authorized), has_data: Boolean(payload.has_data) };
+    state.account = { profile_id: payload.profile_id || null, configured: Boolean(payload.configured), authorized: Boolean(payload.authorized), has_data: Boolean(payload.has_data), provider: payload.provider || null };
     renderAccountSettings();
     if (!state.account.has_data) {
-      const notice = state.account.authorized ? 'Fitbit 已连接。点击顶部“同步 Fitbit”，载入你的健康记录。' : state.account.configured ? '应用信息已保存。请在账户设置中完成 Fitbit 授权。' : '欢迎使用 Fitflare。点击顶部“连接 Fitbit”，开始记录你的健康趋势。';
-      renderEmptyState(state.admin.authenticated ? notice : '暂无健康记录，请登录后连接 Fitbit 并同步数据。');
-      setStatus(state.account.authorized ? '等待同步' : '等待连接 Fitbit');
+      const notice = state.account.authorized ? 'Google Health 已连接。点击顶部“同步数据”，载入你的健康记录。' : state.account.configured ? 'Google 客户端已保存。请在账户设置中完成 Google Health 授权。' : '欢迎使用 Fitflare。点击顶部“连接 Google Health”，开始记录你的健康趋势。';
+      renderEmptyState(state.admin.authenticated ? notice : '暂无健康记录，请登录后连接 Google Health 并同步数据。');
+      setStatus(state.account.authorized ? '等待同步' : '等待连接 Google Health');
       setDashboardLoading(false);
       return;
     }
@@ -118,7 +120,7 @@ async function loadDashboard() {
     state.dashboard = payload;
     state.viewModel = normalizeDashboard(payload, state.admin.authenticated);
     renderDashboard();
-    setStatus(state.account.authorized ? '健康记录已更新' : '记录已载入 · 待授权 Fitbit');
+    setStatus(state.account.authorized ? '健康记录已更新' : '记录已载入 · 待授权 Google Health');
   } catch (error) {
     if (error.name === 'AbortError' || requestId !== dashboardRequest) return;
     renderEmptyState('读取失败，请检查连接后重试。', true);
@@ -133,6 +135,7 @@ function renderEmptyState(message = '暂无可显示的数据。', retry = false
   refs.dashboardNoticeText.textContent = message;
   refs.retryBtn.hidden = !retry;
   refs.overviewMetrics.hidden = true;
+  refs.dataQualityNote.hidden = true;
   refs.latestRecordText.textContent = '暂无记录';
   refs.lastSyncText.textContent = '暂无';
   document.querySelectorAll('[data-view-panel]').forEach(panel => { panel.hidden = true; });
@@ -147,24 +150,10 @@ function renderDashboard() {
   refs.lastSyncText.textContent = formatDateTime(snapshotStatus.saved_at || overview.latest_sync_at);
   refs.overviewMetrics.hidden = state.activeView !== 'overview';
   document.querySelectorAll('[data-view-panel]').forEach(panel => { panel.hidden = panel.dataset.viewPanel !== state.activeView; });
-  if (state.activeView === 'overview') renderStats();
   views[state.activeView]();
+  views.note();
   requestAnimationFrame(resizeVisibleCharts);
 }
-function renderStats() {
-  const core = [['sleep_hours', '睡眠时长'], ['steps', '步数'], ['hrv', 'HRV'], ['rhr', '静息心率']];
-  const cardHtml = card => `<button class="metric-card" type="button" data-jump-view="${escapeHtml(card.targetView || 'overview')}">
-    <span class="metric-label">${escapeHtml(card.label)}</span>
-    <strong class="metric-value">${escapeHtml(card.latestText || '--')}</strong>
-    <span class="metric-meta">最新 ${escapeHtml(formatDate(card.latest_date, 'short'))}</span>
-    <span class="metric-average">7 天均值 <b>${escapeHtml(card.avg7Text || '--')}</b></span>
-  </button>`;
-  refs.statsGrid.innerHTML = core.map(([key, label]) => cardHtml(state.viewModel.statsByKey[key] || { label })).join('');
-  const others = state.viewModel.stats.filter(card => !core.some(([key]) => key === card.key));
-  refs.moreStatsGrid.innerHTML = others.map(cardHtml).join('');
-  refs.moreMetrics.hidden = !others.length;
-}
-function getDailySeries() { return selectDateWindow(state.dashboard?.charts?.daily || [], refs.rangeSelect.value); }
 function getRouteState() { return Object.fromEntries(new URLSearchParams(window.location.search)); }
 function sanitizeRange(value) { return VALID_RANGES.has(String(value)) ? String(value) : '30'; }
 function syncRoute(values, { mode = 'replace' } = {}) {
@@ -174,6 +163,7 @@ function syncRoute(values, { mode = 'replace' } = {}) {
   if (url.href !== window.location.href) window.history[mode === 'push' ? 'pushState' : 'replaceState']({}, '', url);
 }
 function activateView(view, { updateHistory = true, historyMode = 'replace' } = {}) {
+  view = VIEW_ALIASES[view] || view;
   state.activeView = Object.hasOwn(VIEWS, view) ? view : 'overview';
   document.querySelectorAll('.tab-button').forEach(button => {
     const active = button.dataset.view === state.activeView;
@@ -315,9 +305,9 @@ async function logoutAdmin() {
 
 function renderAccountSettings() {
   const { configured, authorized } = state.account;
-  refs.openAccountBtn.textContent = configured ? '账户设置' : '连接 Fitbit';
-  refs.accountConnectionStatus.textContent = !configured ? '尚未连接 Fitbit' : authorized ? 'Fitbit 已授权' : '已保存应用信息，等待 Fitbit 授权';
-  refs.accountSettingsHint.textContent = configured ? '需要更换 Fitbit 应用时，填写新的应用信息；已有健康记录会保留。' : '填写你在 Fitbit 开发者平台创建的个人应用信息，然后完成授权。';
+  refs.openAccountBtn.textContent = configured ? '账户设置' : '连接 Google Health';
+  refs.accountConnectionStatus.textContent = !configured ? '尚未连接 Google Health' : authorized ? 'Google Health 已授权' : '已保存 Google 客户端，等待授权';
+  refs.accountSettingsHint.textContent = configured ? '需要更换 Google OAuth 客户端时填写新信息；已有健康记录和当前授权会保留，直到新授权完成。' : '填写 Google Cloud 中启用了 Google Health API 的 Web OAuth 客户端，然后完成授权。';
   refs.accountSetupSubmit.textContent = configured ? '保存并授权' : '连接并授权';
   refs.reauthorizeBtn.hidden = !configured;
   refs.syncBtn.disabled = !configured || !authorized || Boolean(state.fetchJobId);
@@ -326,12 +316,13 @@ function renderAccountSettings() {
 async function setupAccount() {
   const clientId = refs.clientId.value.trim();
   const clientSecret = refs.clientSecret.value.trim();
-  if (!clientId || !clientSecret) { showToast('请填写 Client ID 和 Client Secret。', true); return; }
+  const redirectUri = refs.redirectUri.value.trim();
+  if (!clientId || !clientSecret) { showToast('请填写 Google Client ID 和 Client Secret。', true); return; }
   setButtonState(refs.accountSetupSubmit, true, '保存中…');
   try {
     await apiRequest('/api/account/setup', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId, clientSecret }), requireAdmin: true,
+      body: JSON.stringify({ clientId, clientSecret, redirectUri }), requireAdmin: true,
     });
     refs.accountSetupForm.reset();
     await refreshAccount();
@@ -342,7 +333,17 @@ async function setupAccount() {
   }
 }
 async function startAuthorization() {
-  const payload = await apiRequest('/api/authorize', { requireAdmin: true });
+  let payload;
+  try {
+    payload = await apiRequest('/api/authorize', { requireAdmin: true });
+  } catch (error) {
+    if (error.code === 'google_credentials_missing') {
+      renderAccountSettings();
+      closeModal('authModal');
+      openModal('accountModal');
+    }
+    throw error;
+  }
   state.authorizationOpen = true;
   refs.authOpenLink.href = payload.auth_url || '#';
   refs.authRedirectValue.value = '';
@@ -352,23 +353,31 @@ async function startAuthorization() {
 async function submitAuthorization() {
   if (!state.authorizationOpen) return;
   const redirectUrl = refs.authRedirectValue.value.trim();
-  if (!redirectUrl) { showToast('请粘贴回调 URL 或授权码。', true); return; }
+  if (!redirectUrl) { showToast('请粘贴完整回调 URL（包括 code 和 state）。', true); return; }
   setButtonState(refs.authExchangeSubmit, true, '提交中…');
   try {
-    await apiRequest('/api/authorize-exchange', {
+    const result = await apiRequest('/api/authorize-exchange', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ redirectUrl }), requireAdmin: true,
     });
     state.authorizationOpen = false;
     closeModal('authModal');
     await refreshAccount();
-    showToast('Fitbit 授权完成，现在可以同步数据。');
-  } finally { setButtonState(refs.authExchangeSubmit, false, '完成授权'); }
+    showToast(result.warning || 'Google Health 授权完成，现在可以同步数据。', Boolean(result.warning));
+  } catch (error) {
+    if (['account_not_linked', 'account_mismatch', 'missing_permissions', 'oauth_exchange_failed',
+      'oauth_state_expired', 'oauth_consent_denied', 'oauth_network_error', 'identity_check_failed',
+      'refresh_token_missing'].includes(error.code)) {
+      // The server consumes a callback once. Offer a fresh consent request for retry.
+      try { await startAuthorization(); } catch { /* Keep the original actionable error. */ }
+    }
+    throw error;
+  } finally { setButtonState(refs.authExchangeSubmit, false, '提交授权结果'); }
 }
 
 async function rebuildDashboard() {
   if (!state.account.has_data) {
-    showToast("请先同步 Fitbit 数据。", true)
+    showToast("请先同步健康数据。", true)
     return
   }
   setStatus("正在刷新健康视图")
@@ -382,7 +391,7 @@ async function rebuildDashboard() {
 
 async function startFetch() {
   if (!state.account.configured) {
-    showToast("请先连接 Fitbit。", true)
+    showToast("请先连接 Google Health。", true)
     return
   }
 
@@ -405,7 +414,7 @@ function stopFetchPolling() {
   state.fetchTimer = null;
   state.fetchJobId = null;
   state.authorizationOpen = false;
-  setButtonState(refs.syncBtn, false, '同步 Fitbit');
+  setButtonState(refs.syncBtn, false, '同步数据');
 }
 function pollFetchStatus() {
   if (!state.fetchJobId) return
@@ -424,7 +433,7 @@ function pollFetchStatus() {
           clearInterval(state.fetchTimer)
           state.fetchTimer = null
           state.fetchJobId = null
-          setButtonState(refs.syncBtn, false, "同步 Fitbit")
+          setButtonState(refs.syncBtn, false, "同步数据")
           setStatus("同步任务状态已清理")
         }
         return
@@ -435,11 +444,11 @@ function pollFetchStatus() {
         clearInterval(state.fetchTimer)
         state.fetchTimer = null
         state.fetchJobId = null
-        setButtonState(refs.syncBtn, false, "同步 Fitbit")
+        setButtonState(refs.syncBtn, false, "同步数据")
         if (payload.status === "completed") {
           setStatus("同步完成，正在更新记录")
           await refreshAccount()
-          showToast("Fitbit 数据已同步完成。")
+          showToast("健康数据已同步完成。")
         } else {
           showToast(payload.error || "同步失败。", true)
           setStatus("同步失败")
@@ -450,7 +459,7 @@ function pollFetchStatus() {
       clearInterval(state.fetchTimer)
       state.fetchTimer = null
       state.fetchJobId = null
-      setButtonState(refs.syncBtn, false, "同步 Fitbit")
+      setButtonState(refs.syncBtn, false, "同步数据")
       showToast(error.message || "轮询同步状态失败。", true)
       setStatus("同步状态读取失败")
     }
@@ -464,7 +473,7 @@ function updateFetchStatus(payload) {
   if (percent != null && Number.isFinite(percent)) parts.push(`${percent}%`)
   if (payload.message) parts.push(payload.message)
   if (payload.throttle_active) {
-    parts.push(payload.throttle_mmss ? `限流倒计时 ${payload.throttle_mmss}` : "Fitbit 限流中")
+    parts.push(payload.throttle_mmss ? `限流倒计时 ${payload.throttle_mmss}` : "数据服务限流中")
   }
   setStatus(parts.join(" · "))
 }
@@ -473,7 +482,7 @@ async function apiRequest(path, options = {}) {
   const { ignore404, requireAdmin, skipAdminHandling, ...fetchOptions } = options
   const headers = new Headers(fetchOptions.headers || {})
   if (requireAdmin && state.admin.csrfToken) {
-    headers.set("X-FitBaus-CSRF", state.admin.csrfToken)
+    headers.set("X-Fitflare-CSRF", state.admin.csrfToken)
   }
 
   const response = await fetch(path, {

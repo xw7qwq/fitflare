@@ -156,6 +156,8 @@ def _prepare_fetch_env(profile_id: str) -> dict:
     env["FITBIT_TOKENS_FILE"] = tokens_file_for(profile_id)
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUNBUFFERED"] = "1"
+    # These child processes run while the parent owns this profile's fetch lock.
+    env["FITFLARE_FETCH_LOCK_HELD"] = os.path.abspath(os.path.join("profiles", profile_id, "auth", "tokens.json"))
     return env
 
 
@@ -348,7 +350,7 @@ def _auto_sync_loop():
 def start_auto_sync_scheduler():
     global auto_sync_thread
     if not AUTO_SYNC_ENABLED:
-        _auto_sync_log("Automatic sync disabled by FITBAUS_AUTO_SYNC_ENABLED", "WARN")
+        _auto_sync_log("Automatic sync disabled by FITFLARE_AUTO_SYNC_ENABLED", "WARN")
         return
     if auto_sync_thread and auto_sync_thread.is_alive():
         _auto_sync_log("Automatic sync scheduler already running")
@@ -357,7 +359,7 @@ def start_auto_sync_scheduler():
     auto_sync_stop_event.clear()
     auto_sync_thread = threading.Thread(
         target=_auto_sync_loop,
-        name="fitbaus-auto-sync",
+        name="fitflare-auto-sync",
         daemon=True,
     )
     auto_sync_thread.start()

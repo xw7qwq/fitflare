@@ -67,7 +67,7 @@ def public_api_index():
     sample_profile = profiles[0].get('id') if profiles else None
     data = {
         'name': 'Fitflare Personal API',
-        'description': '个人只读接口，用于读取自己的 Fitbit 缓存、趋势序列和 SVG 图表。默认需要管理员会话。',
+        'description': '个人只读接口，用于读取自己的 Google Health 数据与 Fitbit 历史缓存、趋势序列和 SVG 图表。默认需要管理员会话。',
         'docs': {
             'html': f'{base_url}{PUBLIC_API_BASE_PATH}/docs',
             'markdown': f'{base_url}{PUBLIC_API_BASE_PATH}/docs.md',
@@ -593,5 +593,5 @@ def public_profile_chart_svg(profile_id, chart_key):
     except KeyError:
         return _public_api_error(f'Chart "{chart_key}" not found', 404, 'chart_not_found')
     response = _public_text_response(svg, 'image/svg+xml')
-    response.headers['X-FitBaus-Chart-Meta'] = json.dumps(meta, ensure_ascii=False)
+    response.headers['X-Fitflare-Chart-Meta'] = json.dumps(meta, ensure_ascii=False)
     return response

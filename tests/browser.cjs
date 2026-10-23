@@ -6,7 +6,7 @@ const outputDir = process.env.TEST_OUTPUT_DIR || 'test-results';
 fs.mkdirSync(outputDir, { recursive: true });
 const base = process.env.BASE_URL || 'http://127.0.0.1:9001';
 const report = { base, layouts: [], checks: [] };
-const viewNames = ['overview', 'sleep', 'activity', 'recovery', 'body', 'lifestyle', 'account'];
+const viewNames = ['overview', 'sleep', 'activity', 'recovery', 'body', 'account'];
 const check = name => report.checks.push(name);
 async function ready(page) {
   await page.waitForSelector('#mainContent[aria-busy="false"]');
@@ -30,22 +30,22 @@ async function main() {
       await page.goto(base, { waitUntil: 'networkidle' });
       await ready(page);
       assert.equal(await page.locator('#dashboardNotice').isVisible(), false);
-      assert.equal(await page.locator('#statsGrid > button').count(), 4);
+      assert.equal(await page.locator('#statsGrid > button').count(), 6);
       const initialRequests = await page.evaluate(() => performance.getEntriesByType('resource').map(entry => entry.name));
       assert.equal(initialRequests.some(url => url.includes('/api/profile-summaries')), false);
       assert.equal(initialRequests.some(url => url.includes('/api/tables/')), false);
       assert.equal(await page.locator('#profileSelect, #tab-family, #panel-family, #existingProfilesList, #newProfileName').count(), 0);
-      assert.equal(await page.locator('[data-view]').count(), 7);
+      assert.equal(await page.locator('[data-view]').count(), 6);
       assert.match(await page.title(), /Fitflare/);
       assert.equal(initialRequests.some(url => /\/api\/(profiles|profile-summaries|dashboard\/)/.test(url)), false);
-      check(`${name}: seven personal views; no profile controls or legacy profile requests; homepage defers record tables`);
+      check(`${name}: six personal views; no profile controls or legacy profile requests; homepage defers record tables`);
       const initial = await layout(page);
       await page.screenshot({ path: path.join(outputDir, `after-${name}.png`), fullPage: true });
-      const chartId = await page.evaluate(() => window.Chart.getChart('overviewTrendChart')?.id);
+      const chartId = await page.evaluate(() => window.Chart.getChart('overviewStepsChart')?.id);
       for (const range of ['14', '90', '30']) {
         await page.selectOption('#rangeSelect', range);
         await page.waitForTimeout(150);
-        assert.equal(await page.evaluate(() => window.Chart.getChart('overviewTrendChart')?.id), chartId);
+        assert.equal(await page.evaluate(() => window.Chart.getChart('overviewStepsChart')?.id), chartId);
       }
       check(`${name}: range changes reuse chart instances`);
       for (const view of viewNames) {
@@ -57,7 +57,7 @@ async function main() {
         assert.equal(info.visiblePanels, 1);
         for (const chart of info.visibleCharts) assert.ok(chart.width > 100 && chart.height > 100, `${view} chart size invalid`);
       }
-      check(`${name}: all seven views render without overflow`);
+      check(`${name}: all six views render without overflow`);
       await page.locator('#tab-sleep').click();
       await page.locator('#sleepTableWrap').evaluate(element => { const details = element.closest('details'); if (details) details.open = true; });
       await page.waitForSelector('#sleepTableWrap tbody tr');
@@ -100,6 +100,12 @@ async function main() {
     assert.equal(await page.locator('#rangeSelect').inputValue(), '14');
     assert.equal(new URL(page.url()).searchParams.has('profile'), false);
     check('deep links preserve view and range and remove legacy profile selection');
+    await page.goto(`${base}/?view=lifestyle`, { waitUntil: 'networkidle' });
+    await ready(page);
+    assert.equal(await page.locator('#panel-body').isVisible(), true);
+    check('legacy lifestyle links open the body and nutrition view');
+    await page.goto(`${base}/?view=recovery&range=14`, { waitUntil: 'networkidle' });
+    await ready(page);
     for (const path of ['/.env', '/server.py', '/profiles/index.json', '/js/not-public.txt', '/script.js', '/ui-cn.js']) {
       const response = await page.request.get(base + path);
       assert.equal(response.status(), 404, path);
@@ -118,7 +124,8 @@ async function main() {
       assert.equal((await page.request.post(base + '/api/admin/logout')).status(), 403);
       await page.locator('#openAccountBtn').click();
       assert.equal(await page.locator('#clientSecret').getAttribute('type'), 'password');
-      assert.equal(await page.locator('#accountSetupForm input').count(), 2);
+      assert.equal(await page.locator('#accountSetupForm input').count(), 3);
+      assert.equal(await page.locator('#accountSetupForm input[type=url]').getAttribute('id'), 'redirectUri');
       assert.equal(await page.locator('#accountSetupForm input[type=text]').getAttribute('id'), 'clientId');
       assert.equal(await page.locator('#accountModal button').filter({ hasText: '删除' }).count(), 0);
       await page.keyboard.press('Escape');
@@ -151,7 +158,7 @@ async function main() {
     await page.close();
 
     if (process.env.PREVIEW_ADMIN_PASSWORD) {
-      // All Fitbit-facing actions are intercepted. Only synthetic application values are submitted.
+      // All Google-facing actions are intercepted. Only synthetic client values are submitted.
       const setupPage = await browser.newPage();
       setupPage.on('pageerror', error => errors.push(error.message));
       let configured = false, authorized = false;
@@ -159,11 +166,11 @@ async function main() {
       await setupPage.route('**/api/account', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ profile_id: 'Demo', configured, authorized, has_data: false }) }));
       await setupPage.route('**/api/account/setup', async route => {
         setupBodies.push(route.request().postDataJSON());
-        assert.ok(route.request().headers()['x-fitbaus-csrf']);
+        assert.ok(route.request().headers()['x-fitflare-csrf']);
         configured = true;
         await route.fulfill({ contentType: 'application/json', body: '{}' });
       });
-      await setupPage.route('**/api/authorize', route => route.fulfill({ contentType: 'application/json', body: '{"auth_url":"https://example.invalid/fitbit-consent"}' }));
+      await setupPage.route('**/api/authorize', route => route.fulfill({ contentType: 'application/json', body: '{"auth_url":"https://example.invalid/google-consent"}' }));
       await setupPage.route('**/api/authorize-exchange', async route => {
         exchangeBodies.push(route.request().postDataJSON());
         authorized = true;
@@ -175,29 +182,29 @@ async function main() {
       await setupPage.locator('#adminLoginSubmit').click();
       await setupPage.waitForSelector('#adminLogoutBtn:not(.hidden)');
       await ready(setupPage);
-      assert.match(await setupPage.locator('#dashboardNoticeText').innerText(), /连接 Fitbit/);
-      assert.equal(await setupPage.locator('#openAccountBtn').innerText(), '连接 Fitbit');
+      assert.match(await setupPage.locator('#dashboardNoticeText').innerText(), /连接 Google Health/);
+      assert.equal(await setupPage.locator('#openAccountBtn').innerText(), '连接 Google Health');
       await setupPage.locator('#openAccountBtn').click();
-      assert.equal(await setupPage.locator('#accountSetupForm input').count(), 2);
+      assert.equal(await setupPage.locator('#accountSetupForm input').count(), 3);
       assert.equal(await setupPage.locator('#reauthorizeBtn').isVisible(), false);
-      await setupPage.fill('#clientId', 'synthetic-client');
+      await setupPage.fill('#clientId', 'synthetic-client.apps.googleusercontent.com');
       await setupPage.fill('#clientSecret', 'synthetic-secret');
       await setupPage.locator('#accountSetupSubmit').click();
       await setupPage.waitForSelector('#authModal[open]');
-      assert.deepEqual(setupBodies, [{ clientId: 'synthetic-client', clientSecret: 'synthetic-secret' }]);
+      assert.deepEqual(setupBodies, [{ clientId: 'synthetic-client.apps.googleusercontent.com', clientSecret: 'synthetic-secret', redirectUri: 'http://localhost:8080/callback' }]);
       assert.equal(await setupPage.locator('#clientSecret').inputValue(), '');
-      await setupPage.fill('#authRedirectValue', 'synthetic-code');
+      await setupPage.fill('#authRedirectValue', 'http://localhost:8080/callback?code=synthetic-code&state=synthetic-state');
       await setupPage.locator('#authExchangeSubmit').click();
       await setupPage.waitForSelector('#authModal', { state: 'hidden' });
-      await setupPage.waitForFunction(() => document.querySelector('#dashboardNoticeText').textContent.includes('同步 Fitbit'));
-      assert.deepEqual(exchangeBodies, [{ redirectUrl: 'synthetic-code' }]);
+      await setupPage.waitForFunction(() => document.querySelector('#dashboardNoticeText').textContent.includes('同步数据'));
+      assert.deepEqual(exchangeBodies, [{ redirectUrl: 'http://localhost:8080/callback?code=synthetic-code&state=synthetic-state' }]);
       assert.equal(await setupPage.locator('#syncBtn').isDisabled(), false);
       await setupPage.locator('#openAccountBtn').click();
       assert.match(await setupPage.locator('#accountConnectionStatus').innerText(), /已授权/);
       await setupPage.locator('#reauthorizeBtn').click();
       await setupPage.waitForSelector('#authModal[open]');
-      assert.equal(await setupPage.locator('#authOpenLink').getAttribute('href'), 'https://example.invalid/fitbit-consent');
-      check('first-run setup takes only application credentials, finishes mocked authorization, enables sync and supports reauthorization');
+      assert.equal(await setupPage.locator('#authOpenLink').getAttribute('href'), 'https://example.invalid/google-consent');
+      check('first-run setup takes only Google client settings, finishes mocked authorization, enables sync and supports reauthorization');
       await setupPage.close();
     }
 
@@ -241,7 +248,7 @@ async function main() {
     await ready(racePage);
     await racePage.waitForTimeout(1100);
     assert.match(await racePage.locator('#latestRecordText').innerText(), /23/);
-    assert.equal(await racePage.locator('#statsGrid > button').count(), 4);
+    assert.equal(await racePage.locator('#statsGrid > button').count(), 6);
     assert.match(await racePage.locator('.chart-empty:visible').first().innerText(), /暂无|没有/);
     check('late dashboard responses cannot overwrite data after login; empty datasets render safely');
     await racePage.locator('#reloadBtn').click();
@@ -253,6 +260,7 @@ async function main() {
     assert.match(await racePage.locator('#latestRecordText').innerText(), /24/);
     check('a second account refresh supersedes an earlier delayed response');
     await racePage.locator('#tab-sleep').click();
+    await racePage.locator('#sleepTableWrap').evaluate(element => { element.closest('details').open = true; });
     for (let i = 0; i < 100 && !tableStarted; i++) await racePage.waitForTimeout(20);
     assert.equal(tableStarted, true);
     loggedOut = true;

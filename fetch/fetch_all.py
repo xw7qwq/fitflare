@@ -6,6 +6,7 @@ from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common.dashboard_cache import build_dashboard_cache
+from common.google_health import is_google_profile, profile_fetch_lock
 from common.profile_paths import get_active_profile
 
 
@@ -78,31 +79,37 @@ def run_script(script_path: str, cwd: str, extra_args=None) -> tuple[int, str | 
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Sync the configured personal Fitbit account.")
+    parser = argparse.ArgumentParser(description="Sync the configured personal account with its authorized provider.")
     parser.add_argument("--stop-on-error", action="store_true", help="Stop after a failed fetch.")
     parser.add_argument("--profile", default=None, help="Explicit local directory override for maintenance only.")
     args = parser.parse_args()
     profile = get_active_profile(args.profile)
     this_dir = os.path.dirname(os.path.abspath(__file__))
-    scripts = ["fetch_steps.py", "fetch_rhr_data.py", "fetch_hrv_data.py",
-               "fetch_sleep_data.py", "fetch_profile_snapshot.py"]
+    legacy_scripts = ["fetch_steps.py", "fetch_rhr_data.py", "fetch_hrv_data.py",
+                      "fetch_sleep_data.py", "fetch_profile_snapshot.py"]
     results = []
     print(f"Syncing personal account: {profile}")
-    for index, name in enumerate(scripts, 1):
-        print(f"\n[{index}/{len(scripts)}] Starting {name}...")
-        path = os.path.join(this_dir, name)
-        if not os.path.isfile(path):
-            code, detail = 127, "Fetch script missing"
-        else:
-            code, detail = run_script(path, cwd=this_dir, extra_args=["--profile", profile])
-        results.append((name, code, detail))
-        if code and args.stop_on_error:
-            break
-    try:
-        build_dashboard_cache(profile)
-        results.append(("build_dashboard_cache", 0, "Dashboard cache rebuilt"))
-    except Exception as error:
-        results.append(("build_dashboard_cache", 1, str(error)))
+    with profile_fetch_lock(profile):
+        try:
+            scripts = ["fetch_google_health.py"] if is_google_profile(profile) else legacy_scripts
+        except (OSError, ValueError) as exc:
+            print(f"ERR: Cannot determine account provider: {exc}")
+            return 1
+        for index, name in enumerate(scripts, 1):
+            print(f"\n[{index}/{len(scripts)}] Starting {name}...")
+            path = os.path.join(this_dir, name)
+            if not os.path.isfile(path):
+                code, detail = 127, "Fetch script missing"
+            else:
+                code, detail = run_script(path, cwd=this_dir, extra_args=["--profile", profile])
+            results.append((name, code, detail))
+            if code and args.stop_on_error:
+                break
+        try:
+            build_dashboard_cache(profile)
+            results.append(("build_dashboard_cache", 0, "Dashboard cache rebuilt"))
+        except Exception as error:
+            results.append(("build_dashboard_cache", 1, str(error)))
     print("\nSummary:")
     for name, code, detail in results:
         status = "OK" if code == 0 else f"FAIL ({code})"

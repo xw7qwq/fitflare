@@ -61,6 +61,9 @@ docker-compose.yml
 # Runtime data and credentials are mounted, never baked into an image.
 profiles/
 **/client.json
+**/google_client.json
+**/google_oauth_pending.json
+**/fitbit_revocation_pending.json
 **/tokens*.json
 **/tokens*.json.bak
 .env.*
@@ -75,6 +78,11 @@ secrets/
 .github/
 Caddyfile.system
 
+# Host-only files that must never enter the image
+security/
+Caddyfile.system
+Dockerfile.host
+docker-compose.override.yml
 # Repository maintenance and private backups
 docs/
 deploy/

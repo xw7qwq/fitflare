@@ -33,14 +33,14 @@
         {% for key, title in groups.items() %}<a href="#group-{{ key }}">{{ title }}</a>{% endfor %}
         <a href="#conventions">访问与响应约定</a>
       </nav>
-      <p class="sidebar-note">v1 · 只读接口<br>从本地缓存读取，<br>不直接请求 Fitbit。</p>
+      <p class="sidebar-note">v1 · 只读接口<br>从本地缓存读取，<br>不直接请求 Google Health。</p>
     </aside>
     <main id="main" tabindex="-1">
       <section class="intro" id="start">
         <div class="eyebrow"><span class="version">v1</span> DEVELOPER REFERENCE</div>
         <h1>API 文档</h1>
         <p class="lede">把健康记录接入你的项目。</p>
-        <p>读取自己的账户、趋势与结构化记录，或直接嵌入 SVG 图表。无需重复接入 Fitbit OAuth。</p>
+        <p>读取自己的账户、趋势与结构化记录，或直接嵌入 SVG 图表。无需重复配置 Google Health 授权。</p>
         <div class="base-row"><span>基础路径</span><code>{{ api_base }}</code><span class="mode">{{ '私有模式 · 需登录' if access_mode == 'private' else '公开模式 · 个人账户' }}</span></div>
         <div class="quickstart">
           <div><h2>直接读取我的账户</h2><p>所有 <code>/me</code> 接口只访问本站配置的唯一账户，无需选择或输入档案 ID。</p></div>

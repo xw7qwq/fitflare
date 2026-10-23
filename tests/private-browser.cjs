@@ -15,8 +15,9 @@ async function main() {
     await page.fill('#adminPasswordInput', process.env.PREVIEW_ADMIN_PASSWORD);
     await page.locator('#adminLoginSubmit').click();
     await page.waitForSelector('#dashboardNotice', { state: 'hidden' });
-    assert.equal(await page.locator('#statsGrid > button').count(), 4);
+    assert.equal(await page.locator('#statsGrid > button').count(), 6);
     await page.locator('#tab-sleep').click();
+    await page.locator('#sleepTableWrap').evaluate(element => { element.closest('details').open = true; });
     await page.waitForSelector('#sleepTableWrap tbody tr');
     await page.locator('#adminLogoutBtn').click();
     await page.waitForFunction(() => document.querySelector('#dashboardNoticeText').textContent.includes('私有模式'));

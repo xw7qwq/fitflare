@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FitBaus application factory and static entry points; imports start no jobs."""
+"""Fitflare application factory and static entry points; imports start no jobs."""
 import os
 from pathlib import Path, PurePosixPath
 from flask import Flask, jsonify, request, send_from_directory
@@ -15,6 +15,7 @@ STATIC_FILES = {
     'index.html', 'app.js', 'style.css', 'mobile.html', 'spousal.html',
     'js/format.js', 'js/data.js', 'js/charts.js', 'js/views.js', 'js/table.js',
     'docs.css', 'js/docs.js', 'js/docs-request.js',
+    'about.html', 'privacy.html', 'terms.html', 'legal.css',
     'vendor/chart.umd-4.4.1.min.js',
 }
 
