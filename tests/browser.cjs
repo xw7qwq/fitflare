@@ -7,7 +7,7 @@ fs.mkdirSync(outputDir, { recursive: true });
 const base = process.env.BASE_URL || 'http://127.0.0.1:9001';
 const fixtureProfile = process.env.TEST_PROFILE || 'Demo';
 const report = { base, layouts: [], checks: [] };
-const viewNames = ['overview', 'sleep', 'activity', 'recovery', 'body', 'lifestyle', 'account', 'family'];
+const viewNames = ['overview', 'sleep', 'activity', 'recovery', 'body', 'account', 'family'];
 const check = name => report.checks.push(name);
 async function ready(page) {
   await page.waitForSelector('#mainContent[aria-busy="false"]');
@@ -31,18 +31,18 @@ async function main() {
       await page.goto(base, { waitUntil: 'networkidle' });
       await ready(page);
       assert.equal(await page.locator('#dashboardNotice').isVisible(), false);
-      assert.equal(await page.locator('#statsGrid > button').count(), 4);
+      assert.equal(await page.locator('#statsGrid > button').count(), 6);
       const initialRequests = await page.evaluate(() => performance.getEntriesByType('resource').map(entry => entry.name));
       assert.equal(initialRequests.some(url => url.includes('/api/profile-summaries')), false);
       assert.equal(initialRequests.some(url => url.includes('/api/tables/')), false);
       check(`${name}: homepage skips profile summaries and record tables`);
       const initial = await layout(page);
       await page.screenshot({ path: path.join(outputDir, `after-${name}.png`), fullPage: true });
-      const chartId = await page.evaluate(() => window.Chart.getChart('overviewTrendChart')?.id);
+      const chartId = await page.evaluate(() => window.Chart.getChart('overviewStepsChart')?.id);
       for (const range of ['14', '90', '30']) {
         await page.selectOption('#rangeSelect', range);
         await page.waitForTimeout(150);
-        assert.equal(await page.evaluate(() => window.Chart.getChart('overviewTrendChart')?.id), chartId);
+        assert.equal(await page.evaluate(() => window.Chart.getChart('overviewStepsChart')?.id), chartId);
       }
       check(`${name}: range changes reuse chart instances`);
       for (const view of viewNames) {
@@ -54,7 +54,7 @@ async function main() {
         assert.equal(info.visiblePanels, 1);
         for (const chart of info.visibleCharts) assert.ok(chart.width > 100 && chart.height > 100, `${view} chart size invalid`);
       }
-      check(`${name}: all eight views render without overflow`);
+      check(`${name}: all seven views render without overflow`);
       await page.locator('#tab-sleep').click();
       await page.locator('#sleepTableWrap').evaluate(element => { const details = element.closest('details'); if (details) details.open = true; });
       await page.waitForSelector('#sleepTableWrap tbody tr');
@@ -96,6 +96,12 @@ async function main() {
     assert.equal(await page.locator('#panel-recovery').isVisible(), true);
     assert.equal(await page.locator('#rangeSelect').inputValue(), '14');
     check('deep links preserve view and range');
+    await page.goto(`${base}/?view=lifestyle`, { waitUntil: 'networkidle' });
+    await ready(page);
+    assert.equal(await page.locator('#panel-body').isVisible(), true);
+    check('legacy lifestyle links open the body and nutrition view');
+    await page.goto(`${base}/?view=recovery&range=14`, { waitUntil: 'networkidle' });
+    await ready(page);
     for (const path of ['/.env', '/server.py', '/profiles/index.json', '/js/not-public.txt', '/script.js', '/ui-cn.js']) {
       const response = await page.request.get(base + path);
       assert.equal(response.status(), 404, path);
@@ -161,7 +167,7 @@ async function main() {
     await racePage.waitForTimeout(1100);
     assert.equal(await racePage.locator('#profileSelect').inputValue(), 'Fast');
     assert.match(await racePage.locator('#latestRecordText').innerText(), /23/);
-    assert.equal(await racePage.locator('#statsGrid > button').count(), 4);
+    assert.equal(await racePage.locator('#statsGrid > button').count(), 6);
     check('late responses cannot overwrite the selected profile; empty datasets render safely');
     await racePage.close();
     assert.deepEqual(errors, []);

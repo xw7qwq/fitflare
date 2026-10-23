@@ -52,3 +52,31 @@ export function statusLabel(status) {
 export function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 }
+export const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+// Inverse of data.clockOffset: hours since the previous noon -> "HH:MM".
+export function formatClock(offset) {
+  const number = numberOrNull(offset);
+  if (number === null) return '--';
+  const minutes = Math.round((number + 12) * 60) % 1440;
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+export function formatHoursMinutes(hours) {
+  const number = numberOrNull(hours);
+  if (number === null) return '--';
+  const total = Math.round(number * 60);
+  return `${Math.floor(total / 60)} 小时 ${String(total % 60).padStart(2, '0')} 分`;
+}
+export function formatRelativeTime(value, now = Date.now()) {
+  const time = new Date(value).getTime();
+  if (!value || Number.isNaN(time)) return '暂无';
+  const minutes = Math.round((now - time) / 60000);
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes} 分钟前`;
+  if (minutes < 1440) return `${Math.round(minutes / 60)} 小时前`;
+  if (minutes < 43200) return `${Math.floor(minutes / 1440)} 天前`;
+  return `${Math.floor(minutes / 43200)} 个月前`;
+}
+export function formatWeekday(value) {
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? '' : WEEKDAYS[(date.getUTCDay() + 6) % 7];
+}

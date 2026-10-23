@@ -1,5 +1,5 @@
-import { escapeHtml, formatDate, formatDateTime, formatNumber, statusLabel } from './js/format.js';
-import { VIEWS, normalizeDashboard, selectDateWindow } from './js/data.js';
+import { escapeHtml, formatDate, formatDateTime, statusLabel } from './js/format.js';
+import { VIEWS, VIEW_ALIASES, normalizeDashboard } from './js/data.js';
 import { destroyAllCharts, resizeVisibleCharts } from './js/charts.js';
 import { createViews } from './js/views.js';
 import { createTableRenderer } from './js/table.js';
@@ -7,11 +7,11 @@ import { createTableRenderer } from './js/table.js';
 const state = {
   profiles: [], selectedProfile: null, dashboard: null, viewModel: null, profileSummaries: [],
   admin: { configured: false, authenticated: false, csrfToken: null },
-  activeView: 'overview', authProfile: null, fetchJobId: null, fetchTimer: null, fetchNotFoundCount: 0,
+  activeView: 'overview', monthlyMetric: 'steps', authProfile: null, fetchJobId: null, fetchTimer: null, fetchNotFoundCount: 0,
 };
 const refs = Object.fromEntries([...document.querySelectorAll('[id]')].map(element => [element.id, element]));
 const renderTable = createTableRenderer({ apiRequest, getContext: () => ({ profile: state.selectedProfile, version: state.dashboard?.generated_at, authenticated: state.admin.authenticated }) });
-const views = createViews({ state, refs, getDailySeries, renderTable });
+const views = createViews({ state, refs, renderTable });
 const VALID_RANGES = new Set(['14', '30', '90']);
 let dashboardRequest = 0;
 let dashboardAbort;
@@ -75,6 +75,8 @@ function bindEvents() {
     dialog.addEventListener('close', () => dialog.querySelectorAll('input[type=password], textarea').forEach(input => { input.value = ''; }));
   });
   window.addEventListener('popstate', () => applyRouteState().catch(handleAsyncError));
+  // Chart colors come from theme tokens, so a system theme switch needs a redraw.
+  window.matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change', () => { if (state.dashboard) { destroyAllCharts(); renderDashboard(); } });
 }
 async function refreshProfiles(preferredProfile) {
   summariesAbort?.abort();
@@ -172,6 +174,7 @@ function renderEmptyState(message = '暂无可显示的数据。', retry = false
   refs.dashboardNoticeText.textContent = message;
   refs.retryBtn.hidden = !retry;
   refs.overviewMetrics.hidden = true;
+  refs.dataQualityNote.hidden = true;
   refs.latestRecordText.textContent = '暂无记录';
   refs.lastSyncText.textContent = '暂无';
   document.querySelectorAll('[data-view-panel]').forEach(panel => { panel.hidden = true; });
@@ -186,25 +189,11 @@ function renderDashboard() {
   refs.lastSyncText.textContent = formatDateTime(snapshotStatus.saved_at || overview.latest_sync_at);
   refs.overviewMetrics.hidden = state.activeView !== 'overview';
   document.querySelectorAll('[data-view-panel]').forEach(panel => { panel.hidden = panel.dataset.viewPanel !== state.activeView; });
-  if (state.activeView === 'overview') renderStats();
   views[state.activeView]();
+  views.note();
   if (state.activeView === 'family' && !summariesLoaded) loadProfileSummaries().catch(handleAsyncError);
   requestAnimationFrame(resizeVisibleCharts);
 }
-function renderStats() {
-  const core = [['sleep_hours', '睡眠时长'], ['steps', '步数'], ['hrv', 'HRV'], ['rhr', '静息心率']];
-  const cardHtml = card => `<button class="metric-card" type="button" data-jump-view="${escapeHtml(card.targetView || 'overview')}">
-    <span class="metric-label">${escapeHtml(card.label)}</span>
-    <strong class="metric-value">${escapeHtml(card.latestText || '--')}</strong>
-    <span class="metric-meta">最新 ${escapeHtml(formatDate(card.latest_date, 'short'))}</span>
-    <span class="metric-average">7 天均值 <b>${escapeHtml(card.avg7Text || '--')}</b></span>
-  </button>`;
-  refs.statsGrid.innerHTML = core.map(([key, label]) => cardHtml(state.viewModel.statsByKey[key] || { label })).join('');
-  const others = state.viewModel.stats.filter(card => !core.some(([key]) => key === card.key));
-  refs.moreStatsGrid.innerHTML = others.map(cardHtml).join('');
-  refs.moreMetrics.hidden = !others.length;
-}
-function getDailySeries() { return selectDateWindow(state.dashboard?.charts?.daily || [], refs.rangeSelect.value); }
 function getRouteState() { return Object.fromEntries(new URLSearchParams(window.location.search)); }
 function sanitizeRange(value) { return VALID_RANGES.has(String(value)) ? String(value) : '30'; }
 function syncRoute(values, { mode = 'replace' } = {}) {
@@ -213,6 +202,7 @@ function syncRoute(values, { mode = 'replace' } = {}) {
   if (url.href !== window.location.href) window.history[mode === 'push' ? 'pushState' : 'replaceState']({}, '', url);
 }
 function activateView(view, { updateHistory = true, historyMode = 'replace' } = {}) {
+  view = VIEW_ALIASES[view] || view;
   state.activeView = Object.hasOwn(VIEWS, view) ? view : 'overview';
   document.querySelectorAll('.tab-button').forEach(button => {
     const active = button.dataset.view === state.activeView;
