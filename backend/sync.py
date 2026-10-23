@@ -9,6 +9,7 @@ import time
 import fcntl
 from datetime import date, datetime
 from collections import deque
+from common import panel_push
 from common.profile_paths import list_profiles as list_profile_ids, owner_profile_id, profile_path_for, tokens_file_for
 from .config import AUTO_SYNC_ENABLED, AUTO_SYNC_INTERVAL_SECONDS, AUTO_SYNC_SCAN_INTERVAL_SECONDS, AUTO_SYNC_STARTUP_DELAY_SECONDS
 from .time_utils import _parse_date, _now_iso
@@ -343,6 +344,8 @@ def _auto_sync_loop():
 
     while not auto_sync_stop_event.is_set():
         run_auto_sync_cycle()
+        # Only does work when FITFLARE_PANEL_INGEST_TOKEN is set.
+        panel_push.push_if_due(owner_profile_id())
         if auto_sync_stop_event.wait(AUTO_SYNC_SCAN_INTERVAL_SECONDS):
             return
 

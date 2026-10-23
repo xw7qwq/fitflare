@@ -12,6 +12,7 @@
 - 定时自动同步；连接、重新授权和手动同步通过服务器命令行完成。
 - 任何人可查看健康记录；网站没有登录、管理面板、账户设置或写入 API。
 - `/api/public/v1/me` 提供个人只读 API、SVG 趋势图和 OpenAPI 文档。
+- 可选：同步后把指标、趋势和睡眠记录推送到 [lucius7.dev](https://lucius7.dev/) 面板，见 [DEPLOYMENT.md](DEPLOYMENT.md#推送到面板)。
 
 没有档案切换、家庭比较、创建多个档案或网页删除健康记录的功能。后端、定时任务和旧接口也只能访问配置的唯一账户。已有 `profiles/<id>` 目录可以继续使用，不需要重命名或重新导入历史记录。
 
@@ -97,7 +98,7 @@ API 目录维护在 `common/api_docs.py`，修改后运行 `python scripts/docs.
 | `auth/`、`fetch/` | 授权与数据同步；默认只处理配置账户 |
 | `index.html`、`app.js`、`js/`、`style.css` | 个人仪表盘 |
 | `templates/`、`docs.css` | API 文档界面 |
-| `deploy/`、`scripts/` | 配置样例、检查和部署工具 |
+| `deploy/`、`scripts/` | 配置样例、检查、部署和面板推送工具 |
 | `tests/` | 合成数据、访问隔离和浏览器回归 |
 | `docs/` | Workers 研究、来源和历史记录 |
 | `profiles/` | 本地私有运行数据，不进入 Git 或镜像 |

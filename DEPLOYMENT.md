@@ -35,6 +35,7 @@ chmod 600 .env
 | `FITFLARE_DATA_ACCESS` | 必须显式设为 `public`，公开唯一账户的健康记录；其他值或未设置会拒绝启动 |
 | `FITFLARE_AUTO_SYNC_ENABLED` | 首次部署设为 `false`，授权并验证手动同步后再开启 |
 | `GOOGLE_HEALTH_CLIENT_ID` / `_SECRET` | 可选；不填则通过授权命令交互保存 |
+| `FITFLARE_PANEL_INGEST_TOKEN` | 可选；与 lucius7.dev 面板的 `HEALTH_INGEST_TOKEN` 相同时推送快照，见[推送到面板](#推送到面板) |
 | `TZ` | 按需要设置容器时区 |
 
 不需要管理员密码或会话密钥。旧的 `FITFLARE_ADMIN_*`、`FITFLARE_SESSION_*` 和 `FITFLARE_PUBLIC_PROFILES` 配置已不再读取，可以从部署配置中移除。`.env` 不进入镜像和 Git；不要将展开后的 `docker compose config` 输出发布到工单或聊天记录，因为其中可能包含凭据。
@@ -110,6 +111,24 @@ docker exec -it fitflare-app python auth/authorize_google_health.py --configure 
 授权命令会打印 Google 授权链接：在自己的浏览器打开并同意，然后把跳转后的**完整 URL**（含 `code` 和 `state`）粘贴回终端，输入内容不回显。授权成功后执行一次同步。网页上的“刷新视图”只读取已有缓存，不会触发同步。
 
 自动同步、手动同步和授权共用同一把账户锁，不会并发写入；已有同步在进行时，再次执行同步或授权会直接报错退出，部署脚本也会拒绝切换，稍后重试即可。
+
+## 推送到面板
+
+[lucius7.dev](https://lucius7.dev/) 面板（[panel](https://github.com/xw7qwq/panel)）从不连接这台服务器，由 Fitflare 主动推送快照到 `POST /api/v1/ingest/health`：指标卡、最近 400 天的按日序列、最近 104 周的按周序列和最近 10 次睡眠。面板的公开页只显示截至昨天的 7 天平均睡眠和步数，其余内容需要登录面板才能看到。
+
+在 `.env` 写入推送令牌，值与面板的 `HEALTH_INGEST_TOKEN` 相同，然后执行 `docker compose up -d --no-build fitflare` 让容器读到新变量。`FITFLARE_PANEL_INGEST_URL` 默认是 `https://lucius7.dev/api/v1/ingest/health`，只接受 HTTPS（本机调试可用 `http://127.0.0.1`）。
+
+推送由自动同步的调度线程顺带完成：每次扫描（`FITFLARE_AUTO_SYNC_SCAN_INTERVAL_SECONDS`，默认 300 秒）时，如果同步文件比上次推送时新，或者按 UTC+8 当天还没有推送成功过，就推送一次。面板的公开摘要按“昨天”滚动，所以即使没有新数据，每天零点后也要推一次；内容没变时面板不会写入存储。失败后按 5 分钟、10 分钟、20 分钟……最长 6 小时退避，日志以 `[PANEL]` 开头，最近一次结果和错误写在 `profiles/<账户>/cache/panel_push.json`。没有设置令牌时不做任何事；关闭自动同步时调度线程不启动，需要用 cron 定时执行下面的命令。
+
+```bash
+# 立即推送一次，不等调度
+docker exec fitflare-app python scripts/push_panel.py
+
+# 只生成快照，看一下大小和条数，不发送
+docker exec fitflare-app python scripts/push_panel.py --output /tmp/panel-snapshot.json
+```
+
+令牌只放在 `.env`，不要写进仓库、日志或聊天记录；在面板一侧用 `npx wrangler secret put HEALTH_INGEST_TOKEN` 更换后，这里要同步改掉。
 
 ## 从多档案部署迁移
 
