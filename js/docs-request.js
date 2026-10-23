@@ -22,7 +22,7 @@ export function buildRequest(endpoint, values, origin) {
 
 export function exampleCode(url, language = 'curl') {
   const quoted = JSON.stringify(url);
-  if (language === 'javascript') return `const response = await fetch(${quoted}, {\n  credentials: 'same-origin',\n  cache: 'no-store',\n});\nif (!response.ok) throw new Error(\`HTTP \${response.status}\`);\nconst type = response.headers.get('content-type') || '';\nconst data = type.includes('application/json')\n  ? await response.json()\n  : await response.text();\nconsole.log(data);`;
+  if (language === 'javascript') return `const response = await fetch(${quoted}, {\n  credentials: 'omit',\n  cache: 'no-store',\n});\nif (!response.ok) throw new Error(\`HTTP \${response.status}\`);\nconst type = response.headers.get('content-type') || '';\nconst data = type.includes('application/json')\n  ? await response.json()\n  : await response.text();\nconsole.log(data);`;
   if (language === 'python') return `import requests\n\nresponse = requests.get(${quoted}, timeout=15)\nresponse.raise_for_status()\ndata = (response.json() if 'application/json' in\n        response.headers.get('Content-Type', '') else response.text)\nprint(data)`;
   return `curl -fsS '${url.replaceAll("'", "'\\''")}'`;
 }

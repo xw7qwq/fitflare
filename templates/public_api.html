@@ -41,12 +41,12 @@
         <h1>API 文档</h1>
         <p class="lede">把健康记录接入你的项目。</p>
         <p>读取自己的账户、趋势与结构化记录，或直接嵌入 SVG 图表。无需重复配置 Google Health 授权。</p>
-        <div class="base-row"><span>基础路径</span><code>{{ api_base }}</code><span class="mode">{{ '私有模式 · 需登录' if access_mode == 'private' else '公开模式 · 个人账户' }}</span></div>
+        <div class="base-row"><span>基础路径</span><code>{{ api_base }}</code><span class="mode">公开只读 · 单账户</span></div>
         <div class="quickstart">
           <div><h2>直接读取我的账户</h2><p>所有 <code>/me</code> 接口只访问本站配置的唯一账户，无需选择或输入档案 ID。</p></div>
           <div class="code-block"><div class="code-toolbar"><span>cURL</span><button type="button" data-copy="quickCode" hidden data-enhanced>复制</button></div><pre id="quickCode" tabindex="0" data-example-path="{{ api_base }}/me">curl -fsS 'https://YOUR_HOST{{ api_base }}/me'</pre></div>
         </div>
-        <p class="small">私有模式请先<a href="/">登录仪表盘</a>。以下文档始终可读，不代表数据已公开。</p>
+        <p class="small">本站仅提供公开读取。授权和同步由站点维护者在服务器完成。</p>
       </section>
 
       <section id="try" class="try-section" hidden data-enhanced>
@@ -60,7 +60,7 @@
               </select>
               <div id="requestFields" class="field-grid"></div>
               <div class="code-block"><div class="code-toolbar"><label for="exampleLanguage" class="sr-only">示例语言</label><select id="exampleLanguage" aria-label="示例语言"><option value="curl">cURL</option><option value="javascript">JavaScript</option><option value="python">Python</option></select><button type="button" data-copy="requestCode">复制示例</button></div><pre id="requestCode" tabindex="0"></pre></div>
-              <div class="request-actions"><button class="primary" id="sendRequest" type="submit">发送 GET</button><button id="cancelRequest" type="button" hidden>取消</button><span class="small">仅请求本站；使用当前会话。不会保存响应。</span></div>
+              <div class="request-actions"><button class="primary" id="sendRequest" type="submit">发送 GET</button><button id="cancelRequest" type="button" hidden>取消</button><span class="small">仅请求本站的公开数据；不会保存响应。</span></div>
             </form>
             <p id="requestStatus" class="small" role="status" aria-live="polite">尚未发送请求。</p>
             <pre id="responsePreview" class="response-preview" tabindex="0" aria-label="响应预览" hidden></pre>

@@ -2,15 +2,15 @@
 
 [![Release checks](https://github.com/xw7qwq/fitflare/actions/workflows/check.yml/badge.svg)](https://github.com/xw7qwq/fitflare/actions/workflows/check.yml)
 
-一个给自己使用的健康数据仪表盘：通过 Google Health API 同步自己的数据，保留 Fitbit 历史记录，在中文界面查看睡眠、活动、HRV、静息心率和长期趋势。可以公开展示，也可以设为仅自己登录可见（新安装默认私有）。
+一个给自己使用的健康数据仪表盘：通过 Google Health API 同步自己的数据，保留 Fitbit 历史记录，在中文界面查看睡眠、活动、HRV、静息心率和长期趋势。网站公开只读，无需登录；授权和同步通过服务器命令行维护。
 
 ## 一个账户，一份记录
 
 - 六个视图：总览、睡眠、活动、恢复、体征与营养、设备与数据。
 - 总览给出恢复估算、本期要点、带迷你趋势的核心指标、近 7 天对比和月度趋势。
 - 睡眠结构与作息、活动强度与一周规律、步数日历、HRV / 静息心率个人基线等图表；未佩戴设备的日子留空并不计入均值。
-- 定时自动同步；连接、重新授权和手动同步可在网页“账户设置”中完成，也可以完全通过服务器命令行完成（不开放网页登录）。
-- 公开模式任何人可读、无需登录；私有模式需登录。管理操作始终校验会话与 CSRF。
+- 定时自动同步；连接、重新授权和手动同步通过服务器命令行完成。
+- 任何人可查看健康记录；网站没有登录、管理面板、账户设置或写入 API。
 - `/api/public/v1/me` 提供个人只读 API、SVG 趋势图和 OpenAPI 文档。
 
 没有档案切换、家庭比较、创建多个档案或网页删除健康记录的功能。后端、定时任务和旧接口也只能访问配置的唯一账户。已有 `profiles/<id>` 目录可以继续使用，不需要重命名或重新导入历史记录。
@@ -30,7 +30,7 @@ cp deploy/.env.production.example .env
 chmod 600 .env
 ```
 
-编辑 `.env`，分别生成管理员密码和会话密钥。新安装的 `FITFLARE_PROFILE_ID=me` 表示唯一数据目录；从旧部署迁移时改成原目录名。随后：
+编辑 `.env`，确认 `FITFLARE_DATA_ACCESS=public`：这会公开唯一账户的健康记录。新安装的 `FITFLARE_PROFILE_ID=me` 表示唯一数据目录；从旧部署迁移时改成原目录名。随后：
 
 ```bash
 sudo install -d -o 10001 -g 10001 -m 700 profiles
@@ -38,12 +38,14 @@ docker compose up -d --build
 curl -fsS http://127.0.0.1:9000/api/health
 ```
 
-配置 HTTPS 反向代理后，用以下任一方式连接 Google Health 并首次同步：
+配置 HTTPS 反向代理后，在服务器命令行连接 Google Health 并首次同步：
 
-- 网页：设置管理员密码，登录后在“账户设置”填写 Google OAuth 客户端并授权。
-- 命令行：`docker exec -it fitflare-app python auth/authorize_google_health.py --configure --no-browser`，完成后执行 `docker exec fitflare-app python fetch/fetch_all.py`。
+```bash
+docker exec -it fitflare-app python auth/authorize_google_health.py --configure --no-browser
+docker exec fitflare-app python fetch/fetch_all.py
+```
 
-生产样例默认私有、仅监听 `127.0.0.1:9000`，私有模式未填写管理员密码会拒绝启动。想公开展示时设置 `FITFLARE_DATA_ACCESS=public` 与 `FITFLARE_PUBLIC_PROFILES=<账户 ID>`；公开模式可不设管理员密码，此时页面不提供登录，运维全部通过命令行，见 [DEPLOYMENT.md](DEPLOYMENT.md#运维命令)。
+生产样例仅监听 `127.0.0.1:9000`，由 HTTPS 反向代理公开站点。应用要求显式设置 `FITFLARE_DATA_ACCESS=public`；旧私有配置或未设置时会拒绝启动，避免升级时意外发布健康记录。日常维护见 [DEPLOYMENT.md](DEPLOYMENT.md#运维命令)。
 
 完整步骤、已有数据迁移、备份和回滚见 [DEPLOYMENT.md](DEPLOYMENT.md)；Google Cloud 配置与权限范围见 [GOOGLE_HEALTH.md](GOOGLE_HEALTH.md)。
 
@@ -61,9 +63,9 @@ curl -fsS http://127.0.0.1:9000/api/health
 
 - [API.md](API.md)：单账户只读接口，统一通过 `/me` 访问，无需档案 ID。
 - `/api/public/v1/docs`：交互文档；`/api/public/v1/openapi.json`：OpenAPI。
-- 文档本身可匿名访问；私有模式的数据请求仍需登录。
+- 文档、数据 API 和 SVG 均可直接访问，不使用登录会话或 Cookie。
 
-公开模式下可直接调用（把域名换成自己的部署）：
+可直接调用（把域名换成自己的部署）：
 
 ```bash
 curl -s https://fitflare.example.com/api/public/v1/me                                  # 账户概览与链接
@@ -82,7 +84,7 @@ npx playwright install --with-deps chromium
 npm run check
 ```
 
-开发使用 Node.js 24；完整检查需要 Docker。`npm run check` 检查源码和生成文档、构建镜像、执行单元及桌面/手机浏览器回归；所有测试只用合成数据。快速检查可单独执行 `npm test` 和 `python -m unittest discover -s tests -p 'test_*.py' -v`。
+开发使用 Node.js 24；完整检查需要 Docker。`npm run check` 检查源码和生成文档、构建镜像、执行单元及桌面/手机浏览器回归；所有测试只用合成数据。快速检查可单独执行 `npm test` 和 `FITFLARE_DATA_ACCESS=public python -m unittest discover -s tests -p 'test_*.py' -v`。
 
 API 目录维护在 `common/api_docs.py`，修改后运行 `python scripts/docs.py`。协作约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
@@ -90,7 +92,7 @@ API 目录维护在 `common/api_docs.py`，修改后运行 `python scripts/docs.
 
 | 路径 | 内容 |
 | --- | --- |
-| `backend/`、`server.py` | 单账户边界、会话、接口与同步调度 |
+| `backend/`、`server.py` | 单账户边界、只读接口与同步调度 |
 | `common/` | 数据路径、缓存、Google Health 客户端、指标和 API 定义 |
 | `auth/`、`fetch/` | 授权与数据同步；默认只处理配置账户 |
 | `index.html`、`app.js`、`js/`、`style.css` | 个人仪表盘 |
@@ -102,8 +104,8 @@ API 目录维护在 `common/api_docs.py`，修改后运行 `python scripts/docs.
 
 ## 来源与数据
 
-项目基于 [markrai/fitbaus](https://github.com/markrai/fitbaus)，继承自 [theLucius7/fitbaus](https://github.com/theLucius7/fitbaus) 的服务器部署版本。作者和提交历史已保留；来源说明见 [docs/provenance.md](docs/provenance.md)。本项目与 Fitbit 或 Google 无隶属关系。
+项目基于 [markrai/fitbaus](https://github.com/markrai/fitbaus)，继承自原 `theLucius7/fitbaus` 的服务器部署版本（旧仓库已删除）。作者和提交历史已保留；来源说明见 [docs/provenance.md](docs/provenance.md)。本项目与 Fitbit 或 Google 无隶属关系。
 
 继承源码未提供标准许可证，原说明为 “This project is for personal use.”；本次整理不另行授予整个项目的开源许可证。
 
-公开的是源码。真实 `.env`、OAuth 凭据、健康数据、日志和备份均不进入仓库。安全与私密报告说明见 [SECURITY.md](SECURITY.md)。
+已配置账户的仪表盘和数据 API 会公开展示健康记录；真实 `.env`、OAuth 凭据、原始健康数据文件、日志和备份均不进入仓库。安全与私密报告说明见 [SECURITY.md](SECURITY.md)。

@@ -28,20 +28,18 @@ docker build -f "${CHECK_DOCKERFILE:-Dockerfile}" \
   --label "org.opencontainers.image.revision=$revision" \
   --label "dev.fitflare.source-dirty=$source_dirty" \
   -t "$image" . > "$results/build.log" 2>&1
-run=(docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp --user 10001:10001 -e PYTHONDONTWRITEBYTECODE=1 -e FITFLARE_AUTO_SYNC_ENABLED=false -e FITFLARE_PROFILE_ID=Demo)
+run=(docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp --user 10001:10001 -e PYTHONDONTWRITEBYTECODE=1 -e FITFLARE_AUTO_SYNC_ENABLED=false -e FITFLARE_PROFILE_ID=Demo -e FITFLARE_DATA_ACCESS=public)
 "${run[@]}" --entrypoint python "$image" scripts/audit.py --image
 "${run[@]}" -v "$root/tests:/app/tests:ro" --entrypoint python "$image" -m unittest discover -s tests -p 'test_*.py' -v 2>&1 | tee "$results/backend-tests.log"
 python3 tests/fixture.py "$runtime/profiles"
 # These are generated public fixtures, not production health/authorization files.
 chmod -R a+rX "$runtime"
-password=$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')
-export PREVIEW_ADMIN_PASSWORD="$password" TEST_PROFILE=Demo SYNTHETIC_FIXTURE=1
+export TEST_PROFILE=Demo SYNTHETIC_FIXTURE=1
 start_preview() {
   docker run -d --name "$container" --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp --user 10001:10001 \
     -p 127.0.0.1::9000 -v "$runtime/profiles:/app/profiles:ro" \
     -e PYTHONDONTWRITEBYTECODE=1 -e FITFLARE_AUTO_SYNC_ENABLED=false \
-    -e FITFLARE_ADMIN_PASSWORD="$password" -e FITFLARE_SESSION_COOKIE_SECURE=false \
-    -e FITFLARE_PROFILE_ID=Demo -e FITFLARE_DATA_ACCESS="$1" -e FITFLARE_PUBLIC_PROFILES=Demo "$image" >/dev/null
+    -e FITFLARE_PROFILE_ID=Demo -e FITFLARE_DATA_ACCESS=public "$image" >/dev/null
   port=$(docker port "$container" 9000/tcp | sed 's/.*://')
   export BASE_URL="http://127.0.0.1:$port"
   for attempt in $(seq 1 40); do
@@ -51,15 +49,9 @@ start_preview() {
   docker logs --tail 30 "$container"
   return 1
 }
-start_preview public
+start_preview
 TEST_OUTPUT_DIR="$results" npm run test:browser
-node tests/google-health-browser.cjs
-DOCS_ACCESS_MODE=public TEST_OUTPUT_DIR="$results" node tests/docs-browser.cjs
-# Synthetic preview has no authorized Google Health tokens, and auto-sync is off.
-docker rm -f "$container" >/dev/null
-start_preview private
-node tests/private-browser.cjs
-DOCS_ACCESS_MODE=private TEST_OUTPUT_DIR="$results" node tests/docs-browser.cjs
+TEST_OUTPUT_DIR="$results" node tests/docs-browser.cjs
 validated=$(docker image inspect "$image" --format '{{.Id}}')
 printf '%s\n' "$validated" > "$results/validated-image.txt"
 node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({status:"passed", completed_at:new Date().toISOString(), fixture:"synthetic", revision:process.argv[2], source_dirty:process.argv[3]==="true", image:process.argv[4], image_id:process.argv[5]},null,2)+"\n")' "$results/release-gate.json" "$revision" "$source_dirty" "$image" "$validated"

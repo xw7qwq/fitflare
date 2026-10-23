@@ -5,11 +5,11 @@ from pathlib import Path, PurePosixPath
 from flask import Flask, jsonify, make_response, request, send_from_directory
 from backend.assets import AssetManifest
 from backend.config import settings, AUTO_SYNC_ENABLED, AUTO_SYNC_INTERVAL_SECONDS, AUTO_SYNC_SCAN_INTERVAL_SECONDS
-from backend.security import install_security, require_admin
+from backend.security import install_security
 from backend.sync import start_auto_sync_scheduler, stop_auto_sync_scheduler
 from backend import jobs
 from backend.time_utils import _now_iso
-from common.profile_paths import owner_profile_id, profile_path_for
+from common.profile_paths import owner_profile_id
 
 ROOT = Path(__file__).resolve().parent
 STATIC_FILES = {
@@ -40,8 +40,8 @@ def create_app(config=None):
         immutable = suffix != '.html' and request.args.get('v') == assets.version(name)
         response.headers['Cache-Control'] = 'public, max-age=31536000, immutable' if immutable else 'no-cache'
         return response.make_conditional(request)
-    from backend import security, dashboard_routes, public_routes, admin_routes
-    for module in (security, dashboard_routes, public_routes, admin_routes):
+    from backend import dashboard_routes, public_routes
+    for module in (dashboard_routes, public_routes):
         app.register_blueprint(module.bp)
 
     @app.get('/')
@@ -61,17 +61,6 @@ def create_app(config=None):
         if assets.handles(filename):
             return serve_asset(filename)
         return send_from_directory(ROOT, filename)
-
-    @app.get('/profiles/<profile_id>/csv/<filename>')
-    @require_admin()
-    def serve_profile_csv(profile_id, filename):
-        if not filename.endswith('.csv') or Path(filename).name != filename:
-            return 'File not found', 404
-        try:
-            path = profile_path_for(profile_id, 'csv', filename)
-        except ValueError:
-            return 'File not found', 404
-        return send_from_directory(path.parent, path.name, mimetype='text/csv')
 
     @app.get('/api/health')
     def health_check():

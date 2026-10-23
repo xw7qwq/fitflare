@@ -20,9 +20,9 @@ GROUPS = {
 GUIDE = (
     ('access', '访问与隐私', (
         'public/v1 只提供 GET 读取，不会主动发起 Google Health 同步。缺失或过期的派生缓存可能在读取时本地重建。',
-        '所有 /me 接口始终读取本站唯一账户，不需要选择或填写档案 ID。公开模式下任何人可匿名读取，无需登录；私有模式要求本站登录会话。文档页顶部标注当前部署的模式，文档始终可读。',
-        '这里不提供 API Key 或 Bearer Token。私有模式请先在仪表盘登录，再使用同源浏览器请求；cURL 与 Python 示例默认不带会话。',
-        '匿名公开版 API 允许跨域读取；私有模式和管理员会话响应不开放 CORS。所有 API 响应使用 private, no-store，不应在共享缓存中保存健康数据。',
+        '所有 /me 接口始终读取本站唯一账户，不需要选择或填写档案 ID。本站公开只读，访客可直接读取。',
+        '这里不提供 API Key、Bearer Token 或会话 Cookie。Google Health 授权与同步由服务器命令行及定时任务处理，网页不提供管理接口。',
+        '公开 API 允许跨域 GET 读取。所有 API 响应使用 private, no-store，不应在共享缓存中保存健康数据。',
         '公开响应不包含内部 files 路径及 OAuth 凭据文件，但账户快照仍可能包含个人资料、设备和饮食记录；这不是匿名化数据。',
     )),
     ('pagination', '范围与分页', (
@@ -41,7 +41,7 @@ GUIDE = (
     ('responses', '响应与错误', (
         '成功 JSON 使用 api_version、resource、generated_at、data 包装，profile_id、meta、links 按接口出现。generated_at 是派生缓存生成时间，不保证每个上游数据源同一时刻更新；空值表示缺失，不应当作 0。',
         '业务错误通常包含 error.code 和 error.message；访问控制层也可能返回字符串 error 及顶层 code。调用端应兼容两种格式，并先检查 HTTP 状态和 Content-Type。',
-        '401 表示私有数据需要登录；404 表示资源不存在或对当前访问者不可见；服务异常可能返回 500 和文本响应。不要对认证错误无限重试。',
+        '404 表示资源不存在或不是配置的唯一账户；写入请求返回 405；服务异常可能返回 500 和文本响应。',
         'SVG 成功返回 image/svg+xml，Markdown 返回 text/markdown，HTML 文档返回 text/html，OpenAPI 返回规范对象，均不使用业务 JSON 包装。',
     )),
 )
@@ -164,7 +164,7 @@ def response_schema(item):
     return {'allOf': [{'$ref': '#/components/schemas/Envelope'}, {'type': 'object', 'properties': properties}]}
 
 
-def build_openapi_spec(base_url='/', access_mode='public'):
+def build_openapi_spec(base_url='/'):
     paths = {}
     for item in ENDPOINTS:
         media = item['media']
@@ -178,21 +178,16 @@ def build_openapi_spec(base_url='/', access_mode='public'):
         if item['group'] == 'reference':
             operation['security'] = []
         else:
-            for code, message in [('401','私有模式需要管理员会话'),('404','不存在或不可见的资源')]:
+            for code, message in [('404','不存在或不可见的资源')]:
                 operation['responses'][code] = {'description': message, 'content': {'application/json': {'schema': {'$ref': '#/components/schemas/Error'}}}}
             operation['responses']['500'] = {'description': '服务异常；可能为文本响应', 'content': {'text/html': {'schema': {'type': 'string'}}}}
         if item['id'] == 'chart':
             operation['responses']['200']['headers'] = {'X-Fitflare-Chart-Meta': {'description': 'JSON 编码的图表元数据', 'schema': {'type': 'string'}}}
         paths[item['path']] = {'get': operation}
     return {'openapi': '3.1.0', 'info': {'title': 'Fitflare Personal API', 'version': PUBLIC_API_VERSION,
-             'description': ('单人只读本地缓存 API。/me 始终对应配置的唯一账户。'
-                             + ('本部署为公开模式，无需登录即可读取。' if access_mode == 'public' else '本部署为私有模式，需要本站登录会话。')
-                             + '字段不承诺匿名化。')},
+             'description': '公开只读本地缓存 API。/me 对应配置的唯一账户，直接读取，无需认证；字段不承诺匿名化。'},
             'servers': [{'url': base_url or '/'}], 'tags': [{'name': label} for label in GROUPS.values()],
-            'security': [{'SessionCookie': []}] if access_mode == 'private' else [{}, {'SessionCookie': []}],
-            'paths': paths, 'components': {'schemas': deepcopy(SCHEMAS), 'securitySchemes': {
-                'SessionCookie': {'type': 'apiKey', 'in': 'cookie', 'name': 'fitflare_session',
-                                  'description': '仅私有模式需要：在本站仪表盘登录后由浏览器管理；不是 Google Health OAuth 令牌。'}}}}
+            'security': [], 'paths': paths, 'components': {'schemas': deepcopy(SCHEMAS)}}
 
 
 def example_path(item):
@@ -216,17 +211,17 @@ def parameter_constraint(parameter):
     return ' · '.join(parts)
 
 
-def docs_context(access_mode='public'):
+def docs_context():
     return {'api_base': BASE, 'groups': GROUPS, 'guide': GUIDE, 'endpoints': ENDPOINTS,
             'interactive': [{key: item[key] for key in ('id', 'path', 'parameters')} for item in ENDPOINTS],
-            'example_path': example_path, 'constraint': parameter_constraint, 'access_mode': access_mode,
+            'example_path': example_path, 'constraint': parameter_constraint,
             'example_json': json.dumps(EXAMPLE_ENVELOPE, ensure_ascii=False, indent=2)}
 
 
 def render_markdown():
     lines = ['# Fitflare Personal API', '', '> 此文件由 common/api_docs.py 生成。请修改接口目录后运行 python3 scripts/docs.py。', '',
              f'基础路径：`{BASE}`。全部 {len(ENDPOINTS)} 个接口均为 GET。', '',
-             '## 快速开始', '', '通过 /me 直接读取自己的账户，无需档案 ID。私有模式先在仪表盘登录；YOUR_HOST 替换为部署域名。命令行示例未携带登录会话。', '',
+             '## 快速开始', '', '通过 /me 直接读取本站唯一账户，无需档案 ID 或认证。YOUR_HOST 替换为部署域名。', '',
              f"```sh\ncurl -fsS 'https://YOUR_HOST{BASE}/me'\n```", '']
     for _, title, paragraphs in GUIDE:
         lines += [f'## {title}', '']

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const base = process.env.BASE_URL || 'http://127.0.0.1:9001';
-const mode = process.env.DOCS_ACCESS_MODE || 'public';
+const mode = 'public';
 const out = process.env.TEST_OUTPUT_DIR || 'test-results';
 fs.mkdirSync(out, {recursive:true});
 const report = {mode, layouts:[], checks:[]};
@@ -51,14 +51,7 @@ async function main() {
       assert.equal(requests.length,before);
       await page.locator('#sendRequest').click();
       await page.waitForFunction(() => document.getElementById('requestStatus').textContent.includes('HTTP'));
-      assert.match(await page.locator('#requestStatus').textContent(),mode==='private'?/HTTP 401/:/HTTP 200/);
-      if (mode === 'private') {
-        assert.match(await page.locator('#requestStatus').textContent(),/登录/);
-        const result = await page.request.post(base+'/api/admin/login',{data:{password:process.env.PREVIEW_ADMIN_PASSWORD}});
-        assert.equal(result.status(),200);
-        await page.locator('#sendRequest').click();
-        await page.waitForFunction(() => document.getElementById('requestStatus').textContent.includes('HTTP 200'));
-      }
+      assert.match(await page.locator('#requestStatus').textContent(),/HTTP 200/);
       await page.selectOption('#endpointSelect','table');
       await page.locator('#sendRequest').click();
       await page.waitForFunction(() => document.getElementById('requestStatus').textContent.includes('HTTP 200'));
@@ -70,7 +63,7 @@ async function main() {
       report.layouts.push({...layout,errors,cspErrors:csp});
       await page.close();
     }
-    check('desktop/mobile: search, keyboard, anchors, code languages, copy, explicit GET, auth boundary, parameter forms and overflow');
+    check('desktop/mobile: search, keyboard, anchors, code languages, copy, explicit GET, public read access, parameter forms and overflow');
     const page = await browser.newPage();
     await page.goto(base+'/api/public/v1/docs#try',{waitUntil:'networkidle'});
     await page.selectOption('#endpointSelect','chart');

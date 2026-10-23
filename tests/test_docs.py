@@ -52,7 +52,6 @@ def assert_schema(test, value, schema, spec):
 
 class DocsTests(unittest.TestCase):
     setUp = backend_tests.BackendTests.setUp
-    login = backend_tests.BackendTests.login
 
     def test_catalog_covers_all_versioned_get_routes(self):
         actual = {re.sub(r'<(?:[^:<>]+:)?([^<>]+)>', r'{\1}', rule.rule)
@@ -83,14 +82,12 @@ class DocsTests(unittest.TestCase):
                         assert_schema(self, response.json, spec['paths'][item['path']]['get']['responses']['200']['content']['application/json']['schema'], spec)
 
     def test_documentation_does_not_discover_or_disclose_profiles(self):
-        self.app.config['DATA_ACCESS_MODE'] = 'private'
         with patch('backend.repository.visible_profile_ids', side_effect=AssertionError('No profile reads in docs')):
             for suffix in ('docs','docs.md','openapi.json'):
                 text = self.client.get(api_docs.BASE+'/'+suffix).get_data(as_text=True)
                 self.assertNotIn('Hidden', text)
                 self.assertNotIn('Demo', text)
                 self.assertNotIn('/private/', text)
-        self.assertEqual(self.client.get(api_docs.BASE+'/profiles').status_code, 401)
 
     def test_markdown_is_generated_from_catalog_and_served_without_cwd_dependency(self):
         expected = api_docs.render_markdown()
@@ -100,15 +97,13 @@ class DocsTests(unittest.TestCase):
         for item in api_docs.ENDPOINTS:
             self.assertIn(item['path'], expected)
 
-    def test_private_spec_declares_session_and_public_docs(self):
-        self.app.config['DATA_ACCESS_MODE'] = 'private'
+    def test_public_spec_has_no_authentication_schemes(self):
         spec = self.client.get(api_docs.BASE+'/openapi.json').json
-        self.assertEqual(spec['security'], [{'SessionCookie': []}])
-        self.assertEqual(spec['servers'], [{'url':'/'}])
-        for suffix in ('docs','docs.md','openapi.json'):
-            self.assertEqual(spec['paths'][api_docs.BASE+'/'+suffix]['get']['security'], [])
-        self.app.config['DATA_ACCESS_MODE'] = 'public'
-        self.assertIn({}, self.client.get(api_docs.BASE+'/openapi.json').json['security'])
+        self.assertEqual(spec['security'], [])
+        self.assertEqual(spec['servers'], [{'url': '/'}])
+        self.assertNotIn('securitySchemes', spec['components'])
+        for path, item in spec['paths'].items():
+            self.assertNotIn('401', item['get']['responses'], path)
 
     def test_api_parameter_bounds_and_limit_semantics(self):
         rows = [dict(date=f'2026-01-{i:02d}', steps=i) for i in range(1,31)]
@@ -132,11 +127,6 @@ class DocsTests(unittest.TestCase):
             response = self.client.get(api_docs.BASE+path)
             self.assertEqual(response.status_code, 404)
             assert_schema(self, response.json, spec['components']['schemas']['Error'], spec)
-        self.app.config['DATA_ACCESS_MODE'] = 'private'
-        response = self.client.get(api_docs.BASE+'/profiles')
-        self.assertEqual(response.status_code, 401)
-        assert_schema(self, response.json, spec['components']['schemas']['Error'], spec)
-
     def test_docs_assets_and_content_policy(self):
         with self.client.get(api_docs.BASE+'/docs', base_url='https://docs.example') as response:
             self.assertEqual(response.status_code, 200)

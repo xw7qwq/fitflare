@@ -201,7 +201,7 @@ def _refresh_profile_tokens(profile_id: str, log_prefix: str) -> tuple[bool, str
     tokens_file = tokens_file_for(profile_id)
     print(f"[{log_prefix}] Checking tokens file: {tokens_file}")
     if not os.path.exists(tokens_file):
-        return False, f'Profile {profile_id} not found. Open Account settings and configure Fitbit'
+        return False, f'Profile {profile_id} not found. Run auth/authorize_google_health.py --configure --no-browser on the server'
 
     try:
         with open(tokens_file, "r", encoding="utf-8") as handle:
@@ -210,7 +210,7 @@ def _refresh_profile_tokens(profile_id: str, log_prefix: str) -> tuple[bool, str
         return False, f"Error checking tokens: {exc}"
 
     if not tokens or "refresh_token" not in tokens or not tokens.get("refresh_token"):
-        return False, f'Profile {profile_id} needs authorization. Open Account settings and authorize Fitbit'
+        return False, f'Profile {profile_id} needs authorization. Run auth/authorize_google_health.py --no-browser on the server'
 
     refresh_result = subprocess.run(
         [sys.executable, "auth/refresh_token.py"],
@@ -236,7 +236,7 @@ def _refresh_profile_tokens(profile_id: str, log_prefix: str) -> tuple[bool, str
         error_msg = "Token file not found"
     if "Refresh token is invalid or expired" in error_msg:
         error_msg = "Refresh token is invalid or expired"
-    return False, f"Token refresh failed: {error_msg}. Open Account settings and authorize Fitbit"
+    return False, f"Token refresh failed: {error_msg}. Run auth/authorize_google_health.py --no-browser on the server"
 
 
 def _run_auto_sync_for_profile(profile_id: str):

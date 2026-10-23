@@ -18,7 +18,7 @@ const WEAR_FIELDS = ['steps', 'active_minutes', 'very_active_minutes', 'fairly_a
 const NON_WEAR_CLEARED = [...WEAR_FIELDS, 'calories_out', 'activity_calories', 'sedentary_minutes'];
 const DAY_MS = 86400000;
 
-export function normalizeDashboard(dashboard = {}, authenticated = false) {
+export function normalizeDashboard(dashboard = {}) {
   const stats = (Array.isArray(dashboard.stats) ? dashboard.stats : []).map(card => ({
     ...card, targetView: METRIC_VIEWS[card.key] || 'overview',
     latestText: formatMetricValue(card.key, card.latest, card.unit),
@@ -31,7 +31,7 @@ export function normalizeDashboard(dashboard = {}, authenticated = false) {
     stats, statsByKey: Object.fromEntries(stats.map(card => [card.key, card])),
     daily: cleanDailyRows(dashboard.charts?.daily),
     account: {
-      files: authenticated ? dashboard.files || {} : {},
+      files: {},
     },
   };
 }

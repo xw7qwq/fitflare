@@ -45,7 +45,7 @@ test('weekly series aggregate only supplied records and ignore nulls', () => {
 test('public models do not expose internal file paths', () => {
   const raw = { files: { dashboard_cache: '/private/cache.json' }, stats: [{ key: 'hrv', latest: null, avg7: 0 }] };
   assert.deepEqual(normalizeDashboard(raw).account.files, {});
-  assert.equal(normalizeDashboard(raw, true).account.files.dashboard_cache, '/private/cache.json');
+  assert.deepEqual(normalizeDashboard(raw, true).account.files, {});
   assert.equal(normalizeDashboard(raw).stats[0].latestText, '--');
   assert.equal(normalizeDashboard(raw).stats[0].avg7Text, '0.0 ms');
 });

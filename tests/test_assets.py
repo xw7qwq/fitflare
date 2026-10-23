@@ -8,9 +8,9 @@ from unittest.mock import patch
 from backend.assets import AssetManifest
 
 os.environ['FITFLARE_AUTO_SYNC_ENABLED'] = 'false'
-with patch.dict(os.environ, {'FITFLARE_ADMIN_PASSWORD': 'test-import-only', 'FITFLARE_ADMIN_PASSWORD_HASH': '',
-                             'FITFLARE_SESSION_SECRET_FILE': ''}):
+with patch.dict(os.environ, {'FITFLARE_DATA_ACCESS': 'public'}):
     from server import create_app
+
 
 
 class AssetManifestTests(unittest.TestCase):
@@ -66,8 +66,7 @@ class AssetManifestTests(unittest.TestCase):
 
 class AssetRouteTests(unittest.TestCase):
     def setUp(self):
-        self.app = create_app(dict(TESTING=True, SECRET_KEY='test-only-key', ADMIN_PASSWORD='test-only-password',
-                                   ADMIN_PASSWORD_HASH='', DATA_ACCESS_MODE='public'))
+        self.app = create_app(dict(TESTING=True, DATA_ACCESS_MODE='public'))
         self.client = self.app.test_client()
         self.assets = self.app.extensions['assets']
 

@@ -1,4 +1,4 @@
-"""Offline tests: every mutable path is redirected to a temporary synthetic fixture."""
+"""Offline public-read-only contracts; all data is synthetic and temporary."""
 import json
 import os
 import tempfile
@@ -7,8 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 os.environ['FITFLARE_AUTO_SYNC_ENABLED'] = 'false'
-with patch.dict(os.environ, {'FITFLARE_ADMIN_PASSWORD': 'test-import-only',
-                             'FITFLARE_ADMIN_PASSWORD_HASH': '', 'FITFLARE_SESSION_SECRET_FILE': ''}):
+with patch.dict(os.environ, {'FITFLARE_DATA_ACCESS': 'public'}):
     from server import create_app
 from backend import jobs, sync
 from common import profile_paths
@@ -31,30 +30,14 @@ class BackendTests(unittest.TestCase):
                                       'FITBIT_CLIENT_SECRET': '', 'FITBIT_TOKENS_FILE': ''})
         env.start()
         self.addCleanup(env.stop)
-        self.config = dict(OWNER_PROFILE_ID='Demo', TESTING=True, SECRET_KEY='test-only-session-key-not-for-production',
-                           ADMIN_PASSWORD='test-only-password', ADMIN_PASSWORD_HASH='',
-                           SESSION_COOKIE_SECURE=False, PROFILES_DIR=str(self.root / 'profiles'),
-                           PUBLIC_PROFILE_IDS=frozenset({'Demo'}), DATA_ACCESS_MODE='public')
+        self.config = dict(OWNER_PROFILE_ID='Demo', TESTING=True, DATA_ACCESS_MODE='public',
+                           PROFILES_DIR=str(self.root / 'profiles'))
         self.app = create_app(self.config)
         self.client = self.app.test_client()
         jobs.fetch_jobs.clear()
-        jobs.auth_jobs.clear()
 
-    def login(self, client=None):
-        client = client or self.client
-        response = client.post('/api/admin/login', json={'password': 'test-only-password'})
-        self.assertEqual(response.status_code, 200)
-        return response.json['csrf_token']
 
-    def test_public_dashboard_is_filtered_on_server(self):
-        response = self.client.get('/api/dashboard/Demo')
-        self.assertEqual(response.status_code, 200)
-        self.assertNotIn('files', response.json)
-        self.assertNotIn('/private/', response.get_data(as_text=True))
-        self.login()
-        self.assertIn('files', self.client.get('/api/dashboard/Demo').json)
-
-    def test_all_read_surfaces_honor_profile_allowlist(self):
+    def test_all_read_surfaces_only_expose_the_owner(self):
         for suffix in ('', '/dashboard', '/catalog', '/overview', '/coverage', '/metrics', '/correlations', '/series/daily', '/datasets', '/sections', '/tables', '/snapshot', '/snapshot/endpoints', '/charts/overview-trend.svg'):
             with self.subTest(suffix=suffix):
                 self.assertEqual(self.client.get('/api/public/v1/profiles/Hidden'+suffix).status_code, 404)
@@ -64,56 +47,6 @@ class BackendTests(unittest.TestCase):
         self.assertEqual([p['id'] for p in self.client.get('/api/profile-summaries').json], ['Demo'])
         self.assertEqual(self.client.get('/api/public/v1/profiles').json['meta']['count'], 1)
 
-    def test_empty_allowlist_does_not_fall_back_to_all_profiles(self):
-        self.app.config['PUBLIC_PROFILE_IDS'] = frozenset()
-        self.assertEqual(self.client.get('/api/profiles').json, [])
-        self.assertEqual(self.client.get('/api/profile-summaries').json, [])
-        self.assertNotIn('Hidden', self.client.get('/api/public/v1/docs').get_data(as_text=True))
-
-    def test_private_mode_denies_every_data_entry_point(self):
-        self.app.config['DATA_ACCESS_MODE'] = 'private'
-        for path in ('/api/account', '/api/dashboard', '/api/tables/sleep', '/api/public/v1/me', '/api/profiles', '/api/profile-summaries', '/api/dashboard/Demo', '/api/tables/Demo/sleep', '/api/public/v1', '/api/public/v1/profiles/Demo/snapshot', '/api/public/v1/profiles/Demo/charts/overview-trend.svg'):
-            with self.subTest(path=path):
-                response = self.client.get(path)
-                self.assertEqual(response.status_code, 401)
-                self.assertNotIn('Access-Control-Allow-Origin', response.headers)
-                self.assertIn('no-store', response.headers['Cache-Control'])
-        with self.client.get('/') as response:
-            self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.client.get('/api/health').status_code, 200)
-        self.login()
-        self.assertEqual(self.client.get('/api/dashboard/Hidden').status_code, 404)
-        self.assertEqual(self.client.get('/api/dashboard').status_code, 200)
-
-    def test_private_mode_fails_closed_without_credentials(self):
-        with self.assertRaises(RuntimeError):
-            create_app({**self.config, 'DATA_ACCESS_MODE':'private', 'ADMIN_PASSWORD':''})
-        with self.assertRaises(RuntimeError):
-            create_app({**self.config, 'DATA_ACCESS_MODE':'typo'})
-
-    def test_csrf_and_logout_invalidate_session(self):
-        token = self.login()
-        self.assertEqual(self.client.post('/api/admin/logout').status_code, 403)
-        self.assertEqual(self.client.post('/api/admin/logout', headers={'X-Fitflare-CSRF':token}).status_code, 200)
-        self.assertFalse(self.client.get('/api/admin/session').json['authenticated'])
-        self.assertEqual(self.client.post('/api/account/setup', json={}).status_code, 401)
-        self.assertEqual(self.client.post('/api/create-profile', json={}).status_code, 404)
-
-    def test_login_rate_limit_and_malformed_body(self):
-        self.assertEqual(self.client.post('/api/admin/login', json=[]).status_code, 400)
-        for _ in range(5):
-            self.assertEqual(self.client.post('/api/admin/login', json={'password':'incorrect'}).status_code, 401)
-        result = self.client.post('/api/admin/login', json={'password':'incorrect'})
-        self.assertEqual(result.status_code, 429)
-        self.assertIn('Retry-After', result.headers)
-
-    def test_public_cors_does_not_extend_to_management(self):
-        response = self.client.get('/api/public/v1/profiles')
-        self.assertEqual(response.headers['Access-Control-Allow-Origin'], '*')
-        self.assertNotIn('Access-Control-Allow-Origin', self.client.get('/api/admin/session').headers)
-        self.login()
-        self.assertNotIn('Access-Control-Allow-Origin', self.client.get('/api/public/v1/profiles').headers)
-
     def test_tables_are_optional_and_server_paginated(self):
         self.assertNotIn('tables', self.client.get('/api/dashboard/Demo?tables=none').json)
         response = self.client.get('/api/tables/Demo/sleep?offset=20&limit=20').json
@@ -122,22 +55,6 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/tables/Demo/sleep?offset=100000').json['rows'], [])
         self.assertEqual(self.client.get('/api/tables/Demo/unknown').status_code, 404)
         self.assertEqual(self.client.get('/api/tables/Demo/sleep?limit=9999').json['meta']['limit'], 100)
-
-    def test_static_and_csv_access_boundaries(self):
-        for path in ('/.env', '/.git/config', '/server.py', '/backend/security.py', '/profiles/index.json', '/templates/public_api.html', '/static/server.py'):
-            self.assertEqual(self.client.get(path).status_code, 404, path)
-        self.assertEqual(self.client.get('/profiles/Demo/csv/example.csv').status_code, 401)
-        self.login()
-        with self.client.get('/profiles/Demo/csv/example.csv') as response:
-            self.assertEqual(response.status_code, 200)
-
-    def test_profile_traversal_and_symlinks_are_rejected(self):
-        (self.root / 'profiles/Link').symlink_to(self.root, target_is_directory=True)
-        for path in ('/api/dashboard/%2e%2e', '/api/dashboard/Link', '/api/authorize/%2e%2e'):
-            self.assertEqual(self.client.get(path).status_code, 404)
-        token = self.login()
-        response = self.client.post('/api/authorize-exchange', json={'profileName':'../outside','code':'test-only'}, headers={'X-Fitflare-CSRF':token})
-        self.assertEqual(response.status_code, 400)
 
     def test_docs_and_all_sample_public_routes_render(self):
         self.assertEqual(self.client.get('/api/public/v1/docs').status_code, 200)
@@ -158,132 +75,8 @@ class BackendTests(unittest.TestCase):
         self.assertIsNotNone(second)
         sync._release_profile_fetch_lock(second)
 
-    def test_jobs_survive_polling_and_ids_are_unique(self):
-        first, second = jobs.create_fetch('Demo'), jobs.create_fetch('Demo')
-        self.assertNotEqual(first, second)
-        self.login()
-        for _ in range(3):
-            self.assertEqual(self.client.get('/api/fetch-status/'+first).json['profile'], 'Demo')
-        self.assertEqual(self.client.get('/api/fetch-jobs').status_code, 200)
-
-    def test_manual_job_start_uses_registry_and_prevents_duplicate(self):
-        token = self.login()
-        with patch('backend.admin_routes.threading.Thread') as thread:
-            response = self.client.post('/api/fetch-data', json={'profile':'Demo'}, headers={'X-Fitflare-CSRF':token})
-            self.assertEqual(response.status_code, 200)
-            thread.return_value.start.assert_called_once()
-            second = self.client.post('/api/fetch-data', json={'profile':'Demo'}, headers={'X-Fitflare-CSRF':token})
-            self.assertEqual(second.status_code, 409)
-
     def test_no_scheduler_starts_on_import(self):
         self.assertIsNone(sync.auto_sync_thread)
-
-
-    def test_default_is_private_and_owner_is_explicit(self):
-        from backend.config import settings
-        with patch.dict(os.environ, {'FITFLARE_PROFILE_ID': 'me'}):
-            os.environ.pop('FITFLARE_DATA_ACCESS', None)
-            self.assertEqual(settings()['DATA_ACCESS_MODE'], 'private')
-            self.assertEqual(settings()['OWNER_PROFILE_ID'], 'me')
-            self.assertEqual(profile_paths.get_active_profile(), 'me')
-            with patch.dict(os.environ, {'FITBIT_PROFILE': 'Hidden'}):
-                self.assertEqual(profile_paths.resolve_or_prompt_profile(), 'me')
-            self.assertEqual(profile_paths.get_active_profile('Demo'), 'Demo')
-            with self.assertRaises(ValueError):
-                profile_paths.get_active_profile('../Hidden')
-
-    def test_owner_restriction_survives_admin_login_and_public_wildcard(self):
-        self.app.config['PUBLIC_PROFILE_IDS'] = None
-        token = self.login()
-        for prefix in ('/api/dashboard/Hidden', '/api/tables/Hidden/sleep',
-                       '/api/public/v1/profiles/Hidden', '/api/public/v1/profiles/Hidden/dashboard',
-                       '/api/authorize/Hidden', '/profiles/Hidden/csv/example.csv'):
-            self.assertEqual(self.client.get(prefix).status_code, 404, prefix)
-        headers = {'X-Fitflare-CSRF': token}
-        for endpoint, body in (('/api/fetch-data', {'profile': 'Hidden'}),
-                               ('/api/authorize-exchange', {'profileName': 'Hidden', 'code': 'synthetic'}),
-                               ('/api/account/setup', {'profileName': 'Hidden', 'clientId': 'id', 'clientSecret': 'secret'})):
-            self.assertEqual(self.client.post(endpoint, json=body, headers=headers).status_code, 400)
-        self.assertEqual(self.client.post('/api/rebuild-dashboard/Hidden', json={}, headers=headers).status_code, 404)
-        for endpoint in ('create-profile', 'delete-profile'):
-            self.assertEqual(self.client.post('/api/'+endpoint, json={'profileName':'Demo'}, headers=headers).status_code, 404)
-        self.assertEqual([p['name'] for p in self.client.get('/api/profiles').json], ['Demo'])
-
-    def test_account_bootstrap_and_credential_update_preserve_data_and_tokens(self):
-        self.app.config['OWNER_PROFILE_ID'] = 'NewOwner'
-        before = self.client.get('/api/account').json
-        self.assertEqual(before, dict(profile_id='NewOwner', configured=False, authorized=False, has_data=False, provider=None))
-        credentials = {'clientId': 'synthetic.apps.googleusercontent.com', 'clientSecret': 'synthetic-secret'}
-        self.assertEqual(self.client.post('/api/account/setup', json=credentials).status_code, 401)
-        token = self.login()
-        self.assertEqual(self.client.post('/api/account/setup', json=credentials).status_code, 403)
-        headers = {'X-Fitflare-CSRF': token}
-        response = self.client.post('/api/account/setup', json=credentials, headers=headers)
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.json['configured'])
-        self.assertFalse(response.json['authorized'])
-        directory = self.root / 'profiles/NewOwner'
-        path = directory / 'auth/google_client.json'
-        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
-        self.assertEqual(json.loads(path.read_text())['client_id'], credentials['clientId'])
-        token_path = directory / 'auth/tokens.json'
-        token_path.write_text(json.dumps({'oauth_type': 'google', 'refresh_token': 'synthetic-refresh', 'access_token': 'synthetic-access'}))
-        health = directory / 'csv/health.csv'
-        health.write_text('date,value\n2026-01-01,5\n')
-        original = token_path.read_bytes(), health.read_bytes()
-        credentials['clientSecret'] = 'replacement-secret'
-        updated = self.client.post('/api/account/setup', json=credentials, headers=headers)
-        self.assertEqual(updated.status_code, 200)
-        self.assertTrue(updated.json['authorized'])
-        self.assertEqual(updated.json['provider'], 'google_health')
-        self.assertTrue(updated.json['has_data'])
-        self.assertEqual((token_path.read_bytes(), health.read_bytes()), original)
-        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
-        public = self.client.get('/api/account').get_data(as_text=True)
-        for secret in ('synthetic-refresh', 'synthetic-access', 'replacement-secret', credentials['clientId']):
-            self.assertNotIn(secret, public)
-        self.assertFalse([item for item in (directory / 'auth').iterdir() if item.name.startswith('tmp')])
-
-    def test_environment_credentials_and_existing_cache_without_authorization(self):
-        (self.root / 'profiles/Demo/auth/google_client.json').unlink()
-        self.assertEqual(self.client.get('/api/account').json,
-                         dict(profile_id='Demo', configured=False, authorized=False, has_data=True, provider=None))
-        self.assertEqual(self.client.get('/api/dashboard').status_code, 200)
-        with patch.dict(os.environ, {'GOOGLE_HEALTH_CLIENT_ID': 'environment.apps.googleusercontent.com',
-                                     'GOOGLE_HEALTH_CLIENT_SECRET': 'environment-secret'}):
-            self.assertTrue(self.client.get('/api/account').json['configured'])
-            self.login()
-            response = self.client.get('/api/authorize')
-            self.assertEqual(response.status_code, 200)
-            self.assertIn('client_id=environment.apps.googleusercontent.com', response.json['auth_url'])
-            self.assertNotIn('environment-secret', response.get_data(as_text=True))
-
-    def test_personal_aliases_keep_legacy_responses(self):
-        for personal, legacy in (('/api/dashboard', '/api/dashboard/Demo'),
-                                 ('/api/tables/sleep', '/api/tables/Demo/sleep'),
-                                 ('/api/public/v1/me', '/api/public/v1/profiles/Demo'),
-                                 ('/api/public/v1/me/dashboard', '/api/public/v1/profiles/Demo/dashboard')):
-            self.assertEqual(self.client.get(personal).json, self.client.get(legacy).json)
-        self.assertEqual(self.client.get('/api/public/v1/me?profile=Hidden').status_code, 400)
-        token = self.login()
-        with patch('backend.admin_routes.threading.Thread') as thread:
-            result = self.client.post('/api/fetch-data', json={}, headers={'X-Fitflare-CSRF':token})
-            self.assertEqual(result.status_code, 200)
-            self.assertEqual(jobs.fetch_jobs[result.json['job_id']]['profile'], 'Demo')
-            thread.return_value.start.assert_called_once()
-
-    def test_legacy_jobs_are_not_readable_or_mutable(self):
-        jobs.fetch_jobs['legacy'] = dict(id='legacy', profile='Hidden', status='running')
-        jobs.auth_jobs['legacy'] = dict(id='legacy', profile='Hidden', status='running')
-        token = self.login()
-        self.assertEqual(self.client.get('/api/fetch-jobs').json, [])
-        self.assertEqual(self.client.get('/api/fetch-status/legacy').status_code, 404)
-        self.assertEqual(self.client.get('/api/authorize-status/legacy').status_code, 404)
-        self.assertEqual(self.client.post('/api/cancel-fetch/legacy', json={}, headers={'X-Fitflare-CSRF':token}).status_code, 404)
-        self.assertEqual(jobs.fetch_jobs['legacy']['status'], 'running')
-        self.assertEqual(self.client.get('/api/health').json['active_jobs'], 0)
-        with self.assertRaises(ValueError):
-            jobs.create_fetch('Hidden')
 
     def test_background_sync_and_cli_discovery_only_touch_owner(self):
         for profile in ('Demo', 'Hidden'):
@@ -307,68 +100,102 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(env['FITBIT_TOKENS_FILE'], str((self.root / 'profiles/Demo/auth/tokens.json').resolve()))
         self.assertEqual(env['FITFLARE_PROFILE_ID'], 'Demo')
 
-    def test_inner_symlinks_cannot_read_another_account(self):
-        self.login()
-        linked_csv = self.root / 'profiles/Demo/csv/linked.csv'
-        linked_csv.symlink_to(self.root / 'profiles/Hidden/csv/example.csv')
-        self.assertEqual(self.client.get('/profiles/Demo/csv/linked.csv').status_code, 404)
-        cache = self.root / 'profiles/Demo/cache/dashboard.json'
-        cache.unlink()
-        cache.symlink_to(self.root / 'profiles/Hidden/cache/dashboard.json')
-        response = self.client.get('/api/dashboard')
-        self.assertEqual(response.status_code, 500)
-        self.assertNotIn('Hidden', response.get_data(as_text=True))
+    def test_public_reads_ignore_legacy_sessions_and_never_expose_paths(self):
+        self.client.set_cookie('fitflare_session', 'legacy-admin-cookie')
+        for path in ('/api/dashboard', '/api/dashboard/Demo', '/api/public/v1/me/dashboard'):
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn('/private/', response.get_data(as_text=True))
+            self.assertNotIn('files', response.json)
+            self.assertNotIn('Set-Cookie', response.headers)
+            self.assertIn('no-store', response.headers['Cache-Control'])
 
+    def test_all_management_routes_are_removed_and_writes_cannot_mutate_data(self):
+        before = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        paths = ('/api/admin/session', '/api/admin/login', '/api/admin/logout', '/api/account/setup',
+                 '/api/authorize', '/api/authorize/Demo', '/api/authorize-exchange',
+                 '/api/fetch-data', '/api/fetch-jobs', '/api/fetch-status/old', '/api/cancel-fetch/old',
+                 '/api/rebuild-dashboard', '/api/create-profile', '/api/delete-profile')
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get(path).status_code, 404)
+                for method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+                    response = self.client.open(path, method=method, json={'password': 'legacy', 'clientSecret': 'replacement'})
+                    self.assertEqual(response.status_code, 405)
+                    self.assertEqual(response.headers['Allow'], 'GET, HEAD, OPTIONS')
+        after = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        self.assertEqual(before, after)
+        self.assertFalse(jobs.fetch_jobs)
 
+    def test_registered_routes_are_read_only_even_with_old_admin_configuration(self):
+        self.app.config.update(ADMIN_PASSWORD='old-password', SECRET_KEY='old-session-key')
+        for rule in self.app.url_map.iter_rules():
+            self.assertLessEqual(rule.methods, {'GET', 'HEAD', 'OPTIONS'}, rule.rule)
+        for method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+            self.assertEqual(self.client.open('/api/public/v1/me', method=method).status_code, 405)
+        self.assertEqual(self.client.get('/api/dashboard').status_code, 200)
 
-    def test_setup_failed_atomic_replace_preserves_previous_credentials(self):
-        path = self.root / 'profiles/Demo/auth/google_client.json'
-        previous = path.read_bytes()
-        token = self.login()
-        with patch('common.google_health_auth.os.replace', side_effect=OSError('Synthetic failure')):
-            response = self.client.post('/api/account/setup', json={'clientId': 'new.apps.googleusercontent.com', 'clientSecret': 'new-secret'},
-                                        headers={'X-Fitflare-CSRF': token})
-        self.assertEqual(response.status_code, 500)
-        self.assertEqual(path.read_bytes(), previous)
-        self.assertFalse([item for item in path.parent.iterdir() if item.name.startswith('tmp')])
+    def test_publication_requires_explicit_opt_in(self):
+        for mode in ('', 'private', 'typo'):
+            with self.subTest(mode=mode), self.assertRaisesRegex(RuntimeError, 'FITFLARE_DATA_ACCESS=public'):
+                create_app({**self.config, 'DATA_ACCESS_MODE': mode})
+        from backend.config import settings
+        with patch.dict(os.environ, {'FITFLARE_PROFILE_ID': 'me', 'FITFLARE_DATA_ACCESS': ''}):
+            self.assertEqual(settings()['OWNER_PROFILE_ID'], 'me')
+            self.assertEqual(settings()['DATA_ACCESS_MODE'], '')
+            self.assertNotIn('SECRET_KEY', settings())
+            with patch.dict(os.environ, {'FITBIT_PROFILE': 'Hidden'}):
+                self.assertEqual(profile_paths.resolve_or_prompt_profile(), 'me')
+            with self.assertRaises(ValueError):
+                profile_paths.get_active_profile('../Hidden')
 
-    def test_authorization_exchange_and_rebuild_alias_only_use_owner(self):
-        token = self.login()
-        headers = {'X-Fitflare-CSRF': token}
-        with patch('backend.admin_routes.complete_google_authorization', return_value={'message': 'Connected'}) as exchange, \
-             patch('backend.admin_routes.build_dashboard_cache'):
-            result = self.client.post('/api/authorize-exchange', json={'redirectUrl': 'http://localhost:8080/callback?code=c&state=s'}, headers=headers)
-            self.assertEqual(result.status_code, 200)
-            self.assertEqual(exchange.call_args.args[0], 'Demo')
-            invalid = self.client.post('/api/authorize-exchange', json={'profile': 'Hidden', 'redirectUrl': 'x'}, headers=headers)
-            self.assertEqual(invalid.status_code, 400)
-            exchange.assert_called_once()
-        with patch('backend.admin_routes.build_dashboard_cache', return_value={'generated_at': 'synthetic'}) as rebuild:
-            self.assertEqual(self.client.post('/api/rebuild-dashboard', json={}, headers=headers).status_code, 200)
-            rebuild.assert_called_once_with('Demo')
+    def test_public_cors_and_no_session_cookie(self):
+        for method in ('GET', 'HEAD', 'OPTIONS'):
+            response = self.client.open('/api/public/v1/me', method=method)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers['Access-Control-Allow-Origin'], '*')
+            self.assertEqual(response.headers['Access-Control-Allow-Methods'], 'GET, HEAD, OPTIONS')
+            self.assertNotIn('Set-Cookie', response.headers)
+        self.assertNotIn('Access-Control-Allow-Origin', self.client.get('/api/admin/session').headers)
 
-    def test_environment_managed_setup_rejects_without_writing(self):
-        path = self.root / 'profiles/Demo/auth/google_client.json'
-        previous = path.read_bytes()
-        token = self.login()
-        with patch.dict(os.environ, {'GOOGLE_HEALTH_CLIENT_ID': 'env.apps.googleusercontent.com', 'GOOGLE_HEALTH_CLIENT_SECRET': 'env-secret'}):
-            response = self.client.post('/api/account/setup', json={'clientId': 'new.apps.googleusercontent.com', 'clientSecret': 'new-secret'},
-                                        headers={'X-Fitflare-CSRF': token})
-        self.assertEqual(response.status_code, 409)
-        self.assertEqual(response.json['code'], 'credentials_managed_by_environment')
-        self.assertEqual(path.read_bytes(), previous)
+    def test_static_credentials_and_raw_csv_are_not_web_accessible(self):
+        for path in ('/.env', '/.git/config', '/server.py', '/backend/security.py', '/profiles/index.json',
+                     '/profiles/Demo/csv/example.csv', '/profiles/Demo/auth/google_client.json',
+                     '/profiles/Demo/auth/tokens.json', '/templates/public_api.html', '/static/server.py'):
+            self.assertEqual(self.client.get(path).status_code, 404, path)
 
-    def test_explicit_cli_maintenance_uses_matching_token_and_credentials(self):
-        from auth.refresh_token import _resolve_tokens_file, _resolve_client_credentials
-        from common.fitbit_profile import _ensure_env_for_profile
-        for account in ('Demo', 'Hidden'):
-            path = self.root / f'profiles/{account}/auth/client.json'
-            path.write_text(json.dumps({'client_id': account+'-id', 'client_secret':account+'-secret'}))
-        self.assertEqual(profile_paths.owner_profile_id(), 'Demo')
-        _ensure_env_for_profile('Hidden')
-        self.assertEqual(Path(_resolve_tokens_file()), (self.root / 'profiles/Hidden/auth/tokens.json').resolve())
-        self.assertEqual(_resolve_client_credentials(), ('Hidden-id', 'Hidden-secret'))
-        self.assertEqual(profile_paths.get_active_profile(), 'Hidden')
+    def test_profile_traversal_and_symlinks_are_rejected(self):
+        (self.root / 'profiles/Link').symlink_to(self.root, target_is_directory=True)
+        for path in ('/api/dashboard/%2e%2e', '/api/dashboard/Link', '/api/tables/Hidden/sleep'):
+            self.assertEqual(self.client.get(path).status_code, 404)
+        self.assertEqual(self.client.get('/api/public/v1/me?profile=Hidden').status_code, 400)
+
+    def test_account_only_reports_data_availability_without_reading_credentials(self):
+        path = self.root / 'profiles/Demo/auth/tokens.json'
+        path.write_text('unreadable as JSON: synthetic-token')
+        self.assertEqual(self.client.get('/api/account').json, {'profile_id': 'Demo', 'has_data': True})
+        (self.root / 'profiles/Demo/auth/google_client.json').write_text('unreadable synthetic credentials')
+        self.assertEqual(self.client.get('/api/profiles').json, [{'name': 'Demo', 'created': 'Unknown'}])
+        self.app.config['OWNER_PROFILE_ID'] = 'NewOwner'
+        self.assertEqual(self.client.get('/api/account').json, {'profile_id': 'NewOwner', 'has_data': False})
+        self.assertFalse((self.root / 'profiles/NewOwner').exists())
+
+    def test_personal_aliases_keep_legacy_read_responses(self):
+        for personal, legacy in (('/api/dashboard', '/api/dashboard/Demo'),
+                                 ('/api/tables/sleep', '/api/tables/Demo/sleep'),
+                                 ('/api/public/v1/me', '/api/public/v1/profiles/Demo'),
+                                 ('/api/public/v1/me/dashboard', '/api/public/v1/profiles/Demo/dashboard')):
+            self.assertEqual(self.client.get(personal).json, self.client.get(legacy).json)
+
+    def test_background_jobs_keep_owner_isolation_without_web_controls(self):
+        first, second = jobs.create_fetch('Demo'), jobs.create_fetch('Demo')
+        self.assertNotEqual(first, second)
+        jobs.fetch_jobs['legacy'] = dict(id='legacy', profile='Hidden', status='running')
+        self.assertEqual(self.client.get('/api/health').json['active_jobs'], 0)
+        self.assertEqual(self.client.get('/api/fetch-jobs').status_code, 404)
+        self.assertEqual(jobs.fetch_jobs['legacy']['status'], 'running')
+        with self.assertRaises(ValueError):
+            jobs.create_fetch('Hidden')
 
 
 if __name__ == '__main__':

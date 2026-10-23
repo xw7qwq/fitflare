@@ -134,15 +134,14 @@ async function sendRequest(event) {
   refs.requestStatus.textContent = '正在读取本站缓存…';
   const start = performance.now();
   try {
-    const response = await fetch(url, { method: 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal });
+    const response = await fetch(url, { method: 'GET', credentials: 'omit', cache: 'no-store', redirect: 'error', signal: controller.signal });
     const preview = await readPreview(response);
     if (sequence !== requestSequence) return;
     const contentType = response.headers.get('content-type')?.split(';')[0] || '未知类型';
     refs.responsePreview.textContent = preview.text || '（空响应）';
     refs.responsePreview.hidden = false;
     refs.requestStatus.textContent = `HTTP ${response.status} · ${contentType} · ${Math.round(performance.now() - start)} ms` +
-      (preview.truncated ? ' · 预览已截断至 64 KiB。' : '') +
-      (response.status === 401 ? ' · 请先在本站仪表盘登录。' : '');
+      (preview.truncated ? ' · 预览已截断至 64 KiB。' : '');
   } catch (error) {
     if (sequence === requestSequence) refs.requestStatus.textContent = controller.signal.reason === 'timeout'
       ? '请求超过 15 秒，已取消。' : '请求失败，请检查连接后手动重试。';

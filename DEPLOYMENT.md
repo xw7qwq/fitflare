@@ -6,9 +6,9 @@
 
 - 正式地址：`https://fitflare.lucius7.dev/`；旧地址 `https://fitbit.lucius7.dev/` 保留路径和查询参数跳转至新地址。
 - 部署目录：`/home/lucius7/fitflare`，即本仓库的 `main` 检出；持久数据在其中的 `profiles/`。
-- 账户目录：`FITFLARE_PROFILE_ID=Lucius7`；访问模式：公开只读（`FITFLARE_DATA_ACCESS=public`、`FITFLARE_PUBLIC_PROFILES=Lucius7`），任何人可查看健康记录。
+- 账户目录：`FITFLARE_PROFILE_ID=Lucius7`；访问模式：公开只读（`FITFLARE_DATA_ACCESS=public`），任何人可查看健康记录。
 - Caddy 主配置：`/home/lucius7/server-ops/caddy/Caddyfile`，用 `caddyctl check` / `caddyctl apply` 检查并原子加载；服务登记在 `/home/lucius7/server-ops/services.json`。
-- 网页管理：停用（未设置管理口令，页面不显示登录入口）。同步、授权等操作通过 SSH 执行，见 [运维命令](#运维命令)。
+- 网页管理和登录：已移除，没有相关 HTTP 接口或会话。同步、授权等操作通过 SSH 执行，见 [运维命令](#运维命令)。
 - Google OAuth 应用名称 `Fitflare`，正式版（个人自用）；自动同步每 21600 秒（6 小时）。
 - 服务器专用的两个文件不进入 Git（已列入 `.gitignore` 与 `.dockerignore`）：
   - `Dockerfile.host`：基于本机安全修补的运行时基底 `local/cpython-pip-security-20261022:fitflare`，只复制应用代码。不要换回上游原始镜像。
@@ -32,22 +32,12 @@ chmod 600 .env
 | `FITFLARE_UID` / `FITFLARE_GID` | `10001` / `10001`，与数据目录属主一致 |
 | `FITFLARE_BIND_HOST` / `FITFLARE_PORT` | `127.0.0.1` / `9000` |
 | `FITFLARE_PROFILE_ID` | 新安装为 `me`；迁移时填原数据目录名，不是网页可切换的账户 |
-| `FITFLARE_DATA_ACCESS` | `private`，数据读取需要登录 |
-| `FITFLARE_PUBLIC_PROFILES` | 仅公开模式使用，只能填唯一账户 ID；私有模式留空 |
-| `FITFLARE_ADMIN_PASSWORD` | 网页管理口令；也支持用 `FITFLARE_ADMIN_PASSWORD_HASH` 提供 Werkzeug 兼容哈希。私有模式必填；公开模式留空则停用网页登录，管理只走命令行 |
-| `FITFLARE_SESSION_SECRET` | 独立生成并持久保存的随机密钥，至少 32 字符；也可用 `FITFLARE_SESSION_SECRET_FILE` |
-| `FITFLARE_SESSION_COOKIE_SECURE` | `true`，通过 HTTPS 登录 |
+| `FITFLARE_DATA_ACCESS` | 必须显式设为 `public`，公开唯一账户的健康记录；其他值或未设置会拒绝启动 |
 | `FITFLARE_AUTO_SYNC_ENABLED` | 首次部署设为 `false`，授权并验证手动同步后再开启 |
-| `GOOGLE_HEALTH_CLIENT_ID` / `_SECRET` | 可选；不填则在网页“账户设置”中保存 |
+| `GOOGLE_HEALTH_CLIENT_ID` / `_SECRET` | 可选；不填则通过授权命令交互保存 |
 | `TZ` | 按需要设置容器时区 |
 
-分别执行以下命令两次，为密码与会话密钥生成不同的随机值，并填入 `.env`：
-
-```bash
-python3 -c 'import secrets; print(secrets.token_urlsafe(48))'
-```
-
-不要沿用样例密码。没有管理员口令或哈希时，私有模式会拒绝启动；公开模式会正常启动，只是不提供网页登录。会话密钥变化会使已有登录失效。`.env` 不进入镜像和 Git；不要将展开后的 `docker compose config` 输出发布到工单或聊天记录，因为其中可能包含凭据。
+不需要管理员密码或会话密钥。旧的 `FITFLARE_ADMIN_*`、`FITFLARE_SESSION_*` 和 `FITFLARE_PUBLIC_PROFILES` 配置已不再读取，可以从部署配置中移除。`.env` 不进入镜像和 Git；不要将展开后的 `docker compose config` 输出发布到工单或聊天记录，因为其中可能包含凭据。
 
 ## 2. 准备持久化目录并首次启动
 
@@ -76,25 +66,22 @@ fitflare.example.com {
 }
 ```
 
-参考文件：[deploy/caddy-fitflare.example.caddy](deploy/caddy-fitflare.example.caddy)。不要用示例覆盖已有服务器的其他站点配置；本服务器使用 `server-ops` 的 `caddyctl`。随后在 HTTPS 页面登录，确认能读取健康记录。未登录访问数据接口应返回 `401`；首页和 API 文档可以正常展示。
-
-生产保持 `FITFLARE_SESSION_COOKIE_SECURE=true`。在 HTTP 地址登录时浏览器不会发送 Secure Cookie；只有隔离的本机开发环境才应设为 `false`。不要将业务端口直接暴露公网来绕过代理问题。
+参考文件：[deploy/caddy-fitflare.example.caddy](deploy/caddy-fitflare.example.caddy)。不要用示例覆盖已有服务器的其他站点配置；本服务器使用 `server-ops` 的 `caddyctl`。随后直接打开 HTTPS 页面，确认无需登录即可读取健康记录和 API 文档。`/api/admin/session` 等旧管理地址应返回 `404`，HTTP 写入请求应返回 `405`。业务端口保持仅本机监听。
 
 ## 4. 连接 Google Health 与首次同步
 
 在 Google Cloud 创建启用 Google Health API 的 Web OAuth 客户端，回调 URI 登记为 `http://localhost:8080/callback`。完整步骤与权限范围见 [GOOGLE_HEALTH.md](GOOGLE_HEALTH.md)。
 
-1. 在 HTTPS 页面登录，点击顶部“连接 Google Health”，填写 Client ID、Client Secret 与回调 URI 并保存。
-2. 打开 Google 授权页，用关联原 Fitbit 账户的 Google 账号同意所需权限。
-3. 浏览器跳转到 `http://localhost:8080/callback?code=...&state=...`。localhost 指浏览器所在电脑，页面打不开也没关系，从地址栏复制**完整 URL**，粘贴回授权窗口提交。
-4. 点击“同步数据”完成首次同步。确认数据正常后再开启自动同步。
+在服务器运行授权命令，按提示填写客户端信息。打开输出的 Google 授权链接，用关联原 Fitbit 账户的 Google 账号同意所需权限，再将浏览器地址栏的完整回调 URL 粘贴回终端。localhost 页面打不开不影响复制；无需公开 8080 端口。
 
-命令行维护入口（同一账户，无需 `--profile`）：
+命令按顺序执行，作用于唯一账户，无需 `--profile`：
 
 ```bash
 docker exec -it fitflare-app python auth/authorize_google_health.py --configure --no-browser
 docker exec -it fitflare-app python fetch/fetch_all.py
 ```
+
+确认首次同步成功后，再将 `FITFLARE_AUTO_SYNC_ENABLED=true` 并运行 `docker compose up -d --no-build fitflare` 开启自动同步。
 
 `profiles/<FITFLARE_PROFILE_ID>/auth/google_client.json` 保存客户端配置，`tokens.json` 保存授权；不要打印、提交或上传这些文件。授权 URL、回调 URL 和令牌都不要公开。同步包含网络请求、限流等待和令牌刷新，首次抓取可能耗时较长。
 
@@ -120,7 +107,7 @@ docker exec -it fitflare-app python auth/authorize_google_health.py --no-browser
 docker exec -it fitflare-app python auth/authorize_google_health.py --configure --no-browser
 ```
 
-授权命令会打印 Google 授权链接：在自己的浏览器打开并同意，然后把跳转后的**完整 URL**（含 `code` 和 `state`）粘贴回终端，输入内容不回显。授权成功后执行一次同步。私有模式下数据接口需要登录，用 `curl` 查询状态会返回 401，改看日志即可。
+授权命令会打印 Google 授权链接：在自己的浏览器打开并同意，然后把跳转后的**完整 URL**（含 `code` 和 `state`）粘贴回终端，输入内容不回显。授权成功后执行一次同步。网页上的“刷新视图”只读取已有缓存，不会触发同步。
 
 自动同步、手动同步和授权共用同一把账户锁，不会并发写入；已有同步在进行时，再次执行同步或授权会直接报错退出，部署脚本也会拒绝切换，稍后重试即可。
 
@@ -128,7 +115,9 @@ docker exec -it fitflare-app python auth/authorize_google_health.py --configure 
 
 先备份现有 `.env` 和 `profiles/`，记录原有数据目录名，例如 `profiles/myprofile`。设置 `FITFLARE_PROFILE_ID=myprofile`，保留原凭据、CSV、缓存和文件权限。不要将目录改名为 `me`，也不要合并多个目录。
 
-Fitflare 不会删除其他目录，但不会枚举、访问或同步它们，登录用户也不例外。创建/删除档案接口已经移除。`FITFLARE_DATA_ACCESS` 默认是 `private`，升级时必须配置管理员密码。旧版 `FITBAUS_*` 变量不再读取，升级时需把 `.env` 中的变量名改为 `FITFLARE_*`；会话 Cookie 改名后需要重新登录一次。
+Fitflare 不会删除其他目录，也不会枚举、访问或同步它们。创建/删除档案接口已经移除。旧版 `FITBAUS_*` 变量不再读取，升级时需把 `.env` 中的变量名改为 `FITFLARE_*`。
+
+从旧私有版本升级时，必须先确认是否公开该账户，再显式设置 `FITFLARE_DATA_ACCESS=public`；保留 `private` 或不设置会拒绝启动。当前版本不提供私有模式、网页登录或管理面板。删除过时的管理员、会话和公开档案列表配置；已有 Cookie 不再读取。
 
 ## 更新与回滚
 
@@ -175,7 +164,7 @@ docker compose ps
 curl -fsS http://127.0.0.1:9000/api/health
 ```
 
-通常让 `FITFLARE_IMAGE` 使用默认的 `fitflare:latest`。不要在其他目录构建或手工修改 Compose 的 `image`/`build`，以免线上代码与仓库不一致。缓存结构版本变化时，首个请求会自动重建 `profiles/*/cache/dashboard.json`。脚本不检查 DNS 和代理，发布后还要验证 HTTPS 域名和浏览器登录。
+通常让 `FITFLARE_IMAGE` 使用默认的 `fitflare:latest`。不要在其他目录构建或手工修改 Compose 的 `image`/`build`，以免线上代码与仓库不一致。缓存结构版本变化时，首个请求会自动重建 `profiles/*/cache/dashboard.json`。脚本不检查 DNS 和代理，发布后还要验证 HTTPS 域名、公开图表和只读 API。
 
 ## 备份与恢复
 
@@ -192,7 +181,7 @@ sudo chmod 600 "$backup_file"
 docker compose start fitflare
 ```
 
-恢复时先停止同步与容器，将备份解压到仓库外的暂存目录并检查内容；保留当前 `profiles/` 的副本，再恢复 `.env` 与数据，修复到配置的 UID/GID 和私有权限后启动。确认健康接口、登录与数据均正常，再恢复同步。
+恢复时先停止同步与容器，将备份解压到仓库外的暂存目录并检查内容；保留当前 `profiles/` 的副本，再恢复 `.env` 与数据，修复到配置的 UID/GID 和私有权限后启动。确认健康接口、公开展示与数据均正常，再恢复同步。
 
 ## 日常检查
 
