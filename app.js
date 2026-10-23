@@ -85,7 +85,7 @@ async function refreshAccount() {
     renderAccountSettings();
     if (!state.account.has_data) {
       const notice = state.account.authorized ? 'Google Health 已连接。点击顶部“同步数据”，载入你的健康记录。' : state.account.configured ? 'Google 客户端已保存。请在账户设置中完成 Google Health 授权。' : '欢迎使用 Fitflare。点击顶部“连接 Google Health”，开始记录你的健康趋势。';
-      renderEmptyState(state.admin.authenticated ? notice : '暂无健康记录，请登录后连接 Google Health 并同步数据。');
+      renderEmptyState(state.admin.authenticated ? notice : state.admin.configured ? '暂无健康记录，请登录后连接 Google Health 并同步数据。' : '暂无健康记录。连接 Google Health 并完成首次同步后，这里会显示数据。');
       setStatus(state.account.authorized ? '等待同步' : '等待连接 Google Health');
       setDashboardLoading(false);
       return;
@@ -227,12 +227,9 @@ function renderAdminControls() {
   const { configured, authenticated } = state.admin
 
   if (refs.adminModeChip) {
-    refs.adminModeChip.dataset.mode = !configured ? "disabled" : authenticated ? "admin" : "public"
-    refs.adminModeChip.textContent = !configured
-      ? "管理未配置"
-      : authenticated
-        ? "已登录"
-        : state.admin.private ? "私有健康记录" : "公开只读"
+    // Without a management password the web UI is read-only; operations run over SSH.
+    refs.adminModeChip.dataset.mode = authenticated ? "admin" : "public"
+    refs.adminModeChip.textContent = authenticated ? "已登录" : state.admin.private ? "私有健康记录" : "公开只读"
   }
 
   if (refs.adminLoginBtn) {

@@ -6,8 +6,9 @@
 
 - 正式地址：`https://fitflare.lucius7.dev/`；旧地址 `https://fitbit.lucius7.dev/` 保留路径和查询参数跳转至新地址。
 - 部署目录：`/home/lucius7/fitflare`，即本仓库的 `main` 检出；持久数据在其中的 `profiles/`。
-- 账户目录：`FITFLARE_PROFILE_ID=Lucius7`；访问模式：公开只读（`FITFLARE_DATA_ACCESS=public`、`FITFLARE_PUBLIC_PROFILES=Lucius7`），任何人可查看健康记录，同步与授权需登录。
+- 账户目录：`FITFLARE_PROFILE_ID=Lucius7`；访问模式：公开只读（`FITFLARE_DATA_ACCESS=public`、`FITFLARE_PUBLIC_PROFILES=Lucius7`），任何人可查看健康记录。
 - Caddy 主配置：`/home/lucius7/server-ops/caddy/Caddyfile`，用 `caddyctl check` / `caddyctl apply` 检查并原子加载；服务登记在 `/home/lucius7/server-ops/services.json`。
+- 网页管理：停用（未设置管理口令，页面不显示登录入口）。同步、授权等操作通过 SSH 执行，见 [运维命令](#运维命令)。
 - Google OAuth 应用名称 `Fitflare`，正式版（个人自用）；自动同步每 21600 秒（6 小时）。
 - 服务器专用的两个文件不进入 Git（已列入 `.gitignore` 与 `.dockerignore`）：
   - `Dockerfile.host`：基于本机安全修补的运行时基底 `local/cpython-pip-security-20261022:fitflare`，只复制应用代码。不要换回上游原始镜像。
@@ -33,7 +34,7 @@ chmod 600 .env
 | `FITFLARE_PROFILE_ID` | 新安装为 `me`；迁移时填原数据目录名，不是网页可切换的账户 |
 | `FITFLARE_DATA_ACCESS` | `private`，数据读取需要登录 |
 | `FITFLARE_PUBLIC_PROFILES` | 仅公开模式使用，只能填唯一账户 ID；私有模式留空 |
-| `FITFLARE_ADMIN_PASSWORD` | 必须自行生成；也支持用 `FITFLARE_ADMIN_PASSWORD_HASH` 提供 Werkzeug 兼容哈希 |
+| `FITFLARE_ADMIN_PASSWORD` | 网页管理口令；也支持用 `FITFLARE_ADMIN_PASSWORD_HASH` 提供 Werkzeug 兼容哈希。私有模式必填；公开模式留空则停用网页登录，管理只走命令行 |
 | `FITFLARE_SESSION_SECRET` | 独立生成并持久保存的随机密钥，至少 32 字符；也可用 `FITFLARE_SESSION_SECRET_FILE` |
 | `FITFLARE_SESSION_COOKIE_SECURE` | `true`，通过 HTTPS 登录 |
 | `FITFLARE_AUTO_SYNC_ENABLED` | 首次部署设为 `false`，授权并验证手动同步后再开启 |
@@ -46,7 +47,7 @@ chmod 600 .env
 python3 -c 'import secrets; print(secrets.token_urlsafe(48))'
 ```
 
-不要沿用样例密码。没有管理员口令或哈希时，私有模式会拒绝启动。会话密钥变化会使已有登录失效。`.env` 不进入镜像和 Git；不要将展开后的 `docker compose config` 输出发布到工单或聊天记录，因为其中可能包含凭据。
+不要沿用样例密码。没有管理员口令或哈希时，私有模式会拒绝启动；公开模式会正常启动，只是不提供网页登录。会话密钥变化会使已有登录失效。`.env` 不进入镜像和 Git；不要将展开后的 `docker compose config` 输出发布到工单或聊天记录，因为其中可能包含凭据。
 
 ## 2. 准备持久化目录并首次启动
 
@@ -96,6 +97,32 @@ docker exec -it fitflare-app python fetch/fetch_all.py
 ```
 
 `profiles/<FITFLARE_PROFILE_ID>/auth/google_client.json` 保存客户端配置，`tokens.json` 保存授权；不要打印、提交或上传这些文件。授权 URL、回调 URL 和令牌都不要公开。同步包含网络请求、限流等待和令牌刷新，首次抓取可能耗时较长。
+
+## 运维命令
+
+以下命令在部署目录执行，均作用于 `FITFLARE_PROFILE_ID` 指定的唯一账户，不需要网页登录。
+
+```bash
+# 立即同步（与定时同步相同，同步完成后自动重建仪表盘缓存）
+docker exec fitflare-app python fetch/fetch_all.py
+
+# 查看最近同步结果与数据来源
+curl -s http://127.0.0.1:9000/api/public/v1/me/snapshot-status
+docker compose logs --tail 100 fitflare
+
+# 只重建仪表盘缓存（不访问 Google）
+docker exec fitflare-app python -c "from common.dashboard_cache import build_dashboard_cache; build_dashboard_cache(None)"
+
+# 重新授权 Google Health（沿用已保存的 OAuth 客户端）
+docker exec -it fitflare-app python auth/authorize_google_health.py --no-browser
+
+# 更换 Google OAuth 客户端并授权
+docker exec -it fitflare-app python auth/authorize_google_health.py --configure --no-browser
+```
+
+授权命令会打印 Google 授权链接：在自己的浏览器打开并同意，然后把跳转后的**完整 URL**（含 `code` 和 `state`）粘贴回终端，输入内容不回显。授权成功后执行一次同步。私有模式下数据接口需要登录，用 `curl` 查询状态会返回 401，改看日志即可。
+
+自动同步、手动同步和授权共用同一把账户锁，不会并发写入；已有同步在进行时，再次执行同步或授权会直接报错退出，部署脚本也会拒绝切换，稍后重试即可。
 
 ## 从多档案部署迁移
 
