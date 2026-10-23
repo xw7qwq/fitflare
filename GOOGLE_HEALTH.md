@@ -1,6 +1,6 @@
 # Google Health API v4 接入与迁移
 
-FitBaus 新授权默认使用 Google Health API v4。旧 Fitbit 档案在完成新授权前仍使用原连接；授权成功后按档案切换来源，保留历史 CSV 和公共查询接口。
+Fitflare 新授权默认使用 Google Health API v4。旧 Fitbit 档案在完成新授权前仍使用原连接；授权成功后按档案切换来源，保留历史 CSV 和公共查询接口。
 
 ## 1. 配置 Google Cloud
 
@@ -20,17 +20,17 @@ FitBaus 新授权默认使用 Google Health API v4。旧 Fitbit 档案在完成�
 4. 在 Credentials 创建 **Web application** OAuth 客户端，Authorized redirect URIs 填写 `http://localhost:8080/callback`。保存 Client ID 和 Client Secret，不使用原 Fitbit 应用凭据。
 5. 先在 Google Health 手机应用中登录对应 Google 账号；如有旧 Fitbit 账号，完成关联或迁移。必须与本地档案历史数据所属账号相同。
 
-配置界面名称和项目限制以 [Google 官方设置文档](https://developers.google.com/health/setup)为准。Testing 模式下 Google 的离线刷新令牌通常在七天后过期，长期自动同步需要按控制台要求调整发布状态；发布或验证不会由 FitBaus 自动完成。
+配置界面名称和项目限制以 [Google 官方设置文档](https://developers.google.com/health/setup)为准。Testing 模式下 Google 的离线刷新令牌通常在七天后过期，长期自动同步需要按控制台要求调整发布状态；发布或验证不会由 Fitflare 自动完成。
 
-## 2. 在 FitBaus 完成授权
+## 2. 在 Fitflare 完成授权
 
 1. 管理员登录 → 档案管理 → 对已有档案点击「连接 Google Health」。首次会打开 Google 客户端配置表单；也可直接点「Google 客户端配置」。
 2. 填入新 Client ID、Client Secret 和完全相同的回调 URI，保存并继续。
 3. 打开 Google 授权页，同意需要的数据权限。
-4. 复制最终浏览器地址栏的**完整 URL**（包含 `code` 和 `state`），粘贴回 FitBaus。localhost 页面无法访问不影响复制 URL。请在十分钟内提交；超时重新开始。
+4. 复制最终浏览器地址栏的**完整 URL**（包含 `code` 和 `state`），粘贴回 Fitflare。localhost 页面无法访问不影响复制 URL。请在十分钟内提交；超时重新开始。
 5. 授权成功后点击「同步健康数据」，再查看账户页面的缓存状态。
 
-此手动回调流程不需要向公网暴露 8080 端口。若使用其它回调 URI，Google Cloud 和 FitBaus 必须完全一致。只授予部分权限也可连接，其余类别明确显示未更新。
+此手动回调流程不需要向公网暴露 8080 端口。若使用其它回调 URI，Google Cloud 和 Fitflare 必须完全一致。只授予部分权限也可连接，其余类别明确显示未更新。
 
 ## 3. 命令行和环境变量
 
@@ -56,7 +56,7 @@ docker exec -it fitbaus-app python fetch/fetch_all.py --profile Lucius7
 
 - 日步数、距离、热量、楼层和活跃分钟使用 Google 的日聚合；心率、HRV、睡眠及其它记录使用 v4 数据类型接口，按官方单位转换。
 - 继续生成原 `fitbit_*.csv`，避免影响看板和公共 API 的消费者。不同数据集分别记录进度，失败的数据集下次继续补取；缺失值保持为空。
-- 睡眠分数沿用 FitBaus 本地算法，并显示为「睡眠估算得分」，不是 Google 或 Fitbit 官方睡眠分数。
+- 睡眠分数沿用 Fitflare 本地算法，并显示为「睡眠估算得分」，不是 Google 或 Fitbit 官方睡眠分数。
 - v4 未提供的旧目标、徽章、设备闹钟等资料保留历史快照，并标注为不再更新。不会用猜测的接口替代。
 - 迁移时先验证授权权限和 `users/me/identity`。旧 Fitbit ID 必须匹配返回的 `legacyUserId`，再次授权时 Google Health ID 必须一致。验证失败不会切换账号或覆盖历史数据。
 - 切换后停止旧 Fitbit 拉取并撤销旧令牌；若撤销请求暂时失败，显示提示并在刷新时重试，不再使用旧连接同步。

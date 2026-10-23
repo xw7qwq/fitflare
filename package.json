@@ -1,5 +1,5 @@
 {
-  "name": "fitbaus-dashboard",
+  "name": "fitflare-dashboard",
   "private": true,
   "type": "module",
   "devDependencies": { "playwright": "1.62.1" },

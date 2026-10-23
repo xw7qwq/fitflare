@@ -1,12 +1,14 @@
-![FitBaus Logo](assets/fitbausgithublogo.jpg)
+# Fitflare
 
-![FitBaus Dashboard](https://img.shields.io/badge/FitBaus-blue)
+Personal deployment: https://fitflare.lucius7.dev/
+
+![Fitflare Dashboard](https://img.shields.io/badge/Fitflare-blue)
 ![Python](https://img.shields.io/badge/Python-3.7+-green)
 ![Google Health API](https://img.shields.io/badge/Google_Health-API_v4-orange)
 
 ## a data analytics dashboard for Google Health and Fitbit history
 
-FitBaus is web-based dashboard for analyzing your Fitbit health and fitness data with beautiful visualizations, trend analysis, and comprehensive analytics. This project is not affiliated with Fitbit® or Google®
+Fitflare is a self-hosted dashboard for analyzing your Google Health data and retained Fitbit history with beautiful visualizations, trend analysis, and comprehensive analytics. This project is not affiliated with Fitbit® or Google®
 
 
 | ![Chart 1](assets/chart1.jpg) | ![Chart 2](assets/chart2.jpg) | ![Chart 3](assets/chart3.jpg) |
@@ -25,7 +27,7 @@ FitBaus is web-based dashboard for analyzing your Fitbit health and fitness data
 
 ## Public API
 
-FitBaus now exposes a versioned public read-only API for other projects.
+Fitflare now exposes a versioned public read-only API for other projects.
 
 - Human docs: [`API.md`](API.md)
 - Browser docs: `/api/public/v1/docs`
@@ -44,11 +46,11 @@ Key endpoints:
 New connections use Google OAuth and Google Health API v4. Existing Fitbit connections remain active until that profile completes Google authorization; historical CSVs are retained. Legacy Fitbit tokens cannot be reused with Google Health.
 
 1. Follow [Google Cloud setup](https://developers.google.com/health/setup): create a project, enable Google Health API, configure an external OAuth consent screen, and add your own Google account as a test user.
-2. Create a **Web application** OAuth client and register `http://localhost:8080/callback` as an authorized redirect URI. FitBaus accepts a manually pasted full redirect URL, so localhost does not need to serve a page.
+2. Create a **Web application** OAuth client and register `http://localhost:8080/callback` as an authorized redirect URI. Fitflare accepts a manually pasted full redirect URL, so localhost does not need to serve a page.
 3. Enable the read-only scopes listed in [GOOGLE_HEALTH.md](GOOGLE_HEALTH.md). Save the Google Client ID and Client Secret privately.
-4. Start FitBaus with `docker compose up -d --build`. Configure the existing administrator password and production HTTPS reverse proxy as described in [DEPLOYMENT.md](DEPLOYMENT.md).
+4. Start Fitflare with `docker compose up -d --build`. Configure the existing administrator password and production HTTPS reverse proxy as described in [DEPLOYMENT.md](DEPLOYMENT.md).
 5. Open the dashboard → administrator login → **档案管理**. For an existing profile select **连接 Google Health** and enter the Google client configuration; for a new profile fill in the new-profile form.
-6. Open Google consent, using the Google account linked to your original Fitbit data, then paste the **entire final callback URL including `code` and `state`** into FitBaus. First sign into the Google Health mobile app if the account is not linked yet.
+6. Open Google consent, using the Google account linked to your original Fitbit data, then paste the **entire final callback URL including `code` and `state`** into Fitflare. First sign into the Google Health mobile app if the account is not linked yet.
 7. Select **同步健康数据**. Manual and scheduled syncs now use Google Health for this profile.
 
 The app validates identity before changing providers, disables legacy fetching for migrated profiles, and revokes the legacy Fitbit token. If linking fails, the previous connection and historical data remain intact. Missing permissions are reported; only permitted datasets are updated.
@@ -148,7 +150,7 @@ The Life Events feature allows you to track personal events and correlate them w
 
 **Authentication and data fetching:**
 
-- The Google client redirect URI must exactly match the URI used in FitBaus.
+- The Google client redirect URI must exactly match the URI used in Fitflare.
 - Add the Google account to the consent screen's test users while the project is in Testing.
 - Use the same account as the historical Fitbit profile. Identity mismatch is rejected to prevent mixing different people's data.
 - If Google reports an unlinked account, sign into the Google Health mobile app and complete Fitbit account migration before trying again.

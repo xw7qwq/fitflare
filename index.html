@@ -4,8 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="简洁的 Fitbit 中文仪表盘：查看睡眠、活动、恢复和本地缓存记录。">
-  <title>FitBaus · 健康记录</title>
+  <meta name="description" content="Fitflare 个人健康看板：同步 Google Health，保留 Fitbit 历史，查看睡眠、活动与恢复趋势。">
+  <title>Fitflare · 健康记录</title>
+  <link rel="canonical" href="https://fitflare.lucius7.dev/">
   <link rel="icon" href="/assets/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
   <link rel="stylesheet" href="/style.css?v=20260923-1">
@@ -16,7 +17,7 @@
   <a class="skip-link" href="#mainContent">跳到主内容</a>
   <div class="app-shell">
     <header class="topbar">
-      <a class="brand" href="/" aria-label="FitBaus 首页"><span class="brand-icon" aria-hidden="true">F</span><strong>FitBaus</strong><span class="brand-caption">健康记录</span></a>
+      <a class="brand" href="/" aria-label="Fitflare 首页"><span class="brand-icon" aria-hidden="true">F</span><strong>Fitflare</strong><span class="brand-caption">健康记录</span></a>
       <div class="topbar-actions">
         <span class="mode-chip" id="adminModeChip">公开只读模式</span>
         <a class="button button-light" href="/api/public/v1/docs" target="_blank" rel="noreferrer">API 文档</a>
@@ -102,7 +103,7 @@
           </article>
 
           <article class="surface table-card">
-            <div class="section-head"><h3>近期活动日志</h3><p>如果 Fitbit 返回了训练或手动记录，这里会显示更接近原始行为的日志列表。</p></div>
+            <div class="section-head"><h3>近期活动日志</h3><p>展示 Google Health 返回的训练与活动记录。</p></div>
             <div class="table-wrap" id="activityLogTableWrap"></div>
           </article>
         </div>
@@ -124,12 +125,12 @@
 <section class="view-panel" id="panel-body" role="tabpanel" aria-labelledby="tab-body" tabindex="-1" data-view-panel="body" hidden>
         <div class="panel-grid panel-grid-two">
           <article class="surface narrative-card">
-            <div class="section-head"><h3>体重、BMI 与体脂</h3><p>优先读取 Fitbit 体重目标和近期体重 / 体脂日志，没有就退回 profile 快照。</p></div>
+            <div class="section-head"><h3>体重、BMI 与体脂</h3><p>展示 Google Health 体重与体脂记录，没有日志时使用个人资料快照；历史目标继续保留。</p></div>
             <div class="detail-grid" id="bodyMetricGrid"></div>
           </article>
 
           <article class="surface narrative-card">
-            <div class="section-head"><h3>血氧、呼吸率与皮温</h3><p>这些指标来自 Fitbit 的补充 vitals 接口，支持时会自动缓存并展示。</p></div>
+            <div class="section-head"><h3>血氧、呼吸率与皮温</h3><p>这些指标来自 Google Health，设备支持且已授权时会同步并展示。</p></div>
             <div class="detail-grid" id="vitalMetricGrid"></div>
           </article>
         </div>
@@ -141,7 +142,7 @@
           </article>
 
           <article class="surface table-card">
-            <div class="section-head"><h3>近期 vitals 摘要</h3><p>展示每类额外体征的最新可解析数值，便于快速确认 Fitbit 是否返回了数据。</p></div>
+            <div class="section-head"><h3>近期体征摘要</h3><p>展示各项体征的最近记录，便于确认 Google Health 的数据同步情况。</p></div>
             <div class="table-wrap" id="vitalTableWrap"></div>
           </article>
         </div>
@@ -174,12 +175,12 @@
 
         <div class="panel-grid panel-grid-two">
           <article class="surface table-card">
-            <div class="section-head"><h3>Fitbit 设备</h3><p>显示设备电量、同步时间和基础标识信息。</p></div>
+            <div class="section-head"><h3>已连接设备</h3><p>显示设备电量、同步时间和基础标识信息。</p></div>
             <div class="table-wrap" id="deviceTableWrap"></div>
           </article>
 
           <article class="surface table-card">
-            <div class="section-head"><h3>最近徽章</h3><p>如果 profile scope 已授权，会展示 Fitbit badges 的本地快照。</p></div>
+            <div class="section-head"><h3>历史徽章</h3><p>展示迁移前保存的徽章。Google Health 暂不提供徽章接口，此处仅保留历史记录。</p></div>
             <div class="table-wrap" id="badgeTableWrap"></div>
           </article>
         </div>
@@ -208,7 +209,7 @@
         </article>
       </section>
     </main>
-    <footer class="footer"><span>FitBaus · 本地缓存视图 · <a href="/about.html">关于 Fitflare</a> · <a href="/privacy.html">隐私政策</a> · <a href="/terms.html">使用条款</a></span><span>趋势范围以最近记录为终点；均值与补充快照保留各自标注的时间范围。</span></footer>
+    <footer class="footer"><span>Fitflare · 本地缓存视图 · <a href="/about.html">关于 Fitflare</a> · <a href="/privacy.html">隐私政策</a> · <a href="/terms.html">使用条款</a></span><span>趋势范围以最近记录为终点；均值与补充快照保留各自标注的时间范围。</span></footer>
   </div>
   <noscript><p class="empty-state">此仪表盘需要 JavaScript。也可通过 <a href="/api/public/v1/docs">API 文档</a> 查看数据接口。</p></noscript>
   <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>

@@ -17,7 +17,7 @@ from common.profile_paths import resolve_or_prompt_profile
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Connect a FitBaus profile to Google Health")
+    parser = argparse.ArgumentParser(description="Connect a Fitflare profile to Google Health")
     parser.add_argument("--profile", help="Existing profile name")
     parser.add_argument("--configure", action="store_true", help="Prompt for separate Google Cloud OAuth credentials")
     parser.add_argument("--no-browser", action="store_true", help="Only print the Google authorization URL")

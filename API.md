@@ -1,4 +1,4 @@
-# FitBaus Public API
+# Fitflare Public API
 
 > 此文件由 common/api_docs.py 生成。请修改接口目录后运行 python3 scripts/docs.py。
 
@@ -14,7 +14,7 @@ curl -fsS 'https://YOUR_HOST/api/public/v1/profiles'
 
 ## 访问与隐私
 
-public/v1 只提供 GET 读取，不会主动发起 Fitbit 同步。缺失或过期的派生缓存可能在读取时本地重建。
+public/v1 只提供 GET 读取，不会主动发起 Google Health 同步。缺失或过期的派生缓存可能在读取时本地重建。
 
 公开模式只返回部署者允许公开的档案；私有模式的数据接口要求本站管理员会话。文档始终可读，示例中的 YOUR_PROFILE 是占位符，不是真实档案。
 
@@ -269,7 +269,7 @@ curl -fsS 'https://YOUR_HOST/api/public/v1/profiles/YOUR_PROFILE/series/daily?me
 
 返回可嵌入的 SVG；各指标独立归一化。缺少数据时仍返回带空状态文字的 SVG。
 
-返回：`image/svg+xml`；SVG 文本；X-FitBaus-Chart-Meta 响应头包含图表元数据。
+返回：`image/svg+xml`；SVG 文本；X-FitBaus-Chart-Meta 响应头包含图表元数据（保留旧版兼容名称）。
 
 | 参数 | 位置 | 约束 | 说明 |
 | --- | --- | --- | --- |

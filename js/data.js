@@ -13,7 +13,7 @@ export const VIEWS = {
 const METRIC_VIEWS = { sleep_score: 'sleep', sleep_hours: 'sleep', steps: 'activity', active_minutes: 'activity', active_zone_minutes: 'activity', calories_out: 'activity', hrv: 'recovery', rhr: 'recovery' };
 const CACHE_LAYERS = {
   dashboard_cache: ['仪表盘缓存', '聚合指标、图表和记录。'],
-  profile_snapshot: ['Fitbit 快照', '设备、目标与补充指标。'],
+  profile_snapshot: ['健康数据快照', '设备、目标与补充指标。'],
   activity_csv: ['活动历史', '活动与步数的原始缓存。'],
   sleep_csv: ['睡眠历史', '睡眠时长与阶段记录。'],
   hrv_csv: ['HRV 历史', '心率变异性记录。'],

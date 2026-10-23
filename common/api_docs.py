@@ -19,7 +19,7 @@ GROUPS = {
 }
 GUIDE = (
     ('access', '访问与隐私', (
-        'public/v1 只提供 GET 读取，不会主动发起 Fitbit 同步。缺失或过期的派生缓存可能在读取时本地重建。',
+        'public/v1 只提供 GET 读取，不会主动发起 Google Health 同步。缺失或过期的派生缓存可能在读取时本地重建。',
         '公开模式只返回部署者允许公开的档案；私有模式的数据接口要求本站管理员会话。文档始终可读，示例中的 YOUR_PROFILE 是占位符，不是真实档案。',
         '私有模式请先在仪表盘登录，再使用同源浏览器请求。这里不提供 API Key 或 Bearer Token，也不收集、保存或展示管理员密码。cURL 与 Python 示例默认不带会话。',
         '匿名公开版 API 允许跨域读取；私有模式和管理员会话响应不开放 CORS。所有 API 响应使用 private, no-store，不应在共享缓存中保存健康数据。',
@@ -106,7 +106,7 @@ ENDPOINTS = (
     endpoint('metric', 'profiles', PROFILE+'/metrics/{metric_key}', '单项指标', '按 key 读取一张指标卡；不存在的指标返回 404。', 'metric'),
     endpoint('correlations', 'profiles', PROFILE+'/correlations', '相关性', '缓存中的相关系数、强度和重叠点数，仅供描述性参考。', 'correlations', 'array'),
     endpoint('series', 'series', PROFILE+'/series/{granularity}', '趋势序列', '从完整本地数据聚合序列，按指标选择列，按 limit 截取最后若干点。', 'series', 'Series', (METRICS, SERIES_LIMIT), result='data.points[]：序列点；data.metrics[]：单位等元数据；meta.available_metrics[]：可选指标'),
-    endpoint('chart', 'series', PROFILE+'/charts/{chart_key}.svg', 'SVG 趋势图', '返回可嵌入的 SVG；各指标独立归一化。缺少数据时仍返回带空状态文字的 SVG。', query=SVG_PARAMS, media='image/svg+xml', result='SVG 文本；X-FitBaus-Chart-Meta 响应头包含图表元数据'),
+    endpoint('chart', 'series', PROFILE+'/charts/{chart_key}.svg', 'SVG 趋势图', '返回可嵌入的 SVG；各指标独立归一化。缺少数据时仍返回带空状态文字的 SVG。', query=SVG_PARAMS, media='image/svg+xml', result='SVG 文本；X-FitBaus-Chart-Meta 响应头包含图表元数据（保留旧版兼容名称）'),
     endpoint('datasets', 'records', PROFILE+'/datasets', '数据集目录', '列出支持的完整结构化数据集和覆盖信息。', 'datasets', 'array'),
     endpoint('dataset', 'records', PROFILE+'/datasets/{dataset}', '读取数据集', '读取由 CSV 解析或聚合的完整历史，并从 offset 起分页。', 'dataset', 'Dataset', (OFFSET, page_limit(200)), result='data.rows[]：当前页；data.columns[]：列名提示；meta：分页信息'),
     endpoint('sections', 'records', PROFILE+'/sections', '摘要分区列表', '读取 activity、body、vitals、lifestyle、account 摘要。', 'sections', 'array'),
@@ -179,15 +179,15 @@ def build_openapi_spec(base_url='/', access_mode='public'):
                 operation['responses'][code] = {'description': message, 'content': {'application/json': {'schema': {'$ref': '#/components/schemas/Error'}}}}
             operation['responses']['500'] = {'description': '服务异常；可能为文本响应', 'content': {'text/html': {'schema': {'type': 'string'}}}}
         if item['id'] == 'chart':
-            operation['responses']['200']['headers'] = {'X-FitBaus-Chart-Meta': {'description': 'JSON 编码的图表元数据', 'schema': {'type': 'string'}}}
+            operation['responses']['200']['headers'] = {'X-FitBaus-Chart-Meta': {'description': 'JSON 编码的图表元数据（响应头名称保留旧版兼容）', 'schema': {'type': 'string'}}}
         paths[item['path']] = {'get': operation}
-    return {'openapi': '3.1.0', 'info': {'title': 'FitBaus Public API', 'version': PUBLIC_API_VERSION,
+    return {'openapi': '3.1.0', 'info': {'title': 'Fitflare Public API', 'version': PUBLIC_API_VERSION,
              'description': '只读本地缓存 API。公开模式使用档案白名单；私有模式使用本站会话。字段不承诺匿名化。'},
             'servers': [{'url': base_url or '/'}], 'tags': [{'name': label} for label in GROUPS.values()],
             'security': [{'SessionCookie': []}] if access_mode == 'private' else [{}, {'SessionCookie': []}],
             'paths': paths, 'components': {'schemas': deepcopy(SCHEMAS), 'securitySchemes': {
                 'SessionCookie': {'type': 'apiKey', 'in': 'cookie', 'name': 'fitbaus_admin_session',
-                                  'description': '在本站仪表盘登录后由浏览器管理；不是 Fitbit OAuth token。'}}}}
+                                  'description': '在本站仪表盘登录后由浏览器管理；不是 Google Health OAuth 令牌；Cookie 名称为旧版兼容标识。'}}}}
 
 
 def example_path(item):
@@ -219,7 +219,7 @@ def docs_context(access_mode='public'):
 
 
 def render_markdown():
-    lines = ['# FitBaus Public API', '', '> 此文件由 common/api_docs.py 生成。请修改接口目录后运行 python3 scripts/docs.py。', '',
+    lines = ['# Fitflare Public API', '', '> 此文件由 common/api_docs.py 生成。请修改接口目录后运行 python3 scripts/docs.py。', '',
              f'基础路径：`{BASE}`。全部 {len(ENDPOINTS)} 个接口均为 GET。', '',
              '## 快速开始', '', '先读取可见档案，再将 YOUR_PROFILE 替换为响应中的档案 ID。YOUR_HOST 需替换为你的部署域名。', '',
              f"```sh\ncurl -fsS 'https://YOUR_HOST{BASE}/profiles'\n```", '']

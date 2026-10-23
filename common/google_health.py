@@ -1,4 +1,4 @@
-"""Google Health v4 reads and adapters for FitBaus' existing data files.
+"""Google Health v4 reads and adapters for Fitflare' existing data files.
 
 Wire formats follow https://developers.google.com/health/reference/rest/v4.
 Daily totals use the API's reconciled civil-day rollups, never sums of raw
@@ -269,7 +269,7 @@ def activity_row(point, data_type):
             if column:
                 row[column] = integer(item.get("activeMinutesSum"))
         values = [row.get(column) for column in columns.values()]
-        # Preserve FitBaus' existing activeMinutes definition: all three levels.
+        # Preserve Fitflare' existing activeMinutes definition: all three levels.
         # A missing activity level is unknown, not an invented zero-minute value.
         row["activeMinutes"] = sum(values) if all(value is not None for value in values) else None
     elif data_type == "active-zone-minutes":

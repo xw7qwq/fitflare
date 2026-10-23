@@ -57,9 +57,9 @@ def post_worker_init(worker):
         from server import start_auto_sync_scheduler
 
         start_auto_sync_scheduler()
-        worker.log.info("FitBaus auto-sync scheduler started")
+        worker.log.info("Fitflare auto-sync scheduler started")
     except Exception:
-        worker.log.exception("Failed to start FitBaus auto-sync scheduler")
+        worker.log.exception("Failed to start Fitflare auto-sync scheduler")
 
 
 def worker_exit(server, worker):
@@ -67,6 +67,6 @@ def worker_exit(server, worker):
         from server import stop_auto_sync_scheduler
 
         stop_auto_sync_scheduler()
-        server.log.info("FitBaus auto-sync scheduler stopped")
+        server.log.info("Fitflare auto-sync scheduler stopped")
     except Exception:
-        server.log.exception("Failed to stop FitBaus auto-sync scheduler cleanly")
+        server.log.exception("Failed to stop Fitflare auto-sync scheduler cleanly")

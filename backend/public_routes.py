@@ -65,8 +65,8 @@ def public_api_index():
     profiles = build_profile_cards()
     sample_profile = profiles[0].get('id') if profiles else None
     data = {
-        'name': 'FitBaus Public API',
-        'description': '公开只读接口，面向其他项目复用本地 Fitbit 缓存、趋势序列和 SVG 图表。',
+        'name': 'Fitflare Public API',
+        'description': '公开只读接口，面向其他项目复用本地 Google Health 与 Fitbit 历史缓存、趋势序列和 SVG 图表。',
         'docs': {
             'html': f'{base_url}{PUBLIC_API_BASE_PATH}/docs',
             'markdown': f'{base_url}{PUBLIC_API_BASE_PATH}/docs.md',

@@ -1,1 +1,1 @@
-"""HTTP routes and background services for FitBaus."""
+"""HTTP routes and background services for Fitflare."""

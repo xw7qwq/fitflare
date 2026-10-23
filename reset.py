@@ -1,6 +1,6 @@
 ﻿#!/usr/bin/env python3
 """
-Reset script for FitBaus application.
+Reset script for Fitflare application.
 
 This script safely deletes user data and generated files to return the
 application to a clean state with no users and no data.
@@ -92,7 +92,7 @@ def show_usage():
     """Display usage information and examples."""
     print_status("DESCRIPTION:", "INFO")
     print_status("  This script safely deletes user data, profiles, and generated files", "INFO")
-    print_status("  to return the FitBaus application to a clean state.", "INFO")
+    print_status("  to return the Fitflare application to a clean state.", "INFO")
     print()
     print_status("USAGE:", "INFO")
     print_status("  python reset.py                    # Delete ALL profiles and data", "INFO")
@@ -183,7 +183,7 @@ def delete_specific_profile(profile_name, skip_confirmation=False):
         return False
     
     print_status("=" * 60, "INFO")
-    print_status(f"FitBaus Profile Deletion: {profile_name}", "INFO")
+    print_status(f"Fitflare Profile Deletion: {profile_name}", "INFO")
     print_status("=" * 60, "INFO")
     print()
     
@@ -249,7 +249,7 @@ def delete_specific_profile(profile_name, skip_confirmation=False):
 def main():
     """Main reset function."""
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description="Reset FitBaus application data")
+    parser = argparse.ArgumentParser(description="Reset Fitflare application data")
     parser.add_argument("--profile", help="Delete specific profile only (instead of all data)")
     parser.add_argument("--yes", action="store_true", help="Skip confirmation prompts (non-interactive mode)")
     args = parser.parse_args()
@@ -264,7 +264,7 @@ def main():
         return
     
     print_status("=" * 60, "INFO")
-    print_status("FitBaus Reset Script", "INFO")
+    print_status("Fitflare Reset Script", "INFO")
     print_status("=" * 60, "INFO")
     print()
     

@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <meta name="description" content="FitBaus 只读 API：档案、趋势、分页记录与 SVG 图表。参数说明、示例和 OpenAPI。">
-  <title>API 文档 · FitBaus</title>
+  <meta name="description" content="Fitflare 只读 API：档案、趋势、分页记录与 SVG 图表。参数说明、示例和 OpenAPI。">
+  <title>API 文档 · Fitflare</title>
   <link rel="icon" href="/assets/favicon.ico">
   <link rel="stylesheet" href="/docs.css">
   <script src="/js/docs.js" type="module"></script>
@@ -13,7 +13,7 @@
 <body>
   <a href="#main" class="skip-link">跳到文档内容</a>
   <header class="topbar">
-    <a class="brand" href="/"><span class="brand-icon" aria-hidden="true">F</span>FitBaus <span class="brand-divider">/</span><span class="brand-section">API</span></a>
+    <a class="brand" href="/"><span class="brand-icon" aria-hidden="true">F</span>Fitflare <span class="brand-divider">/</span><span class="brand-section">API</span></a>
     <nav class="header-links" aria-label="文档格式">
       <a href="{{ api_base }}/openapi.json">OpenAPI <span aria-hidden="true">↗</span></a>
       <a href="{{ api_base }}/docs.md">Markdown <span aria-hidden="true">↗</span></a>
@@ -33,14 +33,14 @@
         {% for key, title in groups.items() %}<a href="#group-{{ key }}">{{ title }}</a>{% endfor %}
         <a href="#conventions">访问与响应约定</a>
       </nav>
-      <p class="sidebar-note">v1 · 只读接口<br>从本地缓存读取，<br>不直接请求 Fitbit。</p>
+      <p class="sidebar-note">v1 · 只读接口<br>从本地缓存读取，<br>不直接请求 Google Health。</p>
     </aside>
     <main id="main" tabindex="-1">
       <section class="intro" id="start">
         <div class="eyebrow"><span class="version">v1</span> DEVELOPER REFERENCE</div>
         <h1>API 文档</h1>
         <p class="lede">把健康记录接入你的项目。</p>
-        <p>读取档案、趋势与结构化记录，或直接嵌入 SVG 图表。无需重复接入 Fitbit OAuth。</p>
+        <p>读取档案、趋势与结构化记录，或直接嵌入 SVG 图表。无需重复配置 Google Health 授权。</p>
         <div class="base-row"><span>基础路径</span><code>{{ api_base }}</code><span class="mode">{{ '私有模式 · 需登录' if access_mode == 'private' else '公开模式 · 档案白名单' }}</span></div>
         <div class="quickstart">
           <div><h2>先获取可见档案</h2><p>从响应的 <code>data[].id</code> 取得档案 ID，再读取趋势。示例占位符不会自动替换为真实个人信息。</p></div>

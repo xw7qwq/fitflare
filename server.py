@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FitBaus application factory and static entry points; imports start no jobs."""
+"""Fitflare application factory and static entry points; imports start no jobs."""
 import os
 from pathlib import Path, PurePosixPath
 from flask import Flask, jsonify, request, send_from_directory

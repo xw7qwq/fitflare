@@ -464,7 +464,7 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
       </div>
       <div class="scope-chip">
         <strong>目标 scope</strong>
-        <small>为了支持体征、生活和账户页，应用会请求这些 Fitbit 读取范围。</small>
+        <small>为了支持体征、生活和账户页，应用会请求这些 Google Health 只读权限。</small>
         <div class="scope-row">
           ${(requestedScopes.length ? requestedScopes : ["暂无配置"]).map((scope) => `<span class="tag">${escapeHtml(scope)}</span>`).join("")}
         </div>
@@ -551,7 +551,7 @@ export function createViews({ state, refs, getDailySeries, renderTable }) {
         <div class="detail-meta">30 天均值 ${formatMetricValue(key, metric.avg30, unit)}<br>
         差值 ${formatSignedDelta(metric.delta, key === 'rhr' ? 0 : 1)} ${unit} · 有效记录 ${metric.points} 天</div></article>`;
     }).join('');
-    refs.recoveryEstimate.textContent = `本地恢复估算：${formatNumber(state.viewModel.overview.recovery_score)}。仅供趋势参考，不是 Fitbit 官方指标或医疗结论。`;
+    refs.recoveryEstimate.textContent = `Fitflare 恢复估算：${formatNumber(state.viewModel.overview.recovery_score)}。仅供趋势参考，不代表 Google Health 官方评分或医疗结论。`;
   }
 return { overview: () => { renderOverviewCharts(); renderCorrelations(); }, sleep: renderSleepView, activity: renderActivityView, recovery: renderRecoveryView, body: renderBodyView, lifestyle: renderLifestyleView, account: renderAccountView, family: renderFamily };
 }

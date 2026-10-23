@@ -713,7 +713,7 @@ def _build_body_tables(profile: dict[str, Any], snapshot: dict[str, Any]) -> tup
             "体重目标",
             _round(weight_goal, 1),
             "kg",
-            "读取 Fitbit 体重目标设置。",
+            "来自本地保存的体重目标。",
             "green",
         ),
         _value_card(
@@ -732,7 +732,7 @@ def _build_body_tables(profile: dict[str, Any], snapshot: dict[str, Any]) -> tup
             "type": "体重",
             "value": _round(_to_float(row.get("weight")), 1),
             "unit": "kg",
-            "detail": f"BMI {_round(_to_float(row.get('bmi')), 1) or '--'} · 来源 {row.get('source') or 'Fitbit'}",
+            "detail": f"BMI {_round(_to_float(row.get('bmi')), 1) or '--'} · 来源 {row.get('source') or '未标注'}",
         })
     for row in reversed(fat_records[-8:]):
         rows.append({
@@ -740,7 +740,7 @@ def _build_body_tables(profile: dict[str, Any], snapshot: dict[str, Any]) -> tup
             "type": "体脂",
             "value": _round(_to_float(row.get("fat")) or _to_float(row.get("value")), 1),
             "unit": "%",
-            "detail": f"来源 {row.get('source') or 'Fitbit'}",
+            "detail": f"来源 {row.get('source') or '未标注'}",
         })
     rows.sort(key=lambda row: (row.get("date") or "", row.get("type") or ""), reverse=True)
     return {"metrics": metrics}, rows[:12]
@@ -794,7 +794,7 @@ def _build_activity_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], li
             "%",
             f"{steps or 0} / {steps_goal or 0} 步",
             "green",
-            "优先读取 Fitbit 今日活动摘要和目标设置。",
+            "读取最新活动摘要及本地保存的目标。",
         ),
         _value_card(
             "今日距离",
@@ -826,7 +826,7 @@ def _build_activity_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], li
             "步",
             f"终身距离 {lifetime_distance if lifetime_distance is not None else '--'} km",
             "red",
-            "来自 Fitbit lifetime stats。",
+            "来自历史累计统计，Google Health 暂不更新此项。",
         ),
     ]
 
@@ -857,7 +857,7 @@ def _build_activity_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], li
                 "duration": duration,
                 "calories": calories,
                 "distance": distance,
-                "detail": detail or "Fitbit activity log",
+                "detail": detail or "活动记录",
             }
         )
     return {"metrics": metrics}, rows
@@ -918,13 +918,13 @@ def _build_lifestyle_tables(snapshot: dict[str, Any]) -> tuple[dict[str, Any], l
                    else _pick_numeric_leaf(water_log_payload, ("water", "summary.amount"))[1])
 
     metrics = [
-        _value_card("热量目标", _round(calorie_goal, 0), "kcal", "读取 Fitbit 营养目标。", "amber"),
+        _value_card("热量目标", _round(calorie_goal, 0), "kcal", "本地保存的营养目标，Google Health 暂不更新此项。", "amber"),
         _value_card("今日摄入", _round(calorie_summary, 0), "kcal", "来自今日饮食日志摘要。", "red"),
-        _value_card("饮水目标", _round(water_goal, 0), "ml", "读取 Fitbit 饮水目标。", "blue"),
+        _value_card("饮水目标", _round(water_goal, 0), "ml", "本地保存的饮水目标，Google Health 暂不更新此项。", "blue"),
         _value_card("今日饮水", _round(water_value, 0), "ml", f"近期食物 {len(recent_foods)} 条。", "teal"),
-        _value_card("常吃食物", len(frequent_foods), "项", "Fitbit frequent foods 缓存。", "green"),
-        _value_card("收藏食物", len(favorite_foods), "项", "Fitbit favorite foods 缓存。", "blue"),
-        _value_card("餐食模板", len(meals), "个", "Fitbit meals 缓存。", "teal"),
+        _value_card("常吃食物", len(frequent_foods), "项", "常吃食物历史缓存。", "green"),
+        _value_card("收藏食物", len(favorite_foods), "项", "收藏食物历史缓存。", "blue"),
+        _value_card("餐食模板", len(meals), "个", "餐食模板历史缓存。", "teal"),
     ]
 
     rows = [
@@ -965,8 +965,8 @@ def _build_account_tables(
     alarms_count = sum(len(group.get("alarms") or []) for group in alarm_groups)
 
     metrics = [
-        _value_card("已配对设备", len(device_rows), "台", "读取 Fitbit 设备列表。", "blue"),
-        _value_card("徽章数量", len(badges), "枚", "读取 Fitbit badge 资料。", "amber"),
+        _value_card("已配对设备", len(device_rows), "台", "来自已授权健康账户的设备列表。", "blue"),
+        _value_card("徽章数量", len(badges), "枚", "迁移前保存的徽章，Google Health 暂不更新此项。", "amber"),
         _value_card(
             "快照完成度",
             endpoint_summary.get("ok"),
@@ -1224,13 +1224,13 @@ def _build_data_catalog(
             "label": "活动",
             "view": "activity",
             "tone": "green",
-            "summary": "步数、活跃分钟、燃脂区、热量和 Fitbit 活动日志。",
+            "summary": "步数、活跃分钟、燃脂区、热量和活动日志。",
             "coverage": coverage.get("activity") or {},
             "metrics": _catalog_metric_entries(metric_cards, ["steps", "active_minutes", "active_zone_minutes", "calories_out"]),
             "sources": [
                 _source_entry("dataset", "activity", "活动 CSV", (coverage.get("activity") or {}).get("count")),
                 _source_entry("table", "activity", "按日活动表", len(tables.get("activity") or [])),
-                _source_entry("table", "activity_logs", "Fitbit 活动日志", len(tables.get("activity_logs") or [])),
+                _source_entry("table", "activity_logs", "活动日志", len(tables.get("activity_logs") or [])),
             ],
         },
         {
@@ -1286,7 +1286,7 @@ def _build_data_catalog(
             "coverage": {"count": snapshot_ok, "start_date": (coverage.get("snapshot") or {}).get("start_date"), "end_date": snapshot_status.get("saved_at")},
             "metrics": _section_catalog_metrics(sections.get("account") or {}, limit=4),
             "sources": [
-                _source_entry("snapshot", "profile_snapshot", "Fitbit 快照", snapshot_ok),
+                _source_entry("snapshot", "profile_snapshot", "健康数据快照", snapshot_ok),
                 _source_entry("table", "devices", "设备表", len(tables.get("devices") or [])),
                 _source_entry("table", "endpoints", "端点状态", endpoint_count),
             ],
