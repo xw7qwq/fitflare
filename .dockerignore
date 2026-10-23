@@ -76,3 +76,9 @@ secrets/
 **/*.p12
 .github/
 Caddyfile.system
+
+# Host-only files that must never enter the image
+security/
+Caddyfile.system
+Dockerfile.host
+docker-compose.override.yml
