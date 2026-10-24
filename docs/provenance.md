@@ -18,7 +18,7 @@ fitflare 整理自 `lucius7` 服务器 `/home/lucius7/fitbaus` 的部署源码�
 
 ## 2026-10-23 分支整合收尾
 
-[PR #1](https://github.com/xw7qwq/fitflare/pull/1) 将 Google Health API v4 的线上实现与私有单账户重构合并到 `main`，合并提交为 `948992d977c4c874813e4c857054210369a978da`。新仓库原有提交仍在历史中，没有强推。该提交的 Release checks 已通过。
+[PR #1](https://github.com/xw7qwq/health/pull/1) 将 Google Health API v4 的线上实现与私有单账户重构合并到 `main`，合并提交为 `948992d977c4c874813e4c857054210369a978da`。新仓库原有提交仍在历史中，没有强推。该提交的 Release checks 已通过。
 
 收尾时核对远端只保留 `main`，没有待合并 PR 或远端标签。服务器本地残留的三个 2026-09-23 标签仍指向净化前历史；已在仓库外做权限受限的私有 bundle 备份并移除这些本地标签。新仓库的 `main` 不包含已知的旧凭据对象。发布门禁现包含历史审计，防止旧标签或分支误推后再次混入。
 
@@ -28,7 +28,7 @@ fitflare 整理自 `lucius7` 服务器 `/home/lucius7/fitbaus` 的部署源码�
 
 用户确认旧仓库 `theLucius7/fitbaus` 已删除，旧 Fitbit 认证也已在提供方删除。这是用户提供的处理结果；本仓库没有保存或重新启用旧密钥。
 
-[PR #3](https://github.com/xw7qwq/fitflare/pull/3) 修复静态资源缓存指纹，[PR #4](https://github.com/xw7qwq/fitflare/pull/4) 修复趋势方向、比较窗口和 HTTPS 链接。公开只读整理保留这些改动，并按当前部署需求移除网页登录、会话、管理面板、原始文件下载和全部 HTTP 写入入口。Google Health 授权和手动同步通过服务器命令行完成，自动同步与历史数据保留。
+[PR #3](https://github.com/xw7qwq/health/pull/3) 修复静态资源缓存指纹，[PR #4](https://github.com/xw7qwq/health/pull/4) 修复趋势方向、比较窗口和 HTTPS 链接。公开只读整理保留这些改动，并按当前部署需求移除网页登录、会话、管理面板、原始文件下载和全部 HTTP 写入入口。Google Health 授权和手动同步通过服务器命令行完成，自动同步与历史数据保留。
 
 网站和 API 直接展示配置账户的数据；从旧私有版本升级需要显式设置 `FITFLARE_DATA_ACCESS=public`。当前操作说明以 README、DEPLOYMENT 和 GOOGLE_HEALTH 为准，上面的私有模式记录仅描述先前版本。
 
