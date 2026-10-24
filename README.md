@@ -1,6 +1,6 @@
 # Fitflare
 
-[![Release checks](https://github.com/xw7qwq/fitflare/actions/workflows/check.yml/badge.svg)](https://github.com/xw7qwq/fitflare/actions/workflows/check.yml)
+[![Release checks](https://github.com/xw7qwq/health/actions/workflows/check.yml/badge.svg)](https://github.com/xw7qwq/health/actions/workflows/check.yml)
 
 一个给自己使用的健康数据仪表盘：通过 Google Health API 同步自己的数据，保留 Fitbit 历史记录，在中文界面查看睡眠、活动、HRV、静息心率和长期趋势。网站公开只读，无需登录；授权和同步通过服务器命令行维护。
 
@@ -25,7 +25,7 @@
 当前可运行的部署方案是 **Linux + Docker Compose**，使用 Python 3.11、Flask、Gunicorn 和原生 JavaScript。无需数据库或前端打包步骤。
 
 ```bash
-git clone https://github.com/xw7qwq/fitflare.git
+git clone https://github.com/xw7qwq/health.git fitflare
 cd fitflare
 cp deploy/.env.production.example .env
 chmod 600 .env

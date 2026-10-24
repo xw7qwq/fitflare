@@ -27,7 +27,7 @@ DAILY_POINTS = 400
 WEEKLY_POINTS = 104
 DEFAULT_URL = "https://lucius7.dev/api/v1/ingest/health"
 STATE_FILENAME = "panel_push.json"
-USER_AGENT = "fitflare-panel-push/1 (+https://github.com/xw7qwq/fitflare)"
+USER_AGENT = "fitflare-panel-push/1 (+https://github.com/xw7qwq/health)"
 # The panel's public summary covers the 7 days before today in UTC+8, so it
 # needs at least one push after each midnight there even without new data.
 PANEL_TZ = timezone(timedelta(hours=8))

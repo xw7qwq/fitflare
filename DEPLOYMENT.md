@@ -19,7 +19,7 @@
 安装 Docker Engine、Compose 插件和 Git，然后在选定目录执行：
 
 ```bash
-git clone https://github.com/xw7qwq/fitflare.git
+git clone https://github.com/xw7qwq/health.git fitflare
 cd fitflare
 cp deploy/.env.production.example .env
 chmod 600 .env
